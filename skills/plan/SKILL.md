@@ -31,9 +31,21 @@ Options:
 2. **No direct artifact writes.** Return artifact path + markdown content in-chat for orchestrator to hand to `scribe`.
 3. **Delegate specialist planning.** For Debug/Refactor/Review requests, invoke the corresponding subagent and synthesize results.
 4. Ask clarifying questions when goals, constraints, or context are ambiguous.
-5. Detect or confirm framework/language context before final recommendation.
-6. If user references prototypes/docs/APIs, query MCP sources (`docs-mcp-server`, `dash-api`) and cite findings in Context.
-7. Always end with explicit handoff instruction to switch to `orchestrator`.
+5. Before drafting final markdown, run an explicit analysis pass and ask any blocking questions first.
+6. Detect or confirm framework/language context before final recommendation.
+7. If user references prototypes/docs/APIs, query MCP sources (`docs-mcp-server`, `dash-api`) and cite findings in Context.
+8. Always end with explicit handoff instruction to switch to `orchestrator`.
+
+## Artifact Routing Contract (required)
+- `artifact_type`: one of `plan`, `debug`, `refactor`, `review`
+- `slug`: kebab-case task identifier
+- `artifact_path`: derived from `artifact_type` + `slug`:
+  - `plan` -> `.plan/plan.<slug>.md`
+  - `debug` -> `.plan/debug.<slug>.md`
+  - `refactor` -> `.plan/refactor.<slug>.md`
+  - `review` -> `.plan/review.<slug>.md`
+
+`scribe` must receive this contract from `orchestrator` when writing files.
 
 ## Artifact Schema (Required Structure)
 
@@ -63,6 +75,8 @@ Capture which MCP source informed which decision.
 
 Return:
 - `PlanType` selected
-- target artifact path (for example `.plan/plan.<slug>.md`)
+- `artifact_type`
+- `slug`
+- target artifact path derived from routing contract
 - full markdown artifact content
 - explicit next action: "Switch to `orchestrator` to write artifact via `scribe` and execute stages."

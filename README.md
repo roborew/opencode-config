@@ -17,8 +17,9 @@ This repository uses a stage-based orchestration model to keep cheaper models fo
 
 1. `plan` asks what type of plan is needed (Feature, Debug, Refactor, Review) when prompt is greeting/unspecified.
 2. `plan` drafts content (and invokes specialist subagents when needed).
+   - `plan` returns `artifact_type`, `slug`, derived artifact path, and markdown content.
 3. Switch to `orchestrator`.
-4. `orchestrator` dispatches `scribe` to create/update a single artifact in `.plan/`:
+4. `orchestrator` dispatches `scribe` to create/update a single artifact in `.plan/` using `artifact_type` + `slug` (or explicit `target_path`):
    - `.plan/plan.<slug>.md`
    - `.plan/debug.<slug>.md`
    - `.plan/refactor.<slug>.md`
@@ -94,11 +95,19 @@ export PATH="/opt/homebrew/Caskroom/miniconda/base/condabin:$PATH"
 
 if [ -x "/Users/USERNAME/.local/bin/mise" ]; then
   unset __MISE_ORIG_PATH MISE_SHELL __MISE_WATCH
-  eval "$(/Users/USERNAME/.local/bin/mise activate zsh)"
+  eval "$(/Users/USERNAME/.local/bin/mise env -s zsh)"
 fi
 ```
 
 This is the key fix that makes agent shells resolve `ruby`/`node` from mise instead of system defaults.
+
+If you use `brew shellenv` in `~/.zprofile`, re-apply mise after it so login shells keep the same tool PATH:
+
+```sh
+# ~/.zprofile
+eval "$(/opt/homebrew/bin/brew shellenv)"
+eval "$(/Users/USERNAME/.local/bin/mise env -s zsh)"
+```
 
 ### Env vars for code tools and agents
 
@@ -115,6 +124,50 @@ Then add exports to `~/.opencode-agent-env`, for example:
 ```sh
 export EXAMPLE_API_KEY="..."
 export EXAMPLE_BASE_URL="https://example.com"
+```
+
+`~/.opencode-agent-env` is not populated automatically. If a variable is missing in agents, add it there explicitly.
+
+### Force command execution via script (subagent fallback)
+
+If a subagent still behaves inconsistently, execute commands through:
+
+```sh
+./.opencode/agent-run.zsh 'which ruby && ruby -v'
+```
+
+This wrapper loads `~/.opencode-agent-env`, applies `mise env`, and runs the command in a login zsh.
+
+### `mise` trust warning fix
+
+If agent commands print `mise WARN ... mise.toml are not trusted`, run this in the affected project root:
+
+```sh
+mise trust --all
+```
+
+Or trust one file directly:
+
+```sh
+mise trust /path/to/mise.toml
+```
+
+For non-interactive subagents across known work roots, set global trusted paths once:
+
+```sh
+mise settings add trusted_config_paths /Users/USERNAME/.config/opencode
+mise settings add trusted_config_paths /Users/USERNAME/05_Repos
+mise settings get trusted_config_paths
+```
+
+Then re-run checks:
+
+```sh
+mise trust --show
+mise current ruby || true
+mise current node || true
+which ruby && ruby -v
+which node && node -v
 ```
 
 ### PATH and command diagnostics

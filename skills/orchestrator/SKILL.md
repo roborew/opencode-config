@@ -24,18 +24,22 @@ You execute an existing plan artifact by coordinating subagents. You do not edit
 
 ## Required Inputs
 - Artifact path: `.plan/<type>.<slug>.md`
+- Artifact identity: `artifact_type` + `slug` (derive from path when only path is provided)
 - Stage order and acceptance checks from artifact
 
 ## Stage Loop
-1. Ensure artifact exists; if missing, dispatch `scribe` to write it from approved content.
-2. Invoke `helper` for startup environment preflight before any execution stage.
-3. Dispatch `scribe` to update artifact `EnvReadiness` section from helper output.
-4. If EnvReadiness is `Blocked`, stop and request user remediation confirmation.
-5. Dispatch implementation stage to `build` or `designer`.
-6. Collect completion report.
-7. Run `verifier`.
-8. If verifier passes, continue to next stage.
-9. If verifier fails or stage is blocked, invoke `helper`.
+1. Ensure artifact identity is explicit:
+   - parse `artifact_type` + `slug` from artifact path when needed
+   - pass identity fields to `scribe` on every artifact write/update call
+2. Ensure artifact exists; if missing, dispatch `scribe` to write it from approved content.
+3. Invoke `helper` for startup environment preflight before any execution stage.
+4. Dispatch `scribe` to update artifact `EnvReadiness` section from helper output.
+5. If EnvReadiness is `Blocked`, stop and request user remediation confirmation.
+6. Dispatch implementation stage to `build` or `designer`.
+7. Collect completion report.
+8. Run `verifier`.
+9. If verifier passes, continue to next stage.
+10. If verifier fails or stage is blocked, invoke `helper`.
 
 ## Delegation Gate (mandatory)
 Before any stage status update, confirm these Task calls occurred:
