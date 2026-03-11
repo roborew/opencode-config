@@ -68,7 +68,15 @@
       "prompt": "{file:./skills/plan/SKILL.md}",
       "tools": { "write": false, "edit": false, "bash": true },
       "permission": {
-        "edit": "deny"
+        "edit": "deny",
+        "task": {
+          "*": "deny",
+          "scribe": "allow",
+          "build": "allow",
+          "designer": "allow",
+          "verifier": "allow",
+          "review": "allow"
+        }
       }
     },
     "build": {
@@ -90,7 +98,13 @@
       "prompt": "{file:./skills/debugger/SKILL.md}",
       "tools": { "write": false, "edit": false, "bash": true },
       "permission": {
-        "edit": "deny"
+        "edit": "deny",
+        "task": {
+          "*": "deny",
+          "scribe": "allow",
+          "build": "allow",
+          "verifier": "allow"
+        }
       }
     },
     "refactor": {
@@ -100,7 +114,13 @@
       "prompt": "{file:./skills/refactor/SKILL.md}",
       "tools": { "write": false, "edit": false, "bash": true },
       "permission": {
-        "edit": "deny"
+        "edit": "deny",
+        "task": {
+          "*": "deny",
+          "scribe": "allow",
+          "build": "allow",
+          "verifier": "allow"
+        }
       }
     },
     "review": {
@@ -112,6 +132,12 @@
       "permission": {
         "edit": {
           "*": "deny"
+        },
+        "task": {
+          "*": "deny",
+          "scribe": "allow",
+          "build": "allow",
+          "verifier": "allow"
         }
       }
     },
