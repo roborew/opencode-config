@@ -27,8 +27,9 @@ This repository uses a stage-based orchestration model to keep cheaper models fo
 6. `scribe` writes preflight results to artifact `EnvReadiness`.
 7. `orchestrator` dispatches one stage at a time to `build` or `designer` only when environment is ready.
 8. Execution subagents return completion reports with evidence.
-9. `verifier` checks acceptance criteria with evidence before completion.
-10. If execution is stuck or verifier fails repeatedly (or environment blocks), `orchestrator` invokes `helper`, then `scribe` updates the existing artifact before retry.
+9. `orchestrator` grades each child report (`PASS` / `NEEDS_RETRY` / `BLOCKED`) before progressing.
+10. `verifier` checks acceptance criteria with evidence before completion.
+11. If execution is stuck, child output is low quality, verifier fails repeatedly, or environment blocks, `orchestrator` invokes `helper`, then `scribe` updates the existing artifact before retry.
 
 ## Review Decision Gate
 

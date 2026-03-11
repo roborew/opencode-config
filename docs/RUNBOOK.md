@@ -16,7 +16,7 @@
 | Role | Agents | Model Tier | Responsibility |
 |---|---|---|---|
 | Primary (planning) | `plan` | smart | Ask plan type, invoke specialist planner, produce plan draft content |
-| Coordinator | `orchestrator` | fast | Execute artifact stages and enforce helper-triggered recovery |
+| Coordinator | `orchestrator` | smart | Execute artifact stages, grade child reports, and enforce helper-triggered recovery |
 | Planning specialists | `debugger`, `refactor`, `review` | smart | Return type-specific plan drafts to `plan` |
 | Artifact writer | `scribe` | fast | Write/update markdown artifacts and docs from orchestrator content |
 | Recovery | `helper` | fast | Replan minimal strategy deltas and trigger artifact amendment |
@@ -40,6 +40,11 @@ Both primaries (`plan`, `orchestrator`) are non-writing (`edit: deny`). Only `sc
    - **Yes**: `review` creates/updates `.plan/review.<slug>.md`, `build` applies fixes, `verifier` re-checks.
    - **No**: end with resume command and artifact path for a clean new session.
 11. Generate required docs only after verification gates pass by dispatching `scribe`.
+
+At each stage handoff, orchestrator grades child output:
+- `PASS` -> continue
+- `NEEDS_RETRY` -> corrective feedback and rerun stage
+- `BLOCKED` -> helper + scribe amendment path
 
 ## Escalation and Recovery (enforced)
 
