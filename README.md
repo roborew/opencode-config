@@ -5,19 +5,20 @@ This repository uses a stage-based orchestration model to keep cheaper models fo
 ## Topology
 
 - **Primary orchestrators:** `plan`, `debugger`, `refactor`, `review`
+- **Artifact writer:** `scribe`
 - **Execution subagents:** `build`, `designer`
 - **Verification gate:** `verifier`
 - **Optional helper:** `mentor`
 
 ## How It Works
 
-1. A primary agent creates a single artifact in `.plan/`:
+1. A primary agent drafts content and dispatches `scribe` to create/update a single artifact in `.plan/`:
    - `.plan/plan.<slug>.md`
    - `.plan/debug.<slug>.md`
    - `.plan/refactor.<slug>.md`
    - `.plan/review.<slug>.md`
 2. The primary dispatches one stage at a time to `build` or `designer`.
-3. The subagent returns a completion report with evidence.
+3. Execution subagents return completion reports with evidence.
 4. The primary either dispatches the next stage or requests adjustments.
 5. `verifier` checks acceptance criteria with evidence before completion.
 
@@ -25,7 +26,7 @@ This repository uses a stage-based orchestration model to keep cheaper models fo
 
 After feature completion, ask: **"Start review now?"**
 
-- **Yes:** `review` produces/updates a review artifact, `build` applies fixes, `verifier` signs off.
+- **Yes:** `review` dispatches `scribe` to produce/update a review artifact, `build` applies fixes, `verifier` signs off.
 - **No:** keep artifacts and resume in a new session later (better context hygiene).
 
 ## Verifier and Review Responsibilities
@@ -37,6 +38,8 @@ If verification fails, update the same `review.<slug>.md` artifact with:
 - completed tasks marked complete
 - new remediation tasks
 - dated `IterationNotes`
+
+The update is performed by `scribe` (not by primary agents).
 
 ## MCP Usage Expectations
 
@@ -54,6 +57,8 @@ Generate after verification passes:
 - `docs/changelog/<date>-<slug>.md`
 - `docs/guides/<feature-slug>.md`
 - `docs/architecture/<feature-slug>.md`
+
+These docs are written via `scribe`.
 
 Templates live in:
 
