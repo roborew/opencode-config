@@ -20,7 +20,7 @@ This repository uses a stage-based orchestration model to keep cheaper models fo
    - `plan` returns `artifact_type`, `slug`, derived artifact path, and markdown content.
 3. Switch to `orchestrator`.
 4. `orchestrator` dispatches `scribe` to create/update a single artifact in `.plan/` using `artifact_type` + `slug` (or explicit `target_path`):
-   - `.plan/plan.<slug>.md`
+   - `.plan/feature.<slug>.md`
    - `.plan/debug.<slug>.md`
    - `.plan/refactor.<slug>.md`
    - `.plan/review.<slug>.md`

@@ -37,10 +37,10 @@ Options:
 8. Always end with explicit handoff instruction to switch to `orchestrator`.
 
 ## Artifact Routing Contract (required)
-- `artifact_type`: one of `plan`, `debug`, `refactor`, `review`
+- `artifact_type`: one of `feature`, `debug`, `refactor`, `review`
 - `slug`: kebab-case task identifier
 - `artifact_path`: derived from `artifact_type` + `slug`:
-  - `plan` -> `.plan/plan.<slug>.md`
+  - `feature` -> `.plan/feature.<slug>.md`
   - `debug` -> `.plan/debug.<slug>.md`
   - `refactor` -> `.plan/refactor.<slug>.md`
   - `review` -> `.plan/review.<slug>.md`

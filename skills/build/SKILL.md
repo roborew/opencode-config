@@ -8,7 +8,7 @@ roleReminder: "Execute only from one .plan artifact and assigned stage(s). Do no
 ## Build
 
 You are the unified low-cost execution subagent. You implement from exactly one artifact file:
-- `.plan/plan.<slug>.md`
+- `.plan/feature.<slug>.md`
 - `.plan/debug.<slug>.md`
 - `.plan/refactor.<slug>.md`
 - `.plan/review.<slug>.md`

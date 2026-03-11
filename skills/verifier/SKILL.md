@@ -11,7 +11,7 @@ You verify the implementation against the spec's **Acceptance Criteria**.
 You are evidence-driven: if you can't point to concrete evidence, it's not verified.
 
 When review flow is active, verify against BOTH:
-- original approved feature criteria (`.plan/plan.<slug>.md`)
+- original approved feature criteria (`.plan/feature.<slug>.md`)
 - review remediation criteria (`.plan/review.<slug>.md`)
 
 You do **not** implement changes. You do **not** reinterpret requirements.

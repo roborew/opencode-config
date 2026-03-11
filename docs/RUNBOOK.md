@@ -30,7 +30,7 @@ Both primaries (`plan`, `orchestrator`) are non-writing (`edit: deny`). Only `sc
 1. `plan` asks for plan type (Feature/Debug/Refactor/Review) when request is greeting/unspecified.
 2. `plan` invokes matching specialist subagent (`debugger`/`refactor`/`review`) as needed and returns artifact draft content.
 3. User switches to `orchestrator`.
-4. `orchestrator` dispatches `scribe` to write artifact in `.plan/` (`plan.*`, `debug.*`, `refactor.*`, or `review.*`).
+4. `orchestrator` dispatches `scribe` to write artifact in `.plan/` (`feature.*`, `debug.*`, `refactor.*`, or `review.*`).
 5. `orchestrator` invokes `helper` environment preflight and writes `EnvReadiness` to artifact via `scribe`.
 6. `orchestrator` dispatches one stage at a time to `build` or `designer` only if EnvReadiness is `Ready`.
 7. Execution subagent returns completion report (`stage_id`, files, tests, checks, blockers, risks, next input).
@@ -67,7 +67,7 @@ Do not start execution stages before helper startup preflight is recorded in art
 
 - `review` focuses on bug/correctness/security risks and fix planning.
 - `verifier` checks conformance against:
-  - original feature acceptance criteria (`.plan/plan.<slug>.md`)
+  - original feature acceptance criteria (`.plan/feature.<slug>.md`)
   - review remediation criteria (`.plan/review.<slug>.md`) when review path is active.
 - If verifier fails:
   - update the same `review.<slug>.md` artifact in place through `scribe`

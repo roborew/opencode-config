@@ -25,7 +25,7 @@ You are the dedicated markdown writer for orchestrator agents. You write and upd
 - Either:
   - `target_path` (explicit destination path), or
   - artifact routing tuple: `artifact_type` + `slug`
-    - `plan` -> `.plan/plan.<slug>.md`
+    - `feature` -> `.plan/feature.<slug>.md`
     - `debug` -> `.plan/debug.<slug>.md`
     - `refactor` -> `.plan/refactor.<slug>.md`
     - `review` -> `.plan/review.<slug>.md`

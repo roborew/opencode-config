@@ -17,7 +17,7 @@ You are invoked when execution is stuck or verification fails. Your job is to pr
 5. Keep revisions minimal and aligned to existing acceptance criteria.
 
 ## Inputs
-- Current artifact path (`.plan/plan.*`, `.plan/review.*`, `.plan/debug.*`, `.plan/refactor.*`)
+- Current artifact path (`.plan/feature.*`, `.plan/review.*`, `.plan/debug.*`, `.plan/refactor.*`)
 - Failure evidence (blockers, verifier output, failed checks)
 - Current stage status
 - Optional mode: `env_preflight`

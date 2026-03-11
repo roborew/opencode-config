@@ -42,7 +42,7 @@ If environment is blocked:
 
 ## Artifact Types
 
-- `plan.<slug>.md` - Feature implementation (from `plan`)
+- `feature.<slug>.md` - Feature implementation (from `plan`)
 - `debug.<slug>.md` - Bug fix (from `debugger`)
 - `refactor.<slug>.md` - Refactor migration (from `refactor`)
 - `review.<slug>.md` - Review changes (from `review`)
@@ -100,7 +100,7 @@ If environment is blocked:
 - If no, include resume command with artifact path.
 
 ## VerifierInputs
-- Original feature plan: `.plan/plan.<slug>.md`
+- Original feature plan: `.plan/feature.<slug>.md`
 - Review artifact (if present): `.plan/review.<slug>.md`
 - Stage completion reports and test evidence
 
