@@ -17,6 +17,9 @@
     "openrouter": {
       "npm": "@openrouter/ai-sdk-provider",
       "name": "OpenRouter",
+      "options": {
+        "timeout": 300000
+      },
       "models": {
         "minimax/minimax-m2.5": {
           "name": "MiniMax M2.5"
@@ -144,6 +147,7 @@
       "mode": "subagent",
       "model": "openrouter/z-ai/glm-4.7",
       "prompt": "{file:./skills/scribe/SKILL.md}",
+      "steps": 5,
       "tools": { "write": true, "edit": true, "bash": false },
       "permission": {
         "edit": {

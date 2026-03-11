@@ -87,6 +87,7 @@ If OpenCode CLI works but desktop agents miss tools from `mise`, `conda`, `nvm`,
 Put shared runtime setup in `~/.zshenv` (loaded by interactive and non-interactive zsh), including `mise` activation and any PATH entries needed by tools:
 
 ```sh
+export PATH="$HOME/.local/bin:$PATH"
 export PATH="/opt/homebrew/bin:$PATH"
 export PATH="/usr/local/bin:/usr/local/sbin:$PATH"
 export PATH="/opt/homebrew/opt/sqlite/bin:$PATH"

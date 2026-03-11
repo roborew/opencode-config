@@ -103,6 +103,14 @@ When running review artifact flow:
 - dispatch `scribe` to update existing `.plan/review.<slug>.md`
 - rerun build stage and verifier
 
+## Loop Detection and Halt (mandatory)
+If you receive the same or near-identical completion report from a child (e.g. scribe) **2 or more times**:
+1. Treat the report as `PASS` and do not re-invoke that child.
+2. Halt orchestration for that task. Report completion to the user.
+3. Do not ask the child to confirm again.
+
+When scribe returns `path`, `operation`, and `summary`, the write task is complete. Do not re-dispatch scribe for the same content.
+
 ## Completion
 Report:
 - artifact path

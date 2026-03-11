@@ -63,6 +63,17 @@ Do not advance stages until helper amendment is applied.
 Do not allow repeated test-command retries under unresolved environment mismatch.
 Do not start execution stages before helper startup preflight is recorded in artifact.
 
+## Subagent Loop Exit Strategy (enforced)
+
+When a subagent repeats the same completion message or stalls:
+
+1. **OpenCode config**: Scribe has `steps: 5` in `opencode.json` — forces exit after 5 agentic iterations.
+2. **Orchestrator loop detection**: If the same or near-identical child report is received 2+ times, treat as PASS and halt. Do not re-invoke.
+3. **Scribe exit rule**: Scribe returns exactly once per task. After reporting path + operation + summary, it stops.
+4. **Manual escape**: Use `Ctrl+C` or session interrupt. Resume in a new session with artifact path if needed.
+
+Provider-level `timeout` (e.g. 300000ms) can be set in `opencode.json` under `provider.<name>.options` to cap LLM request duration.
+
 ## Review and Verifier Interaction
 
 - `review` focuses on bug/correctness/security risks and fix planning.
