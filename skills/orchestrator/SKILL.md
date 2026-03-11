@@ -26,11 +26,14 @@ You execute an existing plan artifact by coordinating subagents. You do not edit
 
 ## Stage Loop
 1. Ensure artifact exists; if missing, dispatch `scribe` to write it from approved content.
-2. Dispatch implementation stage to `build` or `designer`.
-3. Collect completion report.
-4. Run `verifier`.
-5. If verifier passes, continue to next stage.
-6. If verifier fails or stage is blocked, invoke `helper`.
+2. Invoke `helper` for startup environment preflight before any execution stage.
+3. Dispatch `scribe` to update artifact `EnvReadiness` section from helper output.
+4. If EnvReadiness is `Blocked`, stop and request user remediation confirmation.
+5. Dispatch implementation stage to `build` or `designer`.
+6. Collect completion report.
+7. Run `verifier`.
+8. If verifier passes, continue to next stage.
+9. If verifier fails or stage is blocked, invoke `helper`.
 
 ## Delegation Gate (mandatory)
 Before any stage status update, confirm these Task calls occurred:
@@ -46,8 +49,24 @@ Invoke `helper` immediately when any occur:
 - same stage fails verification twice
 - unresolved blocker reported by execution subagent
 - verifier reports failed criteria requiring strategy change
+- build reports `blocker_code: ENV_BLOCKED`
 
 Do not advance stages until helper updates are applied via `scribe`.
+
+## Environment Blocker Policy
+If a subagent reports `ENV_BLOCKED`:
+1. Stop current stage immediately.
+2. Invoke `helper` to produce a minimal recovery/update strategy.
+3. Use `scribe` to amend artifact `IterationNotes` and next-step tasks.
+4. Ask user for explicit environment remediation confirmation before retry.
+
+Do not let subagents loop on runtime/toolchain commands when environment is mismatched.
+
+## Startup Environment Preflight (mandatory)
+Before any implementation Task call:
+- run helper preflight once
+- ensure artifact has `EnvReadiness` recorded via `scribe`
+- proceed only when `EnvReadiness.Status = Ready`
 
 ## Review Recovery Integration
 When running review artifact flow:

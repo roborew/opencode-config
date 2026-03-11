@@ -23,10 +23,12 @@ This repository uses a stage-based orchestration model to keep cheaper models fo
    - `.plan/debug.<slug>.md`
    - `.plan/refactor.<slug>.md`
    - `.plan/review.<slug>.md`
-5. `orchestrator` dispatches one stage at a time to `build` or `designer`.
-6. Execution subagents return completion reports with evidence.
-7. `verifier` checks acceptance criteria with evidence before completion.
-8. If execution is stuck or verifier fails repeatedly, `orchestrator` invokes `helper`, then `scribe` updates the existing artifact before retry.
+5. `orchestrator` runs a startup environment preflight via `helper`.
+6. `scribe` writes preflight results to artifact `EnvReadiness`.
+7. `orchestrator` dispatches one stage at a time to `build` or `designer` only when environment is ready.
+8. Execution subagents return completion reports with evidence.
+9. `verifier` checks acceptance criteria with evidence before completion.
+10. If execution is stuck or verifier fails repeatedly (or environment blocks), `orchestrator` invokes `helper`, then `scribe` updates the existing artifact before retry.
 
 ## Review Decision Gate
 

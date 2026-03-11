@@ -31,14 +31,15 @@ Both primaries (`plan`, `orchestrator`) are non-writing (`edit: deny`). Only `sc
 2. `plan` invokes matching specialist subagent (`debugger`/`refactor`/`review`) as needed and returns artifact draft content.
 3. User switches to `orchestrator`.
 4. `orchestrator` dispatches `scribe` to write artifact in `.plan/` (`plan.*`, `debug.*`, `refactor.*`, or `review.*`).
-5. `orchestrator` dispatches one stage at a time to `build` or `designer`.
-6. Execution subagent returns completion report (`stage_id`, files, tests, checks, blockers, risks, next input).
-7. `orchestrator` dispatches next stage only after successful handoff.
-8. For final completion, run `verifier`.
-9. Prompt user: **"Start review now?"**
+5. `orchestrator` invokes `helper` environment preflight and writes `EnvReadiness` to artifact via `scribe`.
+6. `orchestrator` dispatches one stage at a time to `build` or `designer` only if EnvReadiness is `Ready`.
+7. Execution subagent returns completion report (`stage_id`, files, tests, checks, blockers, risks, next input).
+8. `orchestrator` dispatches next stage only after successful handoff.
+9. For final completion, run `verifier`.
+10. Prompt user: **"Start review now?"**
    - **Yes**: `review` creates/updates `.plan/review.<slug>.md`, `build` applies fixes, `verifier` re-checks.
    - **No**: end with resume command and artifact path for a clean new session.
-10. Generate required docs only after verification gates pass by dispatching `scribe`.
+11. Generate required docs only after verification gates pass by dispatching `scribe`.
 
 ## Escalation and Recovery (enforced)
 
@@ -46,6 +47,7 @@ Invoke `helper` immediately when any occurs:
 - same stage fails verification twice
 - unresolved blocker reported by execution subagent
 - verifier reports failed criteria requiring strategy change
+- execution reports `ENV_BLOCKED` (runtime/toolchain mismatch)
 
 Recovery loop:
 1. `helper` diagnoses and proposes minimal amendment.
@@ -53,6 +55,8 @@ Recovery loop:
 3. resume with next indicated stage.
 
 Do not advance stages until helper amendment is applied.
+Do not allow repeated test-command retries under unresolved environment mismatch.
+Do not start execution stages before helper startup preflight is recorded in artifact.
 
 ## Review and Verifier Interaction
 
@@ -115,10 +119,12 @@ Constraints: markdown only, approved paths only
 ## Smoke Checklist
 
 - Artifact includes required schema sections (`StagePlan`, `StageAcceptanceChecks`, `CompletionReport`, `VerifierInputs`, `DocumentationOutputs`).
+- Artifact includes `EnvReadiness` and is updated before stage execution.
 - Primary agents cannot edit files directly (`edit: deny`).
 - Scribe can write to `.plan` and docs markdown paths only.
 - Helper never writes directly and only amends existing artifacts via `scribe`.
 - Helper is invoked on repeated verifier failure or unresolved blockers.
+- Environment/toolchain blockers (`ENV_BLOCKED`) halt stage progression and require helper+scribe amendment before retry.
 - Stage dispatch is one-at-a-time with completion handoff.
 - UI work routes to `designer`; non-UI work routes to `build`.
 - Optional review prompt appears at completion and supports defer/resume.

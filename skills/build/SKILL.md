@@ -25,13 +25,29 @@ You do not plan; you execute assigned stages.
 7. Keep each slice <= 200 changed LOC.
 8. Run `StageAcceptanceChecks` for your stage(s), then relevant final checks requested by parent.
 9. Do not call other implementation subagents.
+10. If environment/toolchain preflight fails, stop immediately with `ENV_BLOCKED` and do not keep retrying the same test command.
+11. Never "fix" project dependency files (Gemfile/package manifests/lockfiles) to work around local environment mismatch unless explicitly instructed.
 
 ## Execution Flow
 1. Locate or receive artifact path and assigned `stage_id` values.
 2. Read artifact file.
 3. Load only files referenced for assigned stages.
-4. Execute tasks in order with micro-TDD.
-5. Run stage checks and report completion contract fields.
+4. Run environment preflight once for test/runtime commands.
+5. Execute tasks in order with micro-TDD.
+6. Run stage checks and report completion contract fields.
+
+## Environment Preflight Gate (required)
+
+Before running tests/build commands, perform a quick preflight:
+- confirm required runtime/tool versions (for example Ruby/Bundler/Node) from project files
+- confirm command runner resolves from the current shell context
+
+If preflight fails:
+- return blocker code `ENV_BLOCKED`
+- include exact failing command + stderr summary
+- include likely cause (version manager not loaded, wrong runtime, missing toolchain)
+- include one concrete remediation request for parent/orchestrator
+- stop execution for that stage (no repeated trial loop)
 
 ## Micro-TDD Loop (required for behavior changes)
 - Add one failing test first (target <= 40 LOC).
@@ -65,3 +81,8 @@ Return a completion report with:
 - `blockers`
 - `residual_risks`
 - `next_stage_input`
+
+If blocked by environment, include:
+- `blocker_code: ENV_BLOCKED`
+- `preflight_checks`
+- `recommended_env_fix`

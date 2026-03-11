@@ -20,6 +20,7 @@ You are invoked when execution is stuck or verification fails. Your job is to pr
 - Current artifact path (`.plan/plan.*`, `.plan/review.*`, `.plan/debug.*`, `.plan/refactor.*`)
 - Failure evidence (blockers, verifier output, failed checks)
 - Current stage status
+- Optional mode: `env_preflight`
 
 ## Recovery Workflow
 1. Diagnose failure cause and classify:
@@ -36,6 +37,24 @@ You are invoked when execution is stuck or verification fails. Your job is to pr
    - append remediation tasks
    - add dated `IterationNotes` entry with reason and delta
 4. Dispatch `scribe` with full updated markdown content.
+
+## Environment Readiness Preflight
+When called in `env_preflight` mode:
+1. Run minimal runtime/toolchain checks relevant to the project stack.
+2. Execute a tiny test-command smoke check (or equivalent verification command).
+3. Produce:
+   - `EnvReadiness.Status` = `Ready` or `Blocked`
+   - exact commands run
+   - stderr summaries for failures
+   - required remediation steps
+4. Return structured content for artifact `EnvReadiness` section and request `scribe` update.
+
+## Environment-Mismatch Recovery
+If failure evidence indicates runtime/toolchain mismatch (for example wrong Ruby/Bundler/Node context):
+- classify as `ENV_BLOCKED`
+- do not suggest codebase/dependency-file edits as first response
+- add `IterationNotes` entry documenting environment blocker and exact failing command
+- add a minimal retry task that depends on user-confirmed environment fix
 
 ## Output
 Return to parent:
