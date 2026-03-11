@@ -15,6 +15,8 @@
 | Execution | `build`, `designer` | fast | Execute assigned `stage_id` tasks with micro-TDD |
 | Verification | `verifier` | fast | Verify acceptance criteria with traceable evidence |
 
+Primary agents are permission-scoped to write only `.plan/*.md` artifacts (all other edits denied).
+
 ## Canonical Flow
 
 1. Primary writes one artifact in `.plan/` (`plan.*`, `debug.*`, `refactor.*`, or `review.*`).
