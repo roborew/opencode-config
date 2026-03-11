@@ -1,44 +1,89 @@
-# Cost-Split Agent Workflow Runbook
+# Stage-Based Orchestration Runbook
 
 ## Overview
 
-- **Expensive agents** (plan, debugger, refactorer, review): produce `.plan/*.md` artifacts. Use `openrouter/openai/gpt-5.3-codex`.
-- **Cheap agents** (build, implementor, fix, pr-reviewer): execute from artifacts. Use `openrouter/z-ai/glm-4.7`.
+- **Primary orchestrators** (`plan`, `debugger`, `refactor`, `review`) run on stronger models and own analysis + staged dispatch.
+- **Execution subagents** (`build`, `designer`) run on cheaper models and execute bounded stage tasks.
+- **Verifier** (`verifier`) is an independent evidence gate and never writes code.
+- **Mentor** (`mentor`) is optional and explanatory only.
 
-## A. Feature Plan → Build
+## Agent Matrix
 
-1. Start OpenCode with the **plan** agent (expensive).
-2. Describe the feature; let it analyze code and generate `.plan/plan.<slug>.md`.
-3. When satisfied, stop planning.
-4. Invoke the **build** subagent and say: "Use `.plan/plan.feature-<slug>.md` as the spec. Implement tasks 1–3."
-5. Build reads only that plan file plus code and implements.
+| Role | Agents | Model Tier | Responsibility |
+|---|---|---|---|
+| Primary | `plan`, `debugger`, `refactor`, `review` | smart | Create artifact, orchestrate stages, decide next step |
+| Execution | `build`, `designer` | fast | Execute assigned `stage_id` tasks with micro-TDD |
+| Verification | `verifier` | fast | Verify acceptance criteria with traceable evidence |
 
-## B. Debugger → Fix
+## Canonical Flow
 
-1. Start a **debugger** agent session (expensive).
-2. Paste logs, failing tests, reproduction steps.
-3. Let it write `.plan/debug.<slug>.md` with hypotheses and fix steps.
-4. Call the **fix** subagent: "Apply the fix per `.plan/debug.<slug>.md` and update tests."
+1. Primary writes one artifact in `.plan/` (`plan.*`, `debug.*`, `refactor.*`, or `review.*`).
+2. Primary dispatches one stage at a time to `build` or `designer`.
+3. Execution subagent returns completion report (`stage_id`, files, tests, checks, blockers, risks, next input).
+4. Primary dispatches next stage only after successful handoff.
+5. For final completion, run `verifier`.
+6. Prompt user: **"Start review now?"**
+   - **Yes**: `review` creates/updates `.plan/review.<slug>.md`, `build` applies fixes, `verifier` re-checks.
+   - **No**: end with resume command and artifact path for a clean new session.
+7. Generate required docs only after verification gates pass.
 
-## C. Refactorer → Implementor
+## Review and Verifier Interaction
 
-1. Start a **refactorer** agent session (expensive).
-2. Describe the refactor scope.
-3. Let it write `.plan/refactor.<slug>.md` with invariants and slices.
-4. Call the **implementor** subagent: "Execute `.plan/refactor.<slug>.md`."
+- `review` focuses on bug/correctness/security risks and fix planning.
+- `verifier` checks conformance against:
+  - original feature acceptance criteria (`.plan/plan.<slug>.md`)
+  - review remediation criteria (`.plan/review.<slug>.md`) when review path is active.
+- If verifier fails:
+  - update the same `review.<slug>.md` artifact in place
+  - mark completed tasks
+  - append remediation tasks
+  - append dated `IterationNotes`
+  - repeat `build` -> `verifier` cycle
 
-## D. Review → PR Reviewer
+## MCP Usage Policy
 
-1. Start a **review** agent session (expensive).
-2. Provide PR diff or branch to analyze.
-3. Let it write `.plan/review.<slug>.md` with required changes.
-4. Call the **pr-reviewer** subagent: "Apply changes from `.plan/review.<slug>.md`."
+Primaries and execution agents should use MCP only when it reduces uncertainty:
 
-## Artifact Types
+- `docs-mcp-server`: internal docs, prototypes, linked repos, architecture notes.
+- `dash-api`: API/library contract lookup when behavior is unclear.
 
-| Activity      | Primary agent | Output file              | Subagent     |
-|---------------|---------------|--------------------------|--------------|
-| Feature plan  | plan          | `.plan/plan.<slug>.md`   | build        |
-| Bug analysis  | debugger      | `.plan/debug.<slug>.md`  | fix          |
-| Refactor      | refactorer     | `.plan/refactor.<slug>.md` | implementor |
-| PR review     | review        | `.plan/review.<slug>.md` | pr-reviewer  |
+If a user says "look at the prototype", check `docs-mcp-server` first and record what was used.
+
+## Documentation Gate (Required)
+
+After successful verification, generate:
+
+- `docs/changelog/<date>-<slug>.md`
+- `docs/guides/<feature-slug>.md`
+- `docs/architecture/<feature-slug>.md`
+
+Use templates in:
+- `docs/changelog/TEMPLATE.md`
+- `docs/guides/TEMPLATE.md`
+- `docs/architecture/TEMPLATE.md`
+
+## Stage Dispatch Template
+
+Use this when dispatching execution:
+
+```text
+Artifact: .plan/<type>.<slug>.md
+Stage IDs: <stage-id-list>
+Scope in: <paths/components>
+Scope out: <explicit exclusions>
+Acceptance checks: <commands>
+Completion report required: stage_id, files_changed, tests_run, acceptance_check_status, blockers, residual_risks, next_stage_input
+```
+
+## Smoke Checklist
+
+- Artifact includes required schema sections (`StagePlan`, `StageAcceptanceChecks`, `CompletionReport`, `VerifierInputs`, `DocumentationOutputs`).
+- Stage dispatch is one-at-a-time with completion handoff.
+- UI work routes to `designer`; non-UI work routes to `build`.
+- Optional review prompt appears at completion and supports defer/resume.
+- Verifier receives original feature artifact and review artifact (if present).
+- Verifier report includes criterion-level evidence.
+- Verifier failure updates the existing review artifact (no fragmented review files).
+- No stale references to removed agents (`implementor`, `fix`, `pr-reviewer`, `refactorer`).
+- MCP lookups are used only when prompt/context indicates need.
+- Final docs are generated only after verification gates pass.

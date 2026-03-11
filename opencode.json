@@ -69,26 +69,15 @@
       "tools": { "write": true, "edit": true, "bash": true }
     },
     "build": {
-      "description": "Implements feature plans from .plan/plan.*.md",
+      "description": "Unified executor for .plan artifacts",
       "mode": "subagent",
       "model": "openrouter/z-ai/glm-4.7",
       "prompt": "{file:./skills/build/SKILL.md}"
     },
-    "implementor": {
-      "description": "Scoped leaf executor for implementation tasks",
-      "mode": "subagent",
-      "model": "openrouter/z-ai/glm-4.7",
-      "prompt": "{file:./skills/implementor/SKILL.md}"
-    },
-    "fix": {
-      "description": "Implements bugfix steps from .plan/debug.*.md",
-      "mode": "subagent",
-      "model": "openrouter/z-ai/glm-4.7",
-      "prompt": "{file:./skills/implementor/SKILL.md}"
-    },
     "verifier": {
       "description": "Evidence-driven acceptance verifier",
       "mode": "subagent",
+      "model": "openrouter/z-ai/glm-4.7",
       "prompt": "{file:./skills/verifier/SKILL.md}"
     },
     "debugger": {
@@ -98,34 +87,30 @@
       "prompt": "{file:./skills/debugger/SKILL.md}",
       "tools": { "write": true, "edit": true, "bash": true }
     },
-    "refactorer": {
+    "refactor": {
       "description": "Behavior-preserving refactor orchestrator",
       "mode": "primary",
       "model": "openrouter/openai/gpt-5.3-codex",
-      "prompt": "{file:./skills/refactorer/SKILL.md}",
+      "prompt": "{file:./skills/refactor/SKILL.md}",
       "tools": { "write": true, "edit": true, "bash": true }
     },
     "review": {
       "description": "High-signal PR review planner",
       "mode": "primary",
       "model": "openrouter/openai/gpt-5.3-codex",
-      "prompt": "{file:./skills/pr-reviewer/SKILL.md}",
+      "prompt": "{file:./skills/review/SKILL.md}",
       "tools": { "write": true, "edit": true, "bash": true }
     },
-    "pr-reviewer": {
-      "description": "Applies changes from .plan/review.*.md",
-      "mode": "subagent",
-      "model": "openrouter/z-ai/glm-4.7",
-      "prompt": "{file:./skills/implementor/SKILL.md}"
-    },
-    "ui-designer": {
+    "designer": {
       "description": "UI specialist",
       "mode": "subagent",
-      "prompt": "{file:./skills/ui-designer/SKILL.md}"
+      "model": "openrouter/z-ai/glm-4.7",
+      "prompt": "{file:./skills/designer/SKILL.md}"
     },
     "mentor": {
       "description": "Teaching overlay",
       "mode": "subagent",
+      "model": "openrouter/z-ai/glm-4.7",
       "prompt": "{file:./skills/mentor/SKILL.md}"
     }
   }

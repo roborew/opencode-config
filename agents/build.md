@@ -1,5 +1,5 @@
 ---
-description: Implements feature plans from .plan/plan.*.md
+description: Unified executor for .plan artifacts
 mode: subagent
 tools:
   write: true

@@ -1,6 +1,6 @@
 # .plan Artifact Schema
 
-All `.plan/<type>.<slug>.md` files follow this minimal structure. Assessor agents produce them; writer agents consume them.
+All `.plan/<type>.<slug>.md` files follow this structure. Primary agents produce them; execution and verification subagents consume them.
 
 ## Required Sections
 
@@ -8,18 +8,38 @@ All `.plan/<type>.<slug>.md` files follow this minimal structure. Assessor agent
 |---------|---------|
 | **Context** | Brief background, constraints, and assumptions |
 | **Goal** | One-sentence objective |
-| **Tasks** | Numbered list of concrete steps to execute |
-| **FilesToChange** | Paths and brief explanation per file |
-| **AcceptanceChecks** | How to verify completion (tests, commands, criteria) |
+| **StagePlan** | Ordered stages with `stage_id`, objective, owner, and dependencies |
+| **Tasks** | Numbered tasks mapped to a `stage_id` |
+| **FilesToChange** | Paths and explanations mapped to a `stage_id` |
+| **StageAcceptanceChecks** | Verification gates for each stage (tests, commands, criteria) |
+| **AcceptanceChecks** | End-to-end completion checks |
+| **CompletionReport** | Required executor handoff fields back to primary |
+| **ReviewDecisionGate** | Prompt behavior after feature completion: start review now or defer |
+| **VerifierInputs** | Required references for verifier: original feature plan, optional review artifact, completion reports, evidence |
+| **ReviewIterationPolicy** | On verifier fail, update existing review artifact; add IterationNotes and remediation tasks |
+| **DocumentationOutputs** | Final required docs under `docs/changelog`, `docs/guides`, and `docs/architecture` |
 | **Risks** | Known risks, rollback notes |
 | **OutOfScope** | Explicitly excluded work |
 
+## CompletionReport Contract
+
+Each execution stage must return:
+
+- `stage_id`
+- `plan_file`
+- `files_changed`
+- `tests_run` and outcomes
+- `acceptance_check_status` (pass/fail by check)
+- `blockers`
+- `residual_risks`
+- `next_stage_input`
+
 ## Artifact Types
 
-- `plan.<slug>.md` — Feature implementation (from Plan agent)
-- `debug.<slug>.md` — Bug fix (from Debugger agent)
-- `refactor.<slug>.md` — Refactor migration (from Refactorer agent)
-- `review.<slug>.md` — PR review changes (from PR Reviewer agent)
+- `plan.<slug>.md` - Feature implementation (from `plan`)
+- `debug.<slug>.md` - Bug fix (from `debugger`)
+- `refactor.<slug>.md` - Refactor migration (from `refactor`)
+- `review.<slug>.md` - Review changes (from `review`)
 
 ## Example Skeleton
 
@@ -32,17 +52,50 @@ All `.plan/<type>.<slug>.md` files follow this minimal structure. Assessor agent
 ## Goal
 ...
 
+## StagePlan
+1. `stage_id: stage-ui`
+   - Owner: `designer`
+   - Objective: ...
+2. `stage_id: stage-core`
+   - Owner: `build`
+   - Objective: ...
+
 ## Tasks
-1. ...
-2. ...
+1. [stage-ui] ...
+2. [stage-core] ...
 
 ## FilesToChange
-- path/to/file.ts: explanation
-- ...
+- [stage-ui] path/to/ui-file.tsx: explanation
+- [stage-core] path/to/core-file.ts: explanation
+
+## StageAcceptanceChecks
+- [stage-ui] Run `pnpm test path/to/ui.test.tsx`
+- [stage-core] Run `pnpm test path/to/core.test.ts`
 
 ## AcceptanceChecks
-- Run `npm test`
-- ...
+- Run targeted tests
+- Run lint/type checks for touched code
+
+## CompletionReport
+- Required: stage_id, files_changed, tests_run, blockers, residual_risks
+
+## ReviewDecisionGate
+- Prompt user: "Start review now?"
+- If no, include resume command with artifact path.
+
+## VerifierInputs
+- Original feature plan: `.plan/plan.<slug>.md`
+- Review artifact (if present): `.plan/review.<slug>.md`
+- Stage completion reports and test evidence
+
+## ReviewIterationPolicy
+- Update existing `.plan/review.<slug>.md` in place
+- Mark completed tasks, add remediation tasks, append dated IterationNotes
+
+## DocumentationOutputs
+- `docs/changelog/<date>-<slug>.md`
+- `docs/guides/<slug>.md`
+- `docs/architecture/<slug>.md`
 
 ## Risks
 - ...

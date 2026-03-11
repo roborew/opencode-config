@@ -5,5 +5,5 @@ tools:
   write: true
   edit: true
   bash: true
-prompt: "{file:../skills/ui-designer/SKILL.md}"
+prompt: "{file:../skills/designer/SKILL.md}"
 ---

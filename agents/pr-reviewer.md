@@ -1,9 +1,0 @@
----
-description: Applies changes from .plan/review.*.md
-mode: subagent
-tools:
-  write: true
-  edit: true
-  bash: true
-prompt: "{file:../skills/implementor/SKILL.md}"
----

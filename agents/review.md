@@ -5,5 +5,5 @@ tools:
   write: true
   edit: true
   bash: true
-prompt: "{file:../skills/pr-reviewer/SKILL.md}"
+prompt: "{file:../skills/review/SKILL.md}"
 ---
