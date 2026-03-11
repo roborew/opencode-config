@@ -2,9 +2,12 @@
 
 ## Overview
 
-- **Primary orchestrators** (`plan`, `debugger`, `refactor`, `review`) run on stronger models and own analysis + staged dispatch.
+- **Primary planning mode** (`plan`) classifies task type and drafts plan content.
+- **Primary execution mode** (`orchestrator`) runs delegated stage execution and recovery flow.
+- **Planning specialists** (`debugger`, `refactor`, `review`) are subagents invoked by `plan`.
 - **Execution subagents** (`build`, `designer`) run on cheaper models and execute bounded stage tasks.
 - **Artifact writer** (`scribe`) writes markdown artifacts/docs in approved paths.
+- **Recovery replanner** (`helper`) diagnoses stuck/failed states and amends existing artifacts through `scribe`.
 - **Verifier** (`verifier`) is an independent evidence gate and never writes code.
 - **Mentor** (`mentor`) is optional and explanatory only.
 
@@ -12,24 +15,44 @@
 
 | Role | Agents | Model Tier | Responsibility |
 |---|---|---|---|
-| Primary | `plan`, `debugger`, `refactor`, `review` | smart | Orchestrate stages and decisions; no direct file edits |
+| Primary (planning) | `plan` | smart | Ask plan type, invoke specialist planner, produce plan draft content |
+| Coordinator | `orchestrator` | fast | Execute artifact stages and enforce helper-triggered recovery |
+| Planning specialists | `debugger`, `refactor`, `review` | smart | Return type-specific plan drafts to `plan` |
 | Artifact writer | `scribe` | fast | Write/update markdown artifacts and docs from orchestrator content |
+| Recovery | `helper` | fast | Replan minimal strategy deltas and trigger artifact amendment |
 | Execution | `build`, `designer` | fast | Execute assigned `stage_id` tasks with micro-TDD |
 | Verification | `verifier` | fast | Verify acceptance criteria with traceable evidence |
 
-Primary agents are permission-scoped with `edit: deny` and must delegate markdown file writes to `scribe`.
+Both primaries (`plan`, `orchestrator`) are non-writing (`edit: deny`). Only `scribe` writes markdown artifacts/docs.
 
 ## Canonical Flow
 
-1. Primary drafts artifact content in memory and dispatches `scribe` to write one artifact in `.plan/` (`plan.*`, `debug.*`, `refactor.*`, or `review.*`).
-2. Primary dispatches one stage at a time to `build` or `designer`.
-3. Execution subagent returns completion report (`stage_id`, files, tests, checks, blockers, risks, next input).
-4. Primary dispatches next stage only after successful handoff.
-5. For final completion, run `verifier`.
-6. Prompt user: **"Start review now?"**
+1. `plan` asks for plan type (Feature/Debug/Refactor/Review) when request is greeting/unspecified.
+2. `plan` invokes matching specialist subagent (`debugger`/`refactor`/`review`) as needed and returns artifact draft content.
+3. User switches to `orchestrator`.
+4. `orchestrator` dispatches `scribe` to write artifact in `.plan/` (`plan.*`, `debug.*`, `refactor.*`, or `review.*`).
+5. `orchestrator` dispatches one stage at a time to `build` or `designer`.
+6. Execution subagent returns completion report (`stage_id`, files, tests, checks, blockers, risks, next input).
+7. `orchestrator` dispatches next stage only after successful handoff.
+8. For final completion, run `verifier`.
+9. Prompt user: **"Start review now?"**
    - **Yes**: `review` creates/updates `.plan/review.<slug>.md`, `build` applies fixes, `verifier` re-checks.
    - **No**: end with resume command and artifact path for a clean new session.
-7. Generate required docs only after verification gates pass by dispatching `scribe`.
+10. Generate required docs only after verification gates pass by dispatching `scribe`.
+
+## Escalation and Recovery (enforced)
+
+Invoke `helper` immediately when any occurs:
+- same stage fails verification twice
+- unresolved blocker reported by execution subagent
+- verifier reports failed criteria requiring strategy change
+
+Recovery loop:
+1. `helper` diagnoses and proposes minimal amendment.
+2. `scribe` updates existing artifact in place.
+3. resume with next indicated stage.
+
+Do not advance stages until helper amendment is applied.
 
 ## Review and Verifier Interaction
 
@@ -42,6 +65,7 @@ Primary agents are permission-scoped with `edit: deny` and must delegate markdow
   - mark completed tasks
   - append remediation tasks
   - append dated `IterationNotes`
+  - invoke `helper` when repeated failures or blocker persists
   - repeat `build` -> `verifier` cycle
 
 ## MCP Usage Policy
@@ -93,6 +117,8 @@ Constraints: markdown only, approved paths only
 - Artifact includes required schema sections (`StagePlan`, `StageAcceptanceChecks`, `CompletionReport`, `VerifierInputs`, `DocumentationOutputs`).
 - Primary agents cannot edit files directly (`edit: deny`).
 - Scribe can write to `.plan` and docs markdown paths only.
+- Helper never writes directly and only amends existing artifacts via `scribe`.
+- Helper is invoked on repeated verifier failure or unresolved blockers.
 - Stage dispatch is one-at-a-time with completion handoff.
 - UI work routes to `designer`; non-UI work routes to `build`.
 - Optional review prompt appears at completion and supports defer/resume.

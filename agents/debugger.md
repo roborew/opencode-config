@@ -1,6 +1,6 @@
 ---
-description: Root-cause analysis primary producing .plan/debug.*.md for Build
-mode: primary
+description: Planning specialist for debugger-style plans
+mode: subagent
 tools:
   write: false
   edit: false

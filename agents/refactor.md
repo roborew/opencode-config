@@ -1,6 +1,6 @@
 ---
-description: Refactor planner producing .plan/refactor.*.md for Build
-mode: primary
+description: Planning specialist for refactor plans
+mode: subagent
 tools:
   write: false
   edit: false

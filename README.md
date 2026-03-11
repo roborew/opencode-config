@@ -4,23 +4,29 @@ This repository uses a stage-based orchestration model to keep cheaper models fo
 
 ## Topology
 
-- **Primary orchestrators:** `plan`, `debugger`, `refactor`, `review`
+- **Primary planning mode:** `plan`
+- **Primary execution mode:** `orchestrator`
+- **Planning specialists (subagents):** `debugger`, `refactor`, `review`
 - **Artifact writer:** `scribe`
+- **Recovery replanner:** `helper`
 - **Execution subagents:** `build`, `designer`
 - **Verification gate:** `verifier`
-- **Optional helper:** `mentor`
+- **Optional mentor:** `mentor`
 
 ## How It Works
 
-1. A primary agent drafts content and dispatches `scribe` to create/update a single artifact in `.plan/`:
+1. `plan` asks what type of plan is needed (Feature, Debug, Refactor, Review) when prompt is greeting/unspecified.
+2. `plan` drafts content (and invokes specialist subagents when needed).
+3. Switch to `orchestrator`.
+4. `orchestrator` dispatches `scribe` to create/update a single artifact in `.plan/`:
    - `.plan/plan.<slug>.md`
    - `.plan/debug.<slug>.md`
    - `.plan/refactor.<slug>.md`
    - `.plan/review.<slug>.md`
-2. The primary dispatches one stage at a time to `build` or `designer`.
-3. Execution subagents return completion reports with evidence.
-4. The primary either dispatches the next stage or requests adjustments.
-5. `verifier` checks acceptance criteria with evidence before completion.
+5. `orchestrator` dispatches one stage at a time to `build` or `designer`.
+6. Execution subagents return completion reports with evidence.
+7. `verifier` checks acceptance criteria with evidence before completion.
+8. If execution is stuck or verifier fails repeatedly, `orchestrator` invokes `helper`, then `scribe` updates the existing artifact before retry.
 
 ## Review Decision Gate
 
@@ -40,6 +46,8 @@ If verification fails, update the same `review.<slug>.md` artifact with:
 - dated `IterationNotes`
 
 The update is performed by `scribe` (not by primary agents).
+
+When failures persist, `helper` produces a minimal strategy amendment and `scribe` applies it to the same artifact (`IterationNotes` + task status changes).
 
 ## MCP Usage Expectations
 

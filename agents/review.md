@@ -1,6 +1,6 @@
 ---
-description: High-signal PR review planner producing .plan/review.*.md
-mode: primary
+description: Planning specialist for review plans
+mode: subagent
 tools:
   write: false
   edit: false

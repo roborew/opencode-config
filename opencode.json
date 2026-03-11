@@ -71,11 +71,29 @@
         "edit": "deny",
         "task": {
           "*": "deny",
+          "debugger": "allow",
+          "refactor": "allow",
+          "review": "allow",
+          "designer": "allow",
+          "orchestrator": "allow"
+        }
+      }
+    },
+    "orchestrator": {
+      "description": "Execution orchestrator for artifact-driven stage flow",
+      "mode": "primary",
+      "model": "openrouter/z-ai/glm-4.7",
+      "prompt": "{file:./skills/orchestrator/SKILL.md}",
+      "tools": { "write": false, "edit": false, "bash": true },
+      "permission": {
+        "edit": "deny",
+        "task": {
+          "*": "deny",
           "scribe": "allow",
           "build": "allow",
           "designer": "allow",
           "verifier": "allow",
-          "review": "allow"
+          "helper": "allow"
         }
       }
     },
@@ -92,53 +110,33 @@
       "prompt": "{file:./skills/verifier/SKILL.md}"
     },
     "debugger": {
-      "description": "Diagnose-first bug orchestrator",
-      "mode": "primary",
+      "description": "Planning specialist for debugger-style plans",
+      "mode": "subagent",
       "model": "openrouter/openai/gpt-5.3-codex",
       "prompt": "{file:./skills/debugger/SKILL.md}",
       "tools": { "write": false, "edit": false, "bash": true },
       "permission": {
-        "edit": "deny",
-        "task": {
-          "*": "deny",
-          "scribe": "allow",
-          "build": "allow",
-          "verifier": "allow"
-        }
+        "edit": "deny"
       }
     },
     "refactor": {
-      "description": "Behavior-preserving refactor orchestrator",
-      "mode": "primary",
+      "description": "Planning specialist for refactor plans",
+      "mode": "subagent",
       "model": "openrouter/openai/gpt-5.3-codex",
       "prompt": "{file:./skills/refactor/SKILL.md}",
       "tools": { "write": false, "edit": false, "bash": true },
       "permission": {
-        "edit": "deny",
-        "task": {
-          "*": "deny",
-          "scribe": "allow",
-          "build": "allow",
-          "verifier": "allow"
-        }
+        "edit": "deny"
       }
     },
     "review": {
-      "description": "High-signal PR review planner",
-      "mode": "primary",
+      "description": "Planning specialist for review plans",
+      "mode": "subagent",
       "model": "openrouter/openai/gpt-5.3-codex",
       "prompt": "{file:./skills/review/SKILL.md}",
       "tools": { "write": false, "edit": false, "bash": true },
       "permission": {
-        "edit": {
-          "*": "deny"
-        },
-        "task": {
-          "*": "deny",
-          "scribe": "allow",
-          "build": "allow",
-          "verifier": "allow"
-        }
+        "edit": "deny"
       }
     },
     "scribe": {
@@ -166,6 +164,20 @@
           "*/docs/guides/**/*.md": "allow",
           "*/docs/architecture/*.md": "allow",
           "*/docs/architecture/**/*.md": "allow"
+        }
+      }
+    },
+    "helper": {
+      "description": "Recovery replanner for blocked or failed stages",
+      "mode": "subagent",
+      "model": "openrouter/openai/gpt-5.3-codex",
+      "prompt": "{file:./skills/helper/SKILL.md}",
+      "tools": { "write": false, "edit": false, "bash": true },
+      "permission": {
+        "edit": "deny",
+        "task": {
+          "*": "deny",
+          "scribe": "allow"
         }
       }
     },
