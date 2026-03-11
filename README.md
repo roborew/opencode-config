@@ -76,3 +76,85 @@ Templates live in:
 - `docs/changelog/TEMPLATE.md`
 - `docs/guides/TEMPLATE.md`
 - `docs/architecture/TEMPLATE.md`
+
+## Desktop App Shell Environment Fix
+
+If OpenCode CLI works but desktop agents miss tools from `mise`, `conda`, `nvm`, etc., the desktop app is likely launching shells with a different environment than your terminal.
+
+### Required fix (`~/.zshenv` for all zsh modes)
+
+Put shared runtime setup in `~/.zshenv` (loaded by interactive and non-interactive zsh), including `mise` activation and any PATH entries needed by tools:
+
+```sh
+export PATH="/opt/homebrew/bin:$PATH"
+export PATH="/usr/local/bin:/usr/local/sbin:$PATH"
+export PATH="/opt/homebrew/opt/sqlite/bin:$PATH"
+export PATH="/opt/homebrew/opt/postgresql@17/bin:$PATH"
+export PATH="/opt/homebrew/Caskroom/miniconda/base/condabin:$PATH"
+
+if [ -x "/Users/USERNAME/.local/bin/mise" ]; then
+  unset __MISE_ORIG_PATH MISE_SHELL __MISE_WATCH
+  eval "$(/Users/USERNAME/.local/bin/mise activate zsh)"
+fi
+```
+
+This is the key fix that makes agent shells resolve `ruby`/`node` from mise instead of system defaults.
+
+### Env vars for code tools and agents
+
+If tools need env vars (API keys, toggles, endpoints), load them from a machine-local file in `~/.zshenv`:
+
+```sh
+if [ -f "$HOME/.opencode-agent-env" ]; then
+  . "$HOME/.opencode-agent-env"
+fi
+```
+
+Then add exports to `~/.opencode-agent-env`, for example:
+
+```sh
+export EXAMPLE_API_KEY="..."
+export EXAMPLE_BASE_URL="https://example.com"
+```
+
+### PATH and command diagnostics
+
+Run these in `@helper` when something is missing:
+
+```sh
+echo "SHELL=$SHELL"
+ps -p $$ -o command=
+echo "flags=$-"
+command -v mise || true
+mise --version || true
+mise current ruby || true
+mise which ruby || true
+mise current node || true
+mise which node || true
+which ruby && ruby -v
+which node && node -v
+```
+
+Quick multi-command PATH check:
+
+```sh
+for cmd in ruby node python pip conda pnpm bun go java; do
+  printf "%-8s -> %s\n" "$cmd" "$(command -v "$cmd" || echo MISSING)"
+done
+```
+
+If `mise current node` is unset, configure it globally or per-project:
+
+```sh
+mise use -g node@24.2.0
+# or inside a project:
+mise use node@24.2.0
+```
+
+### Cleanup / rollback
+
+If you previously set a wrapper shell override, remove it:
+
+```sh
+launchctl unsetenv SHELL
+```
