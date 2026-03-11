@@ -4,7 +4,7 @@ mode: primary
 tools:
   write: false
   edit: false
-  bash: true
+  bash: false
 permission:
   edit: deny
   task:

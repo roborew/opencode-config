@@ -84,7 +84,7 @@
       "mode": "primary",
       "model": "openrouter/z-ai/glm-4.7",
       "prompt": "{file:./skills/orchestrator/SKILL.md}",
-      "tools": { "write": false, "edit": false, "bash": true },
+      "tools": { "write": false, "edit": false, "bash": false },
       "permission": {
         "edit": "deny",
         "task": {
