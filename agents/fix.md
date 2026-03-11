@@ -1,5 +1,5 @@
 ---
-description: Applies changes from .plan/review.*.md
+description: Implements bugfix steps from .plan/debug.*.md
 mode: subagent
 tools:
   write: true

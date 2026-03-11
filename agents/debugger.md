@@ -1,10 +1,9 @@
 ---
-description: Diagnose-first bug orchestrator delegating fix and verification
-mode: subagent
+description: Root-cause analysis agent producing .plan/debug.*.md for Fix
+mode: primary
 tools:
-  write: false
-  edit: false
+  write: true
+  edit: true
   bash: true
-  task: true
 prompt: "{file:../skills/debugger/SKILL.md}"
 ---

@@ -26,6 +26,9 @@
         },
         "qwen/qwen3-coder-next": {
           "name": "Qwen3 Coder Next"
+        },
+        "z-ai/glm-4.7": {
+          "name": "GLM 4.7"
         }
       }
     }
@@ -59,14 +62,28 @@
   },
   "agent": {
     "plan": {
-      "prompt": "{file:./skills/plan/SKILL.md}"
+      "description": "High-level feature planning agent",
+      "mode": "primary",
+      "model": "openrouter/openai/gpt-5.3-codex",
+      "prompt": "{file:./skills/plan/SKILL.md}",
+      "tools": { "write": true, "edit": true, "bash": true }
     },
     "build": {
+      "description": "Implements feature plans from .plan/plan.*.md",
+      "mode": "subagent",
+      "model": "openrouter/z-ai/glm-4.7",
       "prompt": "{file:./skills/build/SKILL.md}"
     },
     "implementor": {
       "description": "Scoped leaf executor for implementation tasks",
       "mode": "subagent",
+      "model": "openrouter/z-ai/glm-4.7",
+      "prompt": "{file:./skills/implementor/SKILL.md}"
+    },
+    "fix": {
+      "description": "Implements bugfix steps from .plan/debug.*.md",
+      "mode": "subagent",
+      "model": "openrouter/z-ai/glm-4.7",
       "prompt": "{file:./skills/implementor/SKILL.md}"
     },
     "verifier": {
@@ -76,18 +93,30 @@
     },
     "debugger": {
       "description": "Diagnose-first bug orchestrator",
-      "mode": "subagent",
-      "prompt": "{file:./skills/debugger/SKILL.md}"
+      "mode": "primary",
+      "model": "openrouter/openai/gpt-5.3-codex",
+      "prompt": "{file:./skills/debugger/SKILL.md}",
+      "tools": { "write": true, "edit": true, "bash": true }
     },
     "refactorer": {
       "description": "Behavior-preserving refactor orchestrator",
-      "mode": "subagent",
-      "prompt": "{file:./skills/refactorer/SKILL.md}"
+      "mode": "primary",
+      "model": "openrouter/openai/gpt-5.3-codex",
+      "prompt": "{file:./skills/refactorer/SKILL.md}",
+      "tools": { "write": true, "edit": true, "bash": true }
+    },
+    "review": {
+      "description": "High-signal PR review planner",
+      "mode": "primary",
+      "model": "openrouter/openai/gpt-5.3-codex",
+      "prompt": "{file:./skills/pr-reviewer/SKILL.md}",
+      "tools": { "write": true, "edit": true, "bash": true }
     },
     "pr-reviewer": {
-      "description": "Merge-readiness gatekeeper",
+      "description": "Applies changes from .plan/review.*.md",
       "mode": "subagent",
-      "prompt": "{file:./skills/pr-reviewer/SKILL.md}"
+      "model": "openrouter/z-ai/glm-4.7",
+      "prompt": "{file:./skills/implementor/SKILL.md}"
     },
     "ui-designer": {
       "description": "UI specialist",

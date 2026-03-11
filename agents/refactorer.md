@@ -1,10 +1,9 @@
 ---
-description: Behavior-preserving refactor orchestrator with safety checks
-mode: subagent
+description: Refactor planner producing .plan/refactor.*.md for Implementor
+mode: primary
 tools:
-  write: false
-  edit: false
+  write: true
+  edit: true
   bash: true
-  task: true
 prompt: "{file:../skills/refactorer/SKILL.md}"
 ---
