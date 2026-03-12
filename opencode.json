@@ -160,7 +160,7 @@
     "scribe": {
       "description": "Markdown artifact and docs writer",
       "mode": "subagent",
-      "model": "openrouter/minimax/minimax-m2.5",
+      "model": "openrouter/inception/mercury-2",
       "prompt": "{file:./skills/scribe/SKILL.md}",
       "steps": 5,
       "tools": { "write": true, "edit": true, "bash": false },
