@@ -6,10 +6,12 @@ tools:
   write: false
   edit: false
   bash: true
+  skill: true
 permission:
   edit: deny
+  skill: { "*": "allow" }
   task:
     "*": deny
     scribe: allow
-prompt: "{file:~/.config/opencode/skills/helper/SKILL.md}"
+prompt: "{file:~/.config/opencode/prompts/helper.md}"
 ---

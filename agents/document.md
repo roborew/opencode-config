@@ -6,7 +6,9 @@ tools:
   write: false
   edit: false
   bash: true
+  skill: true
 permission:
   edit: deny
-prompt: "{file:~/.config/opencode/skills/document/SKILL.md}"
+  skill: { "*": "allow" }
+prompt: "{file:~/.config/opencode/prompts/document.md}"
 ---

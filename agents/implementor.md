@@ -7,5 +7,8 @@ tools:
   write: true
   edit: true
   bash: true
-prompt: "{file:~/.config/opencode/skills/implementor/SKILL.md}"
+  skill: true
+permission:
+  skill: { "*": "allow" }
+prompt: "{file:~/.config/opencode/prompts/implementor.md}"
 ---

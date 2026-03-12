@@ -5,7 +5,9 @@ tools:
   write: true
   edit: true
   bash: false
+  skill: true
 permission:
+  skill: { "*": "allow" }
   edit:
     "*": deny
     ".plan/*.md": allow
@@ -24,5 +26,5 @@ permission:
     "*/docs/guides/**/*.md": allow
     "*/docs/architecture/*.md": allow
     "*/docs/architecture/**/*.md": allow
-prompt: "{file:~/.config/opencode/skills/scribe/SKILL.md}"
+prompt: "{file:~/.config/opencode/prompts/scribe.md}"
 ---

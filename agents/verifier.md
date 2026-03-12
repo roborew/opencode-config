@@ -5,5 +5,9 @@ tools:
   write: false
   edit: false
   bash: true
-prompt: "{file:~/.config/opencode/skills/verifier/SKILL.md}"
+  skill: true
+permission:
+  edit: deny
+  skill: { "*": "allow" }
+prompt: "{file:~/.config/opencode/prompts/verifier.md}"
 ---

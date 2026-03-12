@@ -90,7 +90,7 @@
       "description": "High-level planner for serious features and refactors. Plans only, delegates scribe to persist .plan artifact, then hands off to orchestrator.",
       "mode": "primary",
       "model": "openrouter/openai/gpt-5.3-codex",
-      "prompt": "{file:~/.config/opencode/skills/architect/SKILL.md}",
+      "prompt": "{file:~/.config/opencode/prompts/architect.md}",
       "tools": { "write": false, "edit": false, "bash": true, "skill": true },
       "permission": {
         "edit": "deny",
@@ -109,10 +109,11 @@
       "description": "Execution orchestrator for artifact-driven stage flow",
       "mode": "primary",
       "model": "openrouter/inception/mercury-2",
-      "prompt": "{file:~/.config/opencode/skills/orchestrator/SKILL.md}",
-      "tools": { "write": false, "edit": false, "bash": false },
+      "prompt": "{file:~/.config/opencode/prompts/orchestrator.md}",
+      "tools": { "write": false, "edit": false, "bash": false, "skill": true },
       "permission": {
         "edit": "deny",
+        "skill": { "*": "allow" },
         "task": {
           "*": "deny",
           "scribe": "allow",
@@ -127,61 +128,69 @@
       "description": "Unified executor for .plan artifacts. Execute only stages with Owner: implementor.",
       "mode": "subagent",
       "model": "openrouter/minimax/minimax-m2.5",
-      "prompt": "{file:~/.config/opencode/skills/implementor/SKILL.md}",
-      "steps": 20
+      "prompt": "{file:~/.config/opencode/prompts/implementor.md}",
+      "steps": 20,
+      "tools": { "write": true, "edit": true, "bash": true, "skill": true },
+      "permission": { "skill": { "*": "allow" } }
     },
     "verifier": {
       "description": "Evidence-driven acceptance verifier",
       "mode": "subagent",
       "model": "openrouter/minimax/minimax-m2.5",
-      "prompt": "{file:~/.config/opencode/skills/verifier/SKILL.md}"
+      "prompt": "{file:~/.config/opencode/prompts/verifier.md}",
+      "tools": { "write": false, "edit": false, "bash": true, "skill": true },
+      "permission": { "edit": "deny", "skill": { "*": "allow" } }
     },
     "debugger": {
       "description": "Planning specialist for debugger-style plans",
       "mode": "subagent",
       "model": "openrouter/minimax/minimax-m2.5",
-      "prompt": "{file:~/.config/opencode/skills/debugger/SKILL.md}",
-      "tools": { "write": false, "edit": false, "bash": true },
+      "prompt": "{file:~/.config/opencode/prompts/debugger.md}",
+      "tools": { "write": false, "edit": false, "bash": true, "skill": true },
       "permission": {
-        "edit": "deny"
+        "edit": "deny",
+        "skill": { "*": "allow" }
       }
     },
     "refactor": {
       "description": "Planning specialist for refactor plans",
       "mode": "subagent",
       "model": "openrouter/minimax/minimax-m2.5",
-      "prompt": "{file:~/.config/opencode/skills/refactor/SKILL.md}",
-      "tools": { "write": false, "edit": false, "bash": true },
+      "prompt": "{file:~/.config/opencode/prompts/refactor.md}",
+      "tools": { "write": false, "edit": false, "bash": true, "skill": true },
       "permission": {
-        "edit": "deny"
+        "edit": "deny",
+        "skill": { "*": "allow" }
       }
     },
     "document": {
       "description": "Generates documentation content from completed plan artifacts. Read-only; returns content for scribe to write.",
       "mode": "subagent",
       "model": "openrouter/minimax/minimax-m2.5",
-      "prompt": "{file:~/.config/opencode/skills/document/SKILL.md}",
-      "tools": { "write": false, "edit": false, "bash": true },
-      "permission": { "edit": "deny" }
+      "prompt": "{file:~/.config/opencode/prompts/document.md}",
+      "tools": { "write": false, "edit": false, "bash": true, "skill": true },
+      "permission": { "edit": "deny", "skill": { "*": "allow" } }
     },
     "review": {
       "description": "Planning specialist for review plans",
       "mode": "subagent",
       "model": "openrouter/minimax/minimax-m2.5",
-      "prompt": "{file:~/.config/opencode/skills/review/SKILL.md}",
-      "tools": { "write": false, "edit": false, "bash": true },
+      "prompt": "{file:~/.config/opencode/prompts/review.md}",
+      "tools": { "write": false, "edit": false, "bash": true, "skill": true },
       "permission": {
-        "edit": "deny"
+        "edit": "deny",
+        "skill": { "*": "allow" }
       }
     },
     "scribe": {
       "description": "Markdown artifact and docs writer",
       "mode": "subagent",
       "model": "openrouter/inception/mercury-2",
-      "prompt": "{file:~/.config/opencode/skills/scribe/SKILL.md}",
+      "prompt": "{file:~/.config/opencode/prompts/scribe.md}",
       "steps": 5,
-      "tools": { "write": true, "edit": true, "bash": false },
+      "tools": { "write": true, "edit": true, "bash": false, "skill": true },
       "permission": {
+        "skill": { "*": "allow" },
         "edit": {
           "*": "deny",
           ".plan/*.md": "allow",
@@ -207,10 +216,11 @@
       "description": "Recovery replanner for blocked or failed stages",
       "mode": "subagent",
       "model": "openrouter/minimax/minimax-m2.5",
-      "prompt": "{file:~/.config/opencode/skills/helper/SKILL.md}",
-      "tools": { "write": false, "edit": false, "bash": true },
+      "prompt": "{file:~/.config/opencode/prompts/helper.md}",
+      "tools": { "write": false, "edit": false, "bash": true, "skill": true },
       "permission": {
         "edit": "deny",
+        "skill": { "*": "allow" },
         "task": {
           "*": "deny",
           "scribe": "allow"
@@ -221,13 +231,17 @@
       "description": "UI specialist",
       "mode": "subagent",
       "model": "openrouter/minimax/minimax-m2.5",
-      "prompt": "{file:~/.config/opencode/skills/designer/SKILL.md}"
+      "prompt": "{file:~/.config/opencode/prompts/designer.md}",
+      "tools": { "write": true, "edit": true, "bash": true, "skill": true },
+      "permission": { "skill": { "*": "allow" } }
     },
     "mentor": {
       "description": "Teaching overlay",
       "mode": "subagent",
       "model": "openrouter/minimax/minimax-m2.5",
-      "prompt": "{file:~/.config/opencode/skills/mentor/SKILL.md}"
+      "prompt": "{file:~/.config/opencode/prompts/mentor.md}",
+      "tools": { "write": false, "edit": false, "bash": false, "skill": true },
+      "permission": { "skill": { "*": "allow" } }
     }
   }
 }

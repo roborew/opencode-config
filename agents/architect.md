@@ -17,5 +17,5 @@ permission:
     review: allow
     document: allow
     scribe: allow
-prompt: "{file:~/.config/opencode/skills/architect/SKILL.md}"
+prompt: "{file:~/.config/opencode/prompts/architect.md}"
 ---

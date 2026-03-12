@@ -5,5 +5,8 @@ tools:
   write: true
   edit: true
   bash: true
-prompt: "{file:~/.config/opencode/skills/designer/SKILL.md}"
+  skill: true
+permission:
+  skill: { "*": "allow" }
+prompt: "{file:~/.config/opencode/prompts/designer.md}"
 ---

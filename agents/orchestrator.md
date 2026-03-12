@@ -6,8 +6,10 @@ tools:
   write: false
   edit: false
   bash: false
+  skill: true
 permission:
   edit: deny
+  skill: { "*": "allow" }
   task:
     "*": deny
     scribe: allow
@@ -15,5 +17,5 @@ permission:
     designer: allow
     verifier: allow
     helper: allow
-prompt: "{file:~/.config/opencode/skills/orchestrator/SKILL.md}"
+prompt: "{file:~/.config/opencode/prompts/orchestrator.md}"
 ---

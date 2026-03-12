@@ -5,7 +5,9 @@ tools:
   write: false
   edit: false
   bash: true
+  skill: true
 permission:
   edit: deny
-prompt: "{file:~/.config/opencode/skills/refactor/SKILL.md}"
+  skill: { "*": "allow" }
+prompt: "{file:~/.config/opencode/prompts/refactor.md}"
 ---
