@@ -104,12 +104,14 @@ When running review artifact flow:
 - rerun build stage and verifier
 
 ## Loop Detection and Halt (mandatory)
-If you receive the same or near-identical completion report from a child (e.g. scribe) **2 or more times**:
+If you receive the same or near-identical report from a child (scribe, build, designer, verifier) **2 or more times**:
 1. Treat the report as `PASS` and do not re-invoke that child.
 2. Halt orchestration for that task. Report completion to the user.
 3. Do not ask the child to confirm again.
 
 When scribe returns `path`, `operation`, and `summary`, the write task is complete. Do not re-dispatch scribe for the same content.
+
+When build repeats the same intent (e.g. "Let me create X") without new evidence, treat as stuck: halt, report to user, and do not re-invoke build for the same stage without corrective feedback.
 
 ## Completion
 Report:

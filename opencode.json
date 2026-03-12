@@ -32,6 +32,9 @@
         },
         "z-ai/glm-4.7": {
           "name": "GLM 4.7"
+        },
+        "inception/mercury-2": {
+          "name": "Mercury 2"
         }
       }
     }
@@ -103,8 +106,9 @@
     "build": {
       "description": "Unified executor for .plan artifacts",
       "mode": "subagent",
-      "model": "openrouter/z-ai/glm-4.7",
-      "prompt": "{file:./skills/build/SKILL.md}"
+      "model": "openrouter/inception/mercury-2",
+      "prompt": "{file:./skills/build/SKILL.md}",
+      "steps": 20
     },
     "verifier": {
       "description": "Evidence-driven acceptance verifier",

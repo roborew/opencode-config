@@ -70,6 +70,12 @@ Use MCP sources when they materially reduce uncertainty for assigned work:
 
 Do not browse broadly; capture only evidence relevant to the current stage.
 
+## Anti-Loop (mandatory)
+- Do not repeat the same verbal statement. If you said "Let me create X" or "I understand Y", proceed immediately to perform the action.
+- Do not output the same intent multiple times. One statement of intent, then execute.
+- If you have already created a file or run a command, do not announce it again. Move to the next step or report completion.
+- **Never repeat** "Good, I've done X. Now I need to Y. Let me Z." — after the first occurrence, invoke the edit/write tool in the same turn. No second announcement.
+
 ## Completion
 
 Return a completion report with:
