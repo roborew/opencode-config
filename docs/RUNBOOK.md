@@ -3,12 +3,12 @@
 ## Overview
 
 - **Built-in agents:** `plan` and `build` remain OpenCode defaults (Codex model) for generic/quick tasks.
-- **Primary planning mode** (`architect`) — read-only: exploration, reporting, drafting plans; also owns review and documentation after implementation. Invokes: `debugger`, `refactor`, `review`, `document`, `scribe`. Never invokes `designer`, `implementor`, or `orchestrator`. Prompts user to switch to orchestrator when done; receives user back for review + docs after orchestrator completes.
-- **Primary execution mode** (`orchestrator`) runs delegated stage execution and recovery flow. On completion, prompts user to switch to architect for review and documentation.
+- **Primary planning mode** (`architect`) — read-only: exploration, reporting, drafting plans; also owns review and documentation after implementation. Invokes: `debugger`, `refactor`, `review`, `document`, `scribe`. Never invokes `designer`, `developer`, or `orchestrate`. Prompts user to switch to orchestrate when done; receives user back for review + docs after orchestrate completes.
+- **Primary execution mode** (`orchestrate`) runs delegated stage execution and recovery flow. On completion, prompts user to switch to architect for review and documentation.
 - **Planning specialists** (`debugger`, `refactor`, `review`) — read-only subagents of architect; return plan drafts, never write code.
 - **Documentation generator** (`document`) — read-only; generates changelog/guides/architecture content; architect invokes, then scribe writes.
-- **Execution subagents** (`implementor`, `designer`) — coding agents invoked by orchestrator only; architect never invokes them.
-- **Artifact writer** (`scribe`) — only write path; writes plan artifacts and docs (invoked by architect and orchestrator).
+- **Execution subagents** (`developer`, `designer`) — coding agents invoked by orchestrate only; architect never invokes them.
+- **Artifact writer** (`scribe`) — only write path; writes plan artifacts and docs (invoked by architect and orchestrate).
 - **Recovery replanner** (`helper`) diagnoses stuck/failed states and amends existing artifacts through `scribe`.
 - **Verifier** (`verifier`) is an independent evidence gate and never writes code.
 - **Mentor** (`mentor`) is optional and explanatory only.
@@ -17,33 +17,33 @@
 
 | Role | Agents | Model Tier | Responsibility |
 |---|---|---|---|
-| Primary (planning) | `architect` | smart | Read-only: explore, report, draft. Plan mode: scribe writes artifact → switch to orchestrator. Post-implementation: review → sign-off → document → scribe writes docs |
-| Coordinator | `orchestrator` | smart | Execute artifact stages, grade child reports, enforce helper-triggered recovery, dispatch scribe for docs |
+| Primary (planning) | `architect` | smart | Read-only: explore, report, draft. Plan mode: scribe writes artifact → switch to orchestrate. Post-implementation: review → sign-off → document → scribe writes docs |
+| Coordinator | `orchestrate` | smart | Execute artifact stages, grade child reports, enforce helper-triggered recovery, dispatch scribe for docs |
 | Planning specialists | `debugger`, `refactor`, `review` | smart | Return type-specific plan drafts to architect |
 | Documentation generator | `document` | fast | Generate changelog/guides/architecture content; architect invokes, scribe writes |
-| Artifact writer | `scribe` | fast | Write/update markdown artifacts and docs from architect/orchestrator content |
+| Artifact writer | `scribe` | fast | Write/update markdown artifacts and docs from architect/orchestrate content |
 | Recovery | `helper` | fast | Replan minimal strategy deltas and trigger artifact amendment |
-| Execution | `implementor`, `designer` | fast | Execute assigned `stage_id` tasks with micro-TDD |
+| Execution | `developer`, `designer` | fast | Execute assigned `stage_id` tasks with micro-TDD |
 | Verification | `verifier` | fast | Verify acceptance criteria with traceable evidence |
 
-Both primaries (`architect`, `orchestrator`) are non-writing (`edit: deny`). Only `scribe` writes markdown artifacts/docs.
+Both primaries (`architect`, `orchestrate`) are non-writing (`edit: deny`). Only `scribe` writes markdown artifacts/docs.
 
 ## Canonical Flow
 
 1. `architect` asks for plan type (Feature/Debug/Refactor/Review) when request is greeting/unspecified.
 2. `architect` invokes matching specialist subagent (`debugger`/`refactor`/`review`) as needed and produces artifact draft content.
 3. `architect` invokes `scribe` to write the artifact to `.plan/<type>.<slug>.md` (mandatory step).
-4. User switches to `orchestrator`.
-5. `orchestrator` ensures artifact exists; if missing, dispatches `scribe` to write it.
-6. `orchestrator` invokes `helper` environment preflight and writes `EnvReadiness` to artifact via `scribe`.
-7. `orchestrator` dispatches one stage at a time to `implementor` or `designer` only if EnvReadiness is `Ready`.
+4. User switches to `orchestrate`.
+5. `orchestrate` ensures artifact exists; if missing, dispatches `scribe` to write it.
+6. `orchestrate` invokes `helper` environment preflight and writes `EnvReadiness` to artifact via `scribe`.
+7. `orchestrate` dispatches one stage at a time to `developer` or `designer` only if EnvReadiness is `Ready`.
 8. Execution subagent returns completion report (`stage_id`, files, tests, checks, blockers, risks, next input).
-9. `orchestrator` dispatches next stage only after successful handoff.
+9. `orchestrate` dispatches next stage only after successful handoff.
 10. For final completion, run `verifier`.
 11. When verifier passes for all stages: **"Implementation complete. Switch to architect for review and documentation sign-off."** Do not run review or documentation. User switches to architect.
-12. Architect (post-implementation): invokes `review` for sign-off. If remediation: scribe writes review artifact → user switches to orchestrator → implementor applies fixes → verifier. If sign-off: architect invokes `document` → scribe writes docs.
+12. Architect (post-implementation): invokes `review` for sign-off. If remediation: scribe writes review artifact → user switches to orchestrate → developer applies fixes → verifier. If sign-off: architect invokes `document` → scribe writes docs.
 
-At each stage handoff, orchestrator grades child output:
+At each stage handoff, orchestrate grades child output:
 - `PASS` -> continue
 - `NEEDS_RETRY` -> corrective feedback and rerun stage
 - `BLOCKED` -> helper + scribe amendment path
@@ -69,10 +69,10 @@ Do not start execution stages before helper startup preflight is recorded in art
 
 When a subagent repeats the same completion message or stalls:
 
-1. **OpenCode config**: Scribe has `steps: 5`, implementor has `steps: 20` in `opencode.json` — forces exit after that many agentic iterations.
+1. **OpenCode config**: Scribe has `steps: 5`, developer has `steps: 20` in `opencode.json` — forces exit after that many agentic iterations.
 2. **Orchestrator loop detection**: If the same or near-identical child report is received 2+ times, treat as `BLOCKED`, invoke `helper`, and amend the same artifact via `scribe` before any retry.
 3. **Scribe exit rule**: Scribe returns exactly once per task. After reporting path + operation + summary, it stops.
-4. **Implementor anti-loop rule**: Implementor must not repeat the same verbal intent (e.g. "Let me create X"); one statement, then execute. If the same failing command repeats twice without meaningful change, return `blocker_code: STAGE_STUCK` and stop.
+4. **Developer anti-loop rule**: Developer must not repeat the same verbal intent (e.g. "Let me create X"); one statement, then execute. If the same failing command repeats twice without meaningful change, return `blocker_code: STAGE_STUCK` and stop.
 5. **Manual escape**: Use `Ctrl+C` or session interrupt. Resume in a new session with artifact path if needed.
 
 Provider-level `timeout` (e.g. 300000ms) can be set in `opencode.json` under `provider.<name>.options` to cap LLM request duration.
@@ -89,7 +89,7 @@ Provider-level `timeout` (e.g. 300000ms) can be set in `opencode.json` under `pr
   - append remediation tasks
   - append dated `IterationNotes`
   - invoke `helper` when repeated failures or blocker persists
-  - repeat `implementor` -> `verifier` cycle
+  - repeat `developer` -> `verifier` cycle
 
 ## MCP Usage Policy
 
@@ -145,11 +145,11 @@ Constraints: markdown only, approved paths only
 - Helper is invoked on repeated verifier failure or unresolved blockers.
 - Environment/toolchain blockers (`ENV_BLOCKED`) halt stage progression and require helper+scribe amendment before retry.
 - Stage dispatch is one-at-a-time with completion handoff.
-- UI work routes to `designer`; non-UI work routes to `implementor`.
+- UI work routes to `designer`; non-UI work routes to `developer`.
 - Orchestrator prompts "Switch to architect for review and documentation" on completion.
 - Verifier receives original feature artifact and review artifact (if present).
 - Verifier report includes criterion-level evidence.
 - Verifier failure updates the existing review artifact (no fragmented review files).
-- No stale references to removed agents (`fix`, `pr-reviewer`, `refactorer`). Execution uses `implementor` (not built-in `build`) in the custom pipeline.
+- No stale references to removed agents (`fix`, `pr-reviewer`, `refactorer`). Execution uses `developer` (not built-in `build`) in the custom pipeline.
 - MCP lookups are used only when prompt/context indicates need.
 - Final docs are generated by architect (document + scribe) after review sign-off.

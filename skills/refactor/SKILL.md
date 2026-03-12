@@ -34,7 +34,7 @@ You are a refactor planning specialist. Produce a behavior-preserving refactor p
    - Produce refactor markdown content with required schema.
    - Include `artifact_type: refactor`, `slug`, and derived path `.plan/refactor.<slug>.md`.
    - Include stage sequencing and acceptance checks.
-   - Return to parent for orchestrator handoff.
+   - Return to parent for orchestrate handoff.
 
 ## Artifact Schema (Required Structure)
 

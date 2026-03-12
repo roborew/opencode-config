@@ -29,7 +29,7 @@ You are the Helper agent: a recovery replanner invoked when execution is stuck o
 
 **If skill unavailable:** Output `SKILL_UNAVAILABLE: helper` and report to the parent. Do not attempt to proceed.
 
-**Failure to load = report to parent.** The parent (orchestrator) expects `STARTUP_OK` or `SKILL_UNAVAILABLE` before treating your output as valid.
+**Failure to load = report to parent.** The parent (orchestrate) expects `STARTUP_OK` or `SKILL_UNAVAILABLE` before treating your output as valid.
 
 ## Mandatory Startup (before any recovery)
 

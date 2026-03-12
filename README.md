@@ -14,16 +14,16 @@ OpenCode's built-in `plan` and `build` remain untouched for generic/quick tasks.
 For serious features, refactors, or multi-stage work, use the custom **Architect → Orchestrator → Subagents** pipeline:
 
 - **Primary planning:** `architect` (default agent) — read-only: exploration, reporting, drafting plans; also owns review and documentation after implementation
-- **Primary execution:** `orchestrator` — coordinates execution; never writes directly; prompts user back to architect on completion
+- **Primary execution:** `orchestrate` — coordinates execution; never writes directly; prompts user back to architect on completion
 - **Planning specialists (architect subagents):** `debugger`, `refactor`, `review` — read-only; return plan drafts
 - **Documentation generator:** `document` — read-only; generates changelog/guides/architecture content; architect invokes, then scribe writes
-- **Artifact writer:** `scribe` — only agent that writes plan artifacts and docs (invoked by architect and orchestrator)
+- **Artifact writer:** `scribe` — only agent that writes plan artifacts and docs (invoked by architect and orchestrate)
 - **Recovery replanner:** `helper`
-- **Execution subagents (orchestrator only):** `implementor`, `designer` — coding agents; architect never invokes these
+- **Execution subagents (orchestrate only):** `developer`, `designer` — coding agents; architect never invokes these
 - **Verification gate:** `verifier`
 - **Optional mentor:** `mentor`
 
-**Responsibility boundary:** Architect owns planning, review, and documentation. Orchestrator owns execution only. User switches: architect → orchestrator (to execute) → architect (for review + docs).
+**Responsibility boundary:** Architect owns planning, review, and documentation. Orchestrator owns execution only. User switches: architect → orchestrate (to execute) → architect (for review + docs).
 
 ## How the Custom Pipeline Works
 
@@ -31,34 +31,34 @@ For serious features, refactors, or multi-stage work, use the custom **Architect
 1. `architect` asks what type of plan is needed (Feature, Debug, Refactor, Review) when prompt is greeting/unspecified.
 2. `architect` drafts content (and invokes specialist subagents when needed).
 3. `architect` invokes `scribe` to write the artifact to `.plan/<type>.<slug>.md` — the scribe step is mandatory.
-4. Switch to `orchestrator`.
+4. Switch to `orchestrate`.
 
 **Phase 2 — Execution**
-5. `orchestrator` ensures artifact exists (architect already wrote it via scribe). If missing, dispatches `scribe` to create it:
+5. `orchestrate` ensures artifact exists (architect already wrote it via scribe). If missing, dispatches `scribe` to create it:
    - `.plan/feature.<slug>.md`
    - `.plan/debug.<slug>.md`
    - `.plan/refactor.<slug>.md`
    - `.plan/review.<slug>.md`
-5. `orchestrator` runs a startup environment preflight via `helper`.
+5. `orchestrate` runs a startup environment preflight via `helper`.
 6. `scribe` writes preflight results to artifact `EnvReadiness`.
-7. `orchestrator` dispatches one stage at a time to `implementor` or `designer` only when environment is ready.
+7. `orchestrate` dispatches one stage at a time to `developer` or `designer` only when environment is ready.
 8. Execution subagents return completion reports with evidence.
-9. `orchestrator` grades each child report (`PASS` / `NEEDS_RETRY` / `BLOCKED`) before progressing.
+9. `orchestrate` grades each child report (`PASS` / `NEEDS_RETRY` / `BLOCKED`) before progressing.
 10. `verifier` checks acceptance criteria with evidence before completion.
-11. If execution is stuck, child output is low quality, verifier fails repeatedly, or environment blocks, `orchestrator` invokes `helper`, then `scribe` updates the existing artifact before retry.
-12. When verifier passes for all stages, orchestrator prompts: **"Implementation complete. Switch to architect for review and documentation sign-off."**
+11. If execution is stuck, child output is low quality, verifier fails repeatedly, or environment blocks, `orchestrate` invokes `helper`, then `scribe` updates the existing artifact before retry.
+12. When verifier passes for all stages, orchestrate prompts: **"Implementation complete. Switch to architect for review and documentation sign-off."**
 
 **Phase 3 — Review and Documentation (architect)**
 13. User switches back to `architect`.
-14. `architect` invokes `review` for final sign-off. If remediation needed: `scribe` writes review artifact → user switches to orchestrator to apply fixes → repeat Phase 2.
+14. `architect` invokes `review` for final sign-off. If remediation needed: `scribe` writes review artifact → user switches to orchestrate to apply fixes → repeat Phase 2.
 15. If sign-off: `architect` invokes `document` to generate changelog/guides/architecture content, then `scribe` writes the docs.
 
 ## Verifier and Review Responsibilities
 
-- `verifier`: validates requirement conformance against original feature criteria (and review criteria when review is active). Invoked by orchestrator.
-- `review`: architect's planning specialist; for post-implementation, assesses completed work and returns sign-off or remediation tasks. Architect invokes; if remediation, scribe writes review artifact and user switches to orchestrator.
+- `verifier`: validates requirement conformance against original feature criteria (and review criteria when review is active). Invoked by orchestrate.
+- `review`: architect's planning specialist; for post-implementation, assesses completed work and returns sign-off or remediation tasks. Architect invokes; if remediation, scribe writes review artifact and user switches to orchestrate.
 
-If verification fails during execution, orchestrator invokes `helper` and `scribe` updates the review artifact. When architect returns remediation, orchestrator runs implementor → verifier again.
+If verification fails during execution, orchestrate invokes `helper` and `scribe` updates the review artifact. When architect returns remediation, orchestrate runs developer → verifier again.
 
 ## MCP Usage Expectations
 
