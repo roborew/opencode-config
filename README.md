@@ -34,24 +34,24 @@ For serious features, refactors, or multi-stage work, use the custom **Architect
 4. Switch to `orchestrate`.
 
 **Phase 2 — Execution**
-5. `orchestrate` ensures artifact exists (architect already wrote it via scribe). If missing, dispatches `scribe` to create it:
+5. `orchestrate` starts by asking whether to run startup preflight checks now (`yes/no`).
+6. If yes, `orchestrate` invokes `developer` preflight (developer loads `preflight` skill), reports results, and pauses for remediation if blocked.
+7. If no (or preflight is ready), `orchestrate` ensures artifact exists (architect already wrote it via scribe). If missing, dispatches `scribe` to create it:
    - `.plan/feature.<slug>.md`
    - `.plan/debug.<slug>.md`
    - `.plan/refactor.<slug>.md`
    - `.plan/review.<slug>.md`
-5. `orchestrate` runs a startup environment preflight via `developer` (developer loads `preflight` skill).
-6. `scribe` writes preflight results to artifact `EnvReadiness`.
-7. `orchestrate` dispatches one stage at a time to `developer` or `designer` only when environment is ready.
-8. Execution subagents return completion reports with evidence.
-9. `orchestrate` grades each child report (`PASS` / `NEEDS_RETRY` / `BLOCKED`) before progressing.
-10. `verifier` checks acceptance criteria with evidence before completion.
-11. If execution is stuck, child output is low quality, verifier fails repeatedly, or environment blocks, `orchestrate` invokes `helper`, then `scribe` updates the existing artifact before retry.
-12. When verifier passes for all stages, orchestrate prompts: **"Implementation complete. Switch to architect for review and documentation sign-off."**
+8. `orchestrate` dispatches one stage at a time to `developer` or `designer`.
+9. Execution subagents return completion reports with evidence.
+10. `orchestrate` grades each child report (`PASS` / `NEEDS_RETRY` / `BLOCKED`) before progressing.
+11. `verifier` checks acceptance criteria with evidence before completion.
+12. If execution is stuck, child output is low quality, verifier fails repeatedly, or environment blocks, `orchestrate` invokes `helper`, then `scribe` updates the existing artifact before retry.
+13. When verifier passes for all stages, orchestrate prompts: **"Implementation complete. Switch to architect for review and documentation sign-off."**
 
 **Phase 3 — Review and Documentation (architect)**
-13. User switches back to `architect`.
-14. `architect` invokes `review` for final sign-off. If remediation needed: `scribe` writes review artifact → user switches to orchestrate to apply fixes → repeat Phase 2.
-15. If sign-off: `architect` invokes `document` to generate changelog/guides/architecture content, then `scribe` writes the docs.
+14. User switches back to `architect`.
+15. `architect` invokes `review` for final sign-off. If remediation needed: `scribe` writes review artifact → user switches to orchestrate to apply fixes → repeat Phase 2.
+16. If sign-off: `architect` invokes `document` to generate changelog/guides/architecture content, then `scribe` writes the docs.
 
 ## Verifier and Review Responsibilities
 

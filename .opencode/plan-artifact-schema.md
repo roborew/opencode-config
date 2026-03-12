@@ -12,7 +12,6 @@ All `.plan/<type>.<slug>.md` files follow this structure. Primary agents produce
 | **Tasks** | Numbered tasks mapped to a `stage_id` |
 | **FilesToChange** | Paths and explanations mapped to a `stage_id` |
 | **StageAcceptanceChecks** | Verification gates for each stage (tests, commands, criteria) |
-| **EnvReadiness** | Runtime/toolchain preflight status, required commands, and known environment constraints |
 | **AcceptanceChecks** | End-to-end completion checks |
 | **CompletionReport** | Required executor handoff fields back to primary |
 | **ReviewDecisionGate** | Prompt behavior after feature completion: start review now or defer |
@@ -79,16 +78,6 @@ Each stage MUST have Owner. Orchestrate dispatches by Owner: `designer` for UI/d
 ## StageAcceptanceChecks
 - [stage-ui] Run `pnpm test path/to/ui.test.tsx`
 - [stage-core] Run `pnpm test path/to/core.test.ts`
-
-## EnvReadiness
-- Status: Ready | Blocked
-- Runtime checks:
-  - `ruby -v`
-  - `bundle -v`
-  - project-specific test command smoke check
-- Notes:
-  - version manager assumptions
-  - required shell initialization details
 
 ## AcceptanceChecks
 - Run targeted tests

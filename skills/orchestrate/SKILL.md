@@ -2,7 +2,7 @@
 name: orchestrate
 description: "Use when a task needs execution orchestration. Non-writing coordinator that executes plan artifacts through delegated subagents (scribe, developer, designer, verifier, helper). On completion, prompts user to switch to architect for review and documentation."
 modelTier: "fast"
-roleReminder: "Never write files directly. Delegate markdown writes to scribe, preflight to developer (preflight skill), and recovery to helper."
+roleReminder: "Never write files directly. Delegate markdown writes to scribe, implementation to developer/designer, verification to verifier, and recovery to helper."
 ---
 
 ## Startup Confirmation
@@ -34,12 +34,22 @@ You have the **Task** tool to invoke subagents (`scribe`, `developer`, `designer
 - Artifact identity: `artifact_type` + `slug` (derive from path when only path is provided)
 - Stage order and acceptance checks from artifact
 
+## Session Bootstrap (mandatory, first in fresh context)
+When no artifact path is provided (new session, greeting, unspecified task):
+1. Ask the user whether to run startup preflight now (`yes/no`).
+2. If `yes`, invoke `developer` with an explicit preflight-only task (developer loads `preflight` skill) and return a concise preflight report to the user.
+3. If preflight reports blocked, stop and request user remediation confirmation before any plan execution.
+4. If `no` (or preflight is ready), continue to plan selection.
+
+Preflight is a session-start option, not a per-stage requirement. Do not auto-run preflight on every stage.
+
 ## Fresh Context / Plan Selection (mandatory)
-When no artifact path is provided (fresh context: new session, greeting, unspecified task, or user has not given a plan path):
+After session bootstrap, when no artifact path is provided:
 1. **List available plans** in `.plan/` (e.g. glob `.plan/*.md` or list `.plan/`).
 2. **Present the list** to the user with short descriptions (Goal or title from each file if readable).
-3. **Prompt the user** to choose one by number or path (e.g. "Select a plan by number or path:").
-4. **Do not proceed** with orchestration until the user selects a plan.
+3. **Prompt the user** to either choose an existing plan by number/path or create a new plan in `architect`.
+4. If the user chooses "create new", stop and prompt: "Switch to `architect` to create a plan, then return here with the plan path."
+5. **Do not proceed** with orchestration until a plan path is selected.
 
 If `.plan/` is empty, inform the user: "No plans found in `.plan/`. Switch to `architect` to create a plan, or provide an artifact path."
 
@@ -48,17 +58,14 @@ If `.plan/` is empty, inform the user: "No plans found in `.plan/`. Switch to `a
    - parse `artifact_type` + `slug` from artifact path when needed
    - pass identity fields to `scribe` on every artifact write/update call
 2. Ensure artifact exists; if missing, dispatch `scribe` to write it from approved content.
-3. Invoke `developer` for startup environment preflight before any execution stage. Developer loads `preflight` skill and runs checks.
-4. Dispatch `scribe` to update artifact `EnvReadiness` section from developer preflight output.
-5. If EnvReadiness is `Blocked`, stop and request user remediation confirmation.
-6. **Dispatch by Owner:** Read the current stage's `Owner` from the artifact `StagePlan`. Dispatch to that subagent only:
+3. **Dispatch by Owner:** Read the current stage's `Owner` from the artifact `StagePlan`. Dispatch to that subagent only:
    - `Owner: designer` → invoke `designer` (UI/design specialist)
    - `Owner: developer` → invoke `developer` (logic/backend specialist)
    Do not dispatch to the wrong subagent for a stage.
-7. Collect completion report.
-8. Run `verifier`.
-9. If verifier passes, continue to next stage.
-10. If verifier fails or stage is blocked, invoke `helper`.
+4. Collect completion report.
+5. Run `verifier`.
+6. If verifier passes, continue to next stage.
+7. If verifier fails or stage is blocked, invoke `helper`.
 
 ## Delegation Gate (mandatory)
 Before any stage status update, confirm these Task calls occurred:
@@ -66,6 +73,7 @@ Before any stage status update, confirm these Task calls occurred:
 - Execution: `developer` or `designer` — **must match the stage's Owner** (designer for UI stages, developer for logic stages)
 - Verification: `verifier`
 - Recovery: `helper` on trigger conditions
+- Each child Task instruction explicitly required a one-shot final `report_to_parent` payload (completion or blocker) followed by immediate return
 
 If any required call is missing, stop and issue the missing Task call first. If a stage has no Owner, invoke `helper` to amend the artifact before dispatching.
 
@@ -111,11 +119,11 @@ If a subagent reports `ENV_BLOCKED`:
 
 Do not let subagents loop on runtime/toolchain commands when environment is mismatched.
 
-## Startup Environment Preflight (mandatory)
-Before any implementation Task call:
-- invoke `developer` to run preflight (developer loads `preflight` skill)
-- ensure artifact has `EnvReadiness` recorded via `scribe` from developer output
-- proceed only when `EnvReadiness.Status = Ready`
+## Startup Environment Preflight (optional)
+Use startup preflight only when the user opts in during session bootstrap, or when the user requests a rerun after environment changes.
+- invoke `developer` with a preflight-only task (developer loads `preflight` skill)
+- report results directly to the user
+- do not write preflight output into plan artifacts
 
 ## Review Artifact Recovery (when architect returns remediation)
 When you receive a review artifact (`.plan/review.<slug>.md`) from architect with remediation tasks:

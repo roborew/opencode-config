@@ -40,13 +40,15 @@ Both primaries (`architect`, `orchestrate`) are non-writing (`edit: deny`). Only
 3. `architect` invokes `scribe` to write the artifact to `.plan/<type>.<slug>.md` (mandatory step).
 4. User switches to `orchestrate`.
 5. `orchestrate` ensures artifact exists; if missing, dispatches `scribe` to write it.
-6. `orchestrate` invokes `developer` for environment preflight (developer loads `preflight` skill) and writes `EnvReadiness` to artifact via `scribe`.
-7. `orchestrate` dispatches one stage at a time to `developer` or `designer` only if EnvReadiness is `Ready`.
-8. Execution subagent returns completion report (`stage_id`, files, tests, checks, blockers, risks, next input).
-9. `orchestrate` dispatches next stage only after successful handoff.
-10. For final completion, run `verifier`.
-11. When verifier passes for all stages: **"Implementation complete. Switch to architect for review and documentation sign-off."** Do not run review or documentation. User switches to architect.
-12. Architect (post-implementation): invokes `review` for sign-off. If remediation: scribe writes review artifact → user switches to orchestrate → developer applies fixes → verifier. If sign-off: architect invokes `document` → scribe writes docs.
+6. `orchestrate` starts by asking whether to run startup preflight checks now (`yes/no`).
+7. If yes: `orchestrate` invokes `developer` for preflight (developer loads `preflight` skill), reports results, and pauses for remediation if blocked.
+8. If no (or preflight is ready): `orchestrate` lists existing plans and asks user to select one or switch to `architect` to create a new plan.
+9. `orchestrate` dispatches one stage at a time to `developer` or `designer`.
+10. Execution subagent returns completion report (`stage_id`, files, tests, checks, blockers, risks, next input).
+11. `orchestrate` dispatches next stage only after successful handoff.
+12. For final completion, run `verifier`.
+13. When verifier passes for all stages: **"Implementation complete. Switch to architect for review and documentation sign-off."** Do not run review or documentation. User switches to architect.
+14. Architect (post-implementation): invokes `review` for sign-off. If remediation: scribe writes review artifact → user switches to orchestrate → developer applies fixes → verifier. If sign-off: architect invokes `document` → scribe writes docs.
 
 At each stage handoff, orchestrate grades child output:
 - `PASS` -> continue
@@ -68,19 +70,21 @@ Recovery loop:
 
 Do not advance stages until helper amendment is applied.
 Do not allow repeated test-command retries under unresolved environment mismatch.
-Do not start execution stages before developer preflight output is recorded in artifact.
+Use startup preflight as an optional session gate; do not require artifact writes for preflight output.
 
 ## Subagent Loop Exit Strategy (enforced)
 
 When a subagent repeats the same completion message or stalls:
 
-1. **OpenCode config**: Scribe has `steps: 5`, developer has `steps: 20` in `opencode.json` — forces exit after that many agentic iterations.
+1. **OpenCode config**: Scribe has `steps: 5`, developer has `steps: 60` in `opencode.json` — forces exit after that many agentic iterations.
 2. **Orchestrator loop detection**: If the same or near-identical child report is received 2+ times, treat as `BLOCKED`, invoke `helper`, and amend the same artifact via `scribe` before any retry.
 3. **Scribe exit rule**: Scribe returns exactly once per task. After reporting path + operation + summary, it stops.
 4. **Developer anti-loop rule**: Developer must not repeat the same verbal intent (e.g. "Let me create X"); one statement, then execute. If the same failing command repeats twice without meaningful change, return `blocker_code: STAGE_STUCK` and stop.
 5. **Manual escape**: Use `Ctrl+C` or session interrupt. Resume in a new session with artifact path if needed.
 
 Provider-level `timeout` (e.g. 300000ms) can be set in `opencode.json` under `provider.<name>.options` to cap LLM request duration.
+
+`default_agent` is set to `orchestrate` so execution sessions start with the coordinator as the active primary context.
 
 ## Review and Verifier Interaction
 
@@ -143,7 +147,6 @@ Constraints: markdown only, approved paths only
 ## Smoke Checklist
 
 - Artifact includes required schema sections (`StagePlan`, `StageAcceptanceChecks`, `CompletionReport`, `VerifierInputs`, `DocumentationOutputs`).
-- Artifact includes `EnvReadiness` and is updated before stage execution.
 - Primary agents cannot edit files directly (`edit: deny`).
 - Scribe can write to `.plan` and docs markdown paths only.
 - Helper never writes directly and only amends existing artifacts via `scribe`.

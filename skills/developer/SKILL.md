@@ -29,22 +29,23 @@ You do not plan; you execute assigned stages. You execute **only** stages where 
 7. Keep each slice <= 200 changed LOC.
 8. Run `StageAcceptanceChecks` for your stage(s), then relevant final checks requested by parent.
 9. Do not call other implementation subagents.
-10. If environment/toolchain preflight fails, stop immediately with `ENV_BLOCKED` and do not keep retrying the same test command.
+10. If explicit preflight run fails, stop immediately with `ENV_BLOCKED` and do not keep retrying the same command.
 11. Never "fix" project dependency files (Gemfile/package manifests/lockfiles) to work around local environment mismatch unless explicitly instructed.
 12. If the same test/verification command fails twice without a code change that addresses the failure, stop with `blocker_code: STAGE_STUCK` and return to orchestrate.
 13. If output begins to repeat (same sentence/intent twice), stop immediately and emit a single completion report or blocker report.
+14. Emit exactly one final parent report per task, then stop. Do not continue with extra narration after reporting.
 
 ## Execution Flow
 1. Locate or receive artifact path and assigned `stage_id` values.
 2. Read artifact file.
 3. Load only files referenced for assigned stages.
-4. Load `preflight` skill and run environment preflight once for test/runtime commands.
-5. Execute tasks in order with micro-TDD.
+4. If the parent explicitly requests preflight-only or preflight-rerun, load `preflight` skill and execute preflight checks.
+5. For implementation tasks, execute assigned stage tasks in order with micro-TDD.
 6. Run stage checks and report completion contract fields.
 
-## Environment Preflight Gate (required)
+## Environment Preflight Gate (on explicit request only)
 
-Before running tests/build commands, load the `preflight` skill and run it. The preflight skill defines the checks (runtime versions, command resolution, smoke check). Follow its output format for `EnvReadiness`.
+Only when the parent explicitly requests preflight, load the `preflight` skill and run it. The preflight skill defines the checks (runtime versions, command resolution, smoke check). Follow its output format.
 
 If preflight fails:
 - return blocker code `ENV_BLOCKED`
@@ -95,7 +96,7 @@ Do not browse broadly; capture only evidence relevant to the current stage.
 
 ## Completion
 
-Return a completion report with:
+Call `report_to_parent` once with:
 - `stage_id`
 - `plan_file`
 - `files_changed`
@@ -105,6 +106,8 @@ Return a completion report with:
 - `residual_risks`
 - `next_stage_input`
 - `attempt_counters` (command retries + stage retries)
+
+After emitting the completion report, end your turn immediately and return control to orchestrate.
 
 If blocked by environment, include:
 - `blocker_code: ENV_BLOCKED`
@@ -116,3 +119,5 @@ If blocked by loop/retry exhaustion, include:
 - `failed_command`
 - `attempt_count`
 - `recommended_helper_request`
+
+In blocker cases, also send exactly one final `report_to_parent` payload, then stop.

@@ -2,7 +2,7 @@
 name: preflight
 description: "Environment readiness checks for runtime, toolchain, and test commands"
 modelTier: "fast"
-roleReminder: "Run minimal checks and produce EnvReadiness. Do not implement code or amend artifacts."
+roleReminder: "Run minimal checks and produce a concise readiness report. Do not implement code or amend artifacts."
 ---
 
 ## Startup Confirmation
@@ -11,13 +11,13 @@ This skill load constitutes startup. Ensure you have emitted `STARTUP_OK: prefli
 
 ## Preflight
 
-You run environment readiness checks before execution stages. Your output is consumed by the developer (or orchestrator) to populate the artifact `EnvReadiness` section.
+You run environment readiness checks when requested at startup (or after environment changes). Your output is consumed by developer/orchestrator as a session readiness report.
 
 ## Hard Rules
 1. Do not implement code or edit files.
 2. Do not amend plan artifacts directly.
 3. Run only minimal runtime/toolchain checks.
-4. Return structured output for artifact `EnvReadiness` section.
+4. Return structured readiness output for parent reporting.
 
 ## Checks (run in order)
 1. **Project README** — Read the project README (`README.md`, `README`, or similar) for environment setup, prerequisites, or preflight instructions. Incorporate any documented requirements into the checks below.
@@ -27,7 +27,7 @@ You run environment readiness checks before execution stages. Your output is con
 4. **Smoke check** — Execute a tiny test-command smoke check (or equivalent verification command) if project defines one.
 
 ## Output
-Produce structured content for `EnvReadiness`:
+Produce structured readiness content:
 - `Status`: `Ready` or `Blocked`
 - `preflight_checks` / `Runtime checks`: exact commands run and their output (or failure details)
 - `stderr summaries`: for any failures
