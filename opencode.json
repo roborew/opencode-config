@@ -99,7 +99,7 @@
     "orchestrator": {
       "description": "Execution orchestrator for artifact-driven stage flow",
       "mode": "primary",
-      "model": "openrouter/openai/gpt-5.3-codex",
+      "model": "openrouter/inception/mercury-2",
       "prompt": "{file:./skills/orchestrator/SKILL.md}",
       "tools": { "write": false, "edit": false, "bash": false },
       "permission": {
