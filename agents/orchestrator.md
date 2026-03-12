@@ -11,7 +11,7 @@ permission:
   task:
     "*": deny
     scribe: allow
-    build: allow
+    implementor: allow
     designer: allow
     verifier: allow
     helper: allow

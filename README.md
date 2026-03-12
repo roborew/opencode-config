@@ -2,31 +2,40 @@
 
 This repository uses a stage-based orchestration model to keep cheaper models focused and context-light while preserving quality gates.
 
-## Topology
+## Built-in Agents (OpenCode Defaults)
 
-- **Primary planning mode:** `plan`
-- **Primary execution mode:** `orchestrator`
+OpenCode's built-in `plan` and `build` remain untouched for generic/quick tasks. Both use the Codex model by default in this config.
+
+- **`plan`** — Built-in primary agent for analysis and planning without edits. Use for quick planning or review.
+- **`build`** — Built-in primary agent with full tools. Use for ad-hoc coding or generic development.
+
+## Custom Pipeline (Serious Work)
+
+For serious features, refactors, or multi-stage work, use the custom **Architect → Orchestrator → Subagents** pipeline:
+
+- **Primary planning:** `architect` (default agent)
+- **Primary execution:** `orchestrator`
 - **Planning specialists (subagents):** `debugger`, `refactor`, `review`
 - **Artifact writer:** `scribe`
 - **Recovery replanner:** `helper`
-- **Execution subagents:** `build`, `designer`
+- **Execution subagents:** `implementor`, `designer`
 - **Verification gate:** `verifier`
 - **Optional mentor:** `mentor`
 
-## How It Works
+## How the Custom Pipeline Works
 
-1. `plan` asks what type of plan is needed (Feature, Debug, Refactor, Review) when prompt is greeting/unspecified.
-2. `plan` drafts content (and invokes specialist subagents when needed).
-   - `plan` returns `artifact_type`, `slug`, derived artifact path, and markdown content.
-3. Switch to `orchestrator`.
-4. `orchestrator` dispatches `scribe` to create/update a single artifact in `.plan/` using `artifact_type` + `slug` (or explicit `target_path`):
+1. `architect` asks what type of plan is needed (Feature, Debug, Refactor, Review) when prompt is greeting/unspecified.
+2. `architect` drafts content (and invokes specialist subagents when needed).
+3. `architect` invokes `scribe` to write the artifact to `.plan/<type>.<slug>.md` — the scribe step is mandatory.
+4. Switch to `orchestrator`.
+5. `orchestrator` ensures artifact exists (architect already wrote it via scribe). If missing, dispatches `scribe` to create it:
    - `.plan/feature.<slug>.md`
    - `.plan/debug.<slug>.md`
    - `.plan/refactor.<slug>.md`
    - `.plan/review.<slug>.md`
 5. `orchestrator` runs a startup environment preflight via `helper`.
 6. `scribe` writes preflight results to artifact `EnvReadiness`.
-7. `orchestrator` dispatches one stage at a time to `build` or `designer` only when environment is ready.
+7. `orchestrator` dispatches one stage at a time to `implementor` or `designer` only when environment is ready.
 8. Execution subagents return completion reports with evidence.
 9. `orchestrator` grades each child report (`PASS` / `NEEDS_RETRY` / `BLOCKED`) before progressing.
 10. `verifier` checks acceptance criteria with evidence before completion.
@@ -36,7 +45,7 @@ This repository uses a stage-based orchestration model to keep cheaper models fo
 
 After feature completion, ask: **"Start review now?"**
 
-- **Yes:** `review` dispatches `scribe` to produce/update a review artifact, `build` applies fixes, `verifier` signs off.
+- **Yes:** `review` dispatches `scribe` to produce/update a review artifact, `implementor` applies fixes, `verifier` signs off.
 - **No:** keep artifacts and resume in a new session later (better context hygiene).
 
 ## Verifier and Review Responsibilities
