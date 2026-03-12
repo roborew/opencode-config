@@ -1,5 +1,5 @@
 ---
-name: "Review"
+name: review
 description: "Planning specialist that produces high-signal review plan content"
 modelTier: "smart"
 roleReminder: "Review and return review-plan content to parent plan agent. Do not write files or orchestrate execution."

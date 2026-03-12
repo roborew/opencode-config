@@ -1,5 +1,5 @@
 ---
-name: "Debugger"
+name: debugger
 description: "Planning specialist that produces diagnosis-first debug plan content"
 modelTier: "smart"
 roleReminder: "Diagnose and return debug-plan content to parent plan agent. Do not write files or orchestrate execution."

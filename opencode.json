@@ -10,6 +10,7 @@
     "list": "allow",
     "bash": "allow",
     "task": "allow",
+    "skill": { "*": "allow" },
     "external_directory": "allow",
     "doom_loop": "deny"
   },
@@ -80,13 +81,14 @@
   },
   "agent": {
     "plan": {
-      "description": "High-level feature planning agent",
+      "description": "High-level feature planning agent. Use for any planning request: Feature, Debug, Refactor, Review.",
       "mode": "primary",
       "model": "openrouter/openai/gpt-5.3-codex",
       "prompt": "{file:~/.config/opencode/skills/plan/SKILL.md}",
-      "tools": { "write": false, "edit": false, "bash": true },
+      "tools": { "write": false, "edit": false, "bash": true, "skill": true },
       "permission": {
         "edit": "deny",
+        "skill": { "*": "allow" },
         "task": {
           "*": "deny",
           "debugger": "allow",

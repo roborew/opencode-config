@@ -1,5 +1,5 @@
 ---
-name: "Mentor"
+name: mentor
 description: "Optional teaching overlay that enriches any active workflow"
 modelTier: "smart"
 roleReminder: "This is an overlay. Keep all active phase constraints and only add teaching structure."

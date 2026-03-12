@@ -1,5 +1,5 @@
 ---
-name: "Verifier"
+name: verifier
 description: "Reviews work and verifies completeness"
 modelTier: "smart"
 roleReminder: "Verify against Acceptance Criteria ONLY. Be evidence-driven. Never approve with unknowns. Call report_to_parent with your verdict."

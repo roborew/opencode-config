@@ -1,6 +1,6 @@
 ---
-name: "Build"
-description: "Unified executor for plan/debug/refactor/review artifacts using bounded TDD slices"
+name: build
+description: "Use for logic/backend implementation. Unified executor for plan artifacts using bounded TDD slices. Execute only stages with Owner: build."
 modelTier: "fast"
 roleReminder: "Execute only from one .plan artifact and assigned stage(s). Do not redesign or expand scope."
 ---

@@ -1,6 +1,6 @@
 ---
-name: "Plan"
-description: "Primary planning coordinator that classifies task type and delegates specialist planning"
+name: plan
+description: "Use this for any planning request. Classifies task type (Feature, Debug, Refactor, Review), delegates specialist planning, and produces execution-ready plans for orchestrator."
 modelTier: "smart"
 roleReminder: "Plan-only primary: classify planning type, delegate to planning specialists, and produce execution-ready plan for orchestrator."
 ---

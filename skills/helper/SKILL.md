@@ -1,5 +1,5 @@
 ---
-name: "Helper"
+name: helper
 description: "Recovery replanner that amends existing artifacts through scribe"
 modelTier: "smart"
 roleReminder: "Diagnose blocker/failure and propose minimal delta strategy; never write files directly."

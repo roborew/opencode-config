@@ -1,5 +1,5 @@
 ---
-name: "Scribe"
+name: scribe
 description: "Writes and updates markdown artifacts and documentation in allowed paths"
 modelTier: "fast"
 roleReminder: "Write markdown only to approved .plan and docs paths. Do not implement code or run shell commands."
