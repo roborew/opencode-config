@@ -35,7 +35,7 @@ Both primaries (`architect`, `orchestrate`) are non-writing (`edit: deny`). Only
 3. `architect` invokes `scribe` to write the artifact to `.plan/<type>.<slug>.md` (mandatory step).
 4. User switches to `orchestrate`.
 5. `orchestrate` ensures artifact exists; if missing, dispatches `scribe` to write it.
-6. `orchestrate` invokes `helper` environment preflight and writes `EnvReadiness` to artifact via `scribe`.
+6. `orchestrate` invokes `developer` for environment preflight (developer loads `preflight` skill) and writes `EnvReadiness` to artifact via `scribe`.
 7. `orchestrate` dispatches one stage at a time to `developer` or `designer` only if EnvReadiness is `Ready`.
 8. Execution subagent returns completion report (`stage_id`, files, tests, checks, blockers, risks, next input).
 9. `orchestrate` dispatches next stage only after successful handoff.
@@ -63,7 +63,7 @@ Recovery loop:
 
 Do not advance stages until helper amendment is applied.
 Do not allow repeated test-command retries under unresolved environment mismatch.
-Do not start execution stages before helper startup preflight is recorded in artifact.
+Do not start execution stages before developer preflight output is recorded in artifact.
 
 ## Subagent Loop Exit Strategy (enforced)
 

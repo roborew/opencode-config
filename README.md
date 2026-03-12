@@ -39,7 +39,7 @@ For serious features, refactors, or multi-stage work, use the custom **Architect
    - `.plan/debug.<slug>.md`
    - `.plan/refactor.<slug>.md`
    - `.plan/review.<slug>.md`
-5. `orchestrate` runs a startup environment preflight via `helper`.
+5. `orchestrate` runs a startup environment preflight via `developer` (developer loads `preflight` skill).
 6. `scribe` writes preflight results to artifact `EnvReadiness`.
 7. `orchestrate` dispatches one stage at a time to `developer` or `designer` only when environment is ready.
 8. Execution subagents return completion reports with evidence.

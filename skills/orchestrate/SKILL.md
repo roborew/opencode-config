@@ -2,7 +2,7 @@
 name: orchestrate
 description: "Use when a task needs execution orchestration. Non-writing coordinator that executes plan artifacts through delegated subagents (scribe, developer, designer, verifier, helper). On completion, prompts user to switch to architect for review and documentation."
 modelTier: "fast"
-roleReminder: "Never write files directly. Delegate markdown writes to scribe and recovery replanning to helper."
+roleReminder: "Never write files directly. Delegate markdown writes to scribe, preflight to developer (preflight skill), and recovery to helper."
 ---
 
 ## Startup Confirmation
@@ -39,8 +39,8 @@ You have the **Task** tool to invoke subagents (`scribe`, `developer`, `designer
    - parse `artifact_type` + `slug` from artifact path when needed
    - pass identity fields to `scribe` on every artifact write/update call
 2. Ensure artifact exists; if missing, dispatch `scribe` to write it from approved content.
-3. Invoke `helper` for startup environment preflight before any execution stage.
-4. Dispatch `scribe` to update artifact `EnvReadiness` section from helper output.
+3. Invoke `developer` for startup environment preflight before any execution stage. Developer loads `preflight` skill and runs checks.
+4. Dispatch `scribe` to update artifact `EnvReadiness` section from developer preflight output.
 5. If EnvReadiness is `Blocked`, stop and request user remediation confirmation.
 6. **Dispatch by Owner:** Read the current stage's `Owner` from the artifact `StagePlan`. Dispatch to that subagent only:
    - `Owner: designer` → invoke `designer` (UI/design specialist)
@@ -104,8 +104,8 @@ Do not let subagents loop on runtime/toolchain commands when environment is mism
 
 ## Startup Environment Preflight (mandatory)
 Before any implementation Task call:
-- run helper preflight once
-- ensure artifact has `EnvReadiness` recorded via `scribe`
+- invoke `developer` to run preflight (developer loads `preflight` skill)
+- ensure artifact has `EnvReadiness` recorded via `scribe` from developer output
 - proceed only when `EnvReadiness.Status = Ready`
 
 ## Review Artifact Recovery (when architect returns remediation)

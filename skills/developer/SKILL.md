@@ -38,21 +38,19 @@ You do not plan; you execute assigned stages. You execute **only** stages where 
 1. Locate or receive artifact path and assigned `stage_id` values.
 2. Read artifact file.
 3. Load only files referenced for assigned stages.
-4. Run environment preflight once for test/runtime commands.
+4. Load `preflight` skill and run environment preflight once for test/runtime commands.
 5. Execute tasks in order with micro-TDD.
 6. Run stage checks and report completion contract fields.
 
 ## Environment Preflight Gate (required)
 
-Before running tests/build commands, perform a quick preflight:
-- confirm required runtime/tool versions (for example Ruby/Bundler/Node) from project files
-- confirm command runner resolves from the current shell context
+Before running tests/build commands, load the `preflight` skill and run it. The preflight skill defines the checks (runtime versions, command resolution, smoke check). Follow its output format for `EnvReadiness`.
 
 If preflight fails:
 - return blocker code `ENV_BLOCKED`
+- include `preflight_checks` (from preflight skill output)
 - include exact failing command + stderr summary
-- include likely cause (version manager not loaded, wrong runtime, missing toolchain)
-- include one concrete remediation request for parent/orchestrate
+- include one concrete `recommended_env_fix` for parent/orchestrate
 - stop execution for that stage (no repeated trial loop)
 
 ## Micro-TDD Loop (required for behavior changes)
