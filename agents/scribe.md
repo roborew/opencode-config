@@ -24,5 +24,5 @@ permission:
     "*/docs/guides/**/*.md": allow
     "*/docs/architecture/*.md": allow
     "*/docs/architecture/**/*.md": allow
-prompt: "{file:../skills/scribe/SKILL.md}"
+prompt: "{file:~/.config/opencode/skills/scribe/SKILL.md}"
 ---

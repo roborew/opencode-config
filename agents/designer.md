@@ -5,5 +5,5 @@ tools:
   write: true
   edit: true
   bash: true
-prompt: "{file:../skills/designer/SKILL.md}"
+prompt: "{file:~/.config/opencode/skills/designer/SKILL.md}"
 ---

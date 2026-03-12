@@ -5,5 +5,5 @@ tools:
   write: false
   edit: false
   bash: true
-prompt: "{file:../skills/verifier/SKILL.md}"
+prompt: "{file:~/.config/opencode/skills/verifier/SKILL.md}"
 ---

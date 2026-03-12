@@ -7,5 +7,5 @@ tools:
   bash: true
 permission:
   edit: deny
-prompt: "{file:../skills/debugger/SKILL.md}"
+prompt: "{file:~/.config/opencode/skills/debugger/SKILL.md}"
 ---

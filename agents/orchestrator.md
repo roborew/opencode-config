@@ -15,5 +15,5 @@ permission:
     designer: allow
     verifier: allow
     helper: allow
-prompt: "{file:../skills/orchestrator/SKILL.md}"
+prompt: "{file:~/.config/opencode/skills/orchestrator/SKILL.md}"
 ---

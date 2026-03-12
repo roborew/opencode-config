@@ -11,5 +11,5 @@ permission:
   task:
     "*": deny
     scribe: allow
-prompt: "{file:../skills/helper/SKILL.md}"
+prompt: "{file:~/.config/opencode/skills/helper/SKILL.md}"
 ---

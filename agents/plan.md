@@ -14,5 +14,5 @@ permission:
     review: allow
     designer: allow
     orchestrator: allow
-prompt: "{file:../skills/plan/SKILL.md}"
+prompt: "{file:~/.config/opencode/skills/plan/SKILL.md}"
 ---

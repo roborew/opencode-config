@@ -7,5 +7,5 @@ tools:
   bash: true
 permission:
   edit: deny
-prompt: "{file:../skills/refactor/SKILL.md}"
+prompt: "{file:~/.config/opencode/skills/refactor/SKILL.md}"
 ---
