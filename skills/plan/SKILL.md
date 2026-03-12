@@ -56,6 +56,19 @@ Follow `.opencode/plan-artifact-schema.md` exactly. At minimum include:
 - `CompletionReport`, `ReviewDecisionGate`, `VerifierInputs`, `DocumentationOutputs`
 - `Risks`, `OutOfScope`
 
+## StagePlan Structure (mandatory)
+
+Structure plans into distinct stages so the correct specialist subagent executes each. Every stage MUST have an `Owner` field.
+
+**Owner assignment rules:**
+- **`Owner: designer`** — UI/design stages: components, layouts, styling, accessibility, visual hierarchy, interactive states, responsive design. Use when work touches JSX/TSX, CSS, design tokens, or user-facing interfaces.
+- **`Owner: build`** — Logic/backend stages: API handlers, business logic, data models, tests, refactors, migrations, configuration. Use when work is primarily non-visual or test-driven.
+
+**Structure guidelines:**
+- Separate design stages from logic stages. Do not mix UI and backend work in the same stage.
+- Order stages by dependency (e.g. design shell first, then wiring to logic).
+- Each stage must have: `stage_id`, `Owner`, objective, and dependencies (if any).
+
 ## MCP Research Policy
 
 When relevant, check:
@@ -65,10 +78,10 @@ When relevant, check:
 Capture which MCP source informed which decision.
 
 ## Specialist Delegation Rules
-- **Feature:** plan directly (or optionally consult `designer` for UI-heavy scope)
-- **Debug:** invoke `debugger` subagent for diagnosis-first plan draft
-- **Refactor:** invoke `refactor` subagent for behavior-preserving plan draft
-- **Review:** invoke `review` subagent for review-plan draft
+- **Feature:** plan directly. For UI-heavy scope, structure StagePlan with `Owner: designer` stages and `Owner: build` stages. Optionally consult `designer` subagent for complex UI architecture.
+- **Debug:** invoke `debugger` subagent for diagnosis-first plan draft. Assign Owner per stage (designer for UI bugs, build for logic bugs).
+- **Refactor:** invoke `refactor` subagent for behavior-preserving plan draft. Assign Owner per stage.
+- **Review:** invoke `review` subagent for review-plan draft. Assign Owner per remediation stage.
 - User may also manually force specialist selection via `@debugger`, `@refactor`, `@review`.
 
 ## Completion

@@ -8,7 +8,7 @@ All `.plan/<type>.<slug>.md` files follow this structure. Primary agents produce
 |---------|---------|
 | **Context** | Brief background, constraints, and assumptions |
 | **Goal** | One-sentence objective |
-| **StagePlan** | Ordered stages with `stage_id`, objective, owner, and dependencies |
+| **StagePlan** | Ordered stages with `stage_id`, **Owner** (`designer` or `build`), objective, and dependencies |
 | **Tasks** | Numbered tasks mapped to a `stage_id` |
 | **FilesToChange** | Paths and explanations mapped to a `stage_id` |
 | **StageAcceptanceChecks** | Verification gates for each stage (tests, commands, criteria) |
@@ -59,6 +59,8 @@ If environment is blocked:
 ...
 
 ## StagePlan
+Each stage MUST have Owner. Orchestrator dispatches by Owner: `designer` for UI/design, `build` for logic/backend.
+
 1. `stage_id: stage-ui`
    - Owner: `designer`
    - Objective: ...
