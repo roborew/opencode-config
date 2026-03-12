@@ -15,8 +15,7 @@ permission:
     debugger: allow
     refactor: allow
     review: allow
-    designer: allow
+    document: allow
     scribe: allow
-    orchestrator: allow
 prompt: "{file:~/.config/opencode/skills/architect/SKILL.md}"
 ---

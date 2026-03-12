@@ -98,8 +98,8 @@ Each stage MUST have Owner. Orchestrator dispatches by Owner: `designer` for UI/
 - Required: stage_id, files_changed, tests_run, blockers, residual_risks
 
 ## ReviewDecisionGate
-- Prompt user: "Start review now?"
-- If no, include resume command with artifact path.
+- Orchestrator: on completion, prompt "Switch to architect for review and documentation sign-off."
+- Architect: after review sign-off, invoke document and scribe for docs.
 
 ## VerifierInputs
 - Original feature plan: `.plan/feature.<slug>.md`

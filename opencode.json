@@ -83,6 +83,9 @@
     "plan": {
       "model": "openrouter/openai/gpt-5.3-codex"
     },
+    "build": {
+      "model": "openrouter/openai/gpt-5.3-codex"
+    },
     "architect": {
       "description": "High-level planner for serious features and refactors. Plans only, delegates scribe to persist .plan artifact, then hands off to orchestrator.",
       "mode": "primary",
@@ -97,9 +100,8 @@
           "debugger": "allow",
           "refactor": "allow",
           "review": "allow",
-          "designer": "allow",
-          "scribe": "allow",
-          "orchestrator": "allow"
+          "document": "allow",
+          "scribe": "allow"
         }
       }
     },
@@ -120,9 +122,6 @@
           "helper": "allow"
         }
       }
-    },
-    "build": {
-      "model": "openrouter/openai/gpt-5.3-codex"
     },
     "implementor": {
       "description": "Unified executor for .plan artifacts. Execute only stages with Owner: implementor.",
@@ -156,6 +155,14 @@
       "permission": {
         "edit": "deny"
       }
+    },
+    "document": {
+      "description": "Generates documentation content from completed plan artifacts. Read-only; returns content for scribe to write.",
+      "mode": "subagent",
+      "model": "openrouter/minimax/minimax-m2.5",
+      "prompt": "{file:~/.config/opencode/skills/document/SKILL.md}",
+      "tools": { "write": false, "edit": false, "bash": true },
+      "permission": { "edit": "deny" }
     },
     "review": {
       "description": "Planning specialist for review plans",

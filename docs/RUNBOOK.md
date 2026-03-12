@@ -3,11 +3,12 @@
 ## Overview
 
 - **Built-in agents:** `plan` and `build` remain OpenCode defaults (Codex model) for generic/quick tasks.
-- **Primary planning mode** (`architect`) classifies task type, drafts plan content, and invokes `scribe` to persist the artifact.
-- **Primary execution mode** (`orchestrator`) runs delegated stage execution and recovery flow.
-- **Planning specialists** (`debugger`, `refactor`, `review`) are subagents invoked by `architect`.
-- **Execution subagents** (`implementor`, `designer`) run on cheaper models and execute bounded stage tasks.
-- **Artifact writer** (`scribe`) writes markdown artifacts/docs in approved paths.
+- **Primary planning mode** (`architect`) — read-only: exploration, reporting, drafting plans; also owns review and documentation after implementation. Invokes: `debugger`, `refactor`, `review`, `document`, `scribe`. Never invokes `designer`, `implementor`, or `orchestrator`. Prompts user to switch to orchestrator when done; receives user back for review + docs after orchestrator completes.
+- **Primary execution mode** (`orchestrator`) runs delegated stage execution and recovery flow. On completion, prompts user to switch to architect for review and documentation.
+- **Planning specialists** (`debugger`, `refactor`, `review`) — read-only subagents of architect; return plan drafts, never write code.
+- **Documentation generator** (`document`) — read-only; generates changelog/guides/architecture content; architect invokes, then scribe writes.
+- **Execution subagents** (`implementor`, `designer`) — coding agents invoked by orchestrator only; architect never invokes them.
+- **Artifact writer** (`scribe`) — only write path; writes plan artifacts and docs (invoked by architect and orchestrator).
 - **Recovery replanner** (`helper`) diagnoses stuck/failed states and amends existing artifacts through `scribe`.
 - **Verifier** (`verifier`) is an independent evidence gate and never writes code.
 - **Mentor** (`mentor`) is optional and explanatory only.
@@ -16,9 +17,10 @@
 
 | Role | Agents | Model Tier | Responsibility |
 |---|---|---|---|
-| Primary (planning) | `architect` | smart | Ask plan type, invoke specialist planner, produce plan, call scribe to write artifact |
+| Primary (planning) | `architect` | smart | Read-only: explore, report, draft. Plan mode: scribe writes artifact → switch to orchestrator. Post-implementation: review → sign-off → document → scribe writes docs |
 | Coordinator | `orchestrator` | smart | Execute artifact stages, grade child reports, enforce helper-triggered recovery, dispatch scribe for docs |
 | Planning specialists | `debugger`, `refactor`, `review` | smart | Return type-specific plan drafts to architect |
+| Documentation generator | `document` | fast | Generate changelog/guides/architecture content; architect invokes, scribe writes |
 | Artifact writer | `scribe` | fast | Write/update markdown artifacts and docs from architect/orchestrator content |
 | Recovery | `helper` | fast | Replan minimal strategy deltas and trigger artifact amendment |
 | Execution | `implementor`, `designer` | fast | Execute assigned `stage_id` tasks with micro-TDD |
@@ -38,10 +40,8 @@ Both primaries (`architect`, `orchestrator`) are non-writing (`edit: deny`). Onl
 8. Execution subagent returns completion report (`stage_id`, files, tests, checks, blockers, risks, next input).
 9. `orchestrator` dispatches next stage only after successful handoff.
 10. For final completion, run `verifier`.
-11. Prompt user: **"Start review now?"**
-   - **Yes**: `review` creates/updates `.plan/review.<slug>.md`, `implementor` applies fixes, `verifier` re-checks.
-   - **No**: end with resume command and artifact path for a clean new session.
-12. Generate required docs from artifact `DocumentationOutputs` by dispatching `scribe` (mandatory before declaring completion).
+11. When verifier passes for all stages: **"Implementation complete. Switch to architect for review and documentation sign-off."** Do not run review or documentation. User switches to architect.
+12. Architect (post-implementation): invokes `review` for sign-off. If remediation: scribe writes review artifact → user switches to orchestrator → implementor applies fixes → verifier. If sign-off: architect invokes `document` → scribe writes docs.
 
 At each stage handoff, orchestrator grades child output:
 - `PASS` -> continue
@@ -102,7 +102,7 @@ If a user says "look at the prototype", check `docs-mcp-server` first and record
 
 ## Documentation Gate (Required)
 
-After successful verification, generate:
+After architect's review sign-off, architect invokes `document` to generate content, then `scribe` to write:
 
 - `docs/changelog/<date>-<slug>.md`
 - `docs/guides/<feature-slug>.md`
@@ -146,10 +146,10 @@ Constraints: markdown only, approved paths only
 - Environment/toolchain blockers (`ENV_BLOCKED`) halt stage progression and require helper+scribe amendment before retry.
 - Stage dispatch is one-at-a-time with completion handoff.
 - UI work routes to `designer`; non-UI work routes to `implementor`.
-- Optional review prompt appears at completion and supports defer/resume.
+- Orchestrator prompts "Switch to architect for review and documentation" on completion.
 - Verifier receives original feature artifact and review artifact (if present).
 - Verifier report includes criterion-level evidence.
 - Verifier failure updates the existing review artifact (no fragmented review files).
 - No stale references to removed agents (`fix`, `pr-reviewer`, `refactorer`). Execution uses `implementor` (not built-in `build`) in the custom pipeline.
 - MCP lookups are used only when prompt/context indicates need.
-- Final docs are generated only after verification gates pass.
+- Final docs are generated by architect (document + scribe) after review sign-off.
