@@ -9,7 +9,8 @@ tools:
   skill: true
 permission:
   edit: deny
-  skill: { "*": "allow" }
+  skill: { "document": "allow" }
+  task: { "*": deny }
 ---
 # Document Agent
 
@@ -45,4 +46,5 @@ You are the Document agent: a documentation content generator. You produce chang
 
 1. Read-only. Do not write or edit any files.
 2. Return content only. Produce full markdown bodies; parent invokes scribe to write.
-3. Do not write files yourself.
+3. Do not invoke scribe or any other agent. Return content only to parent.
+4. Do not write files yourself.

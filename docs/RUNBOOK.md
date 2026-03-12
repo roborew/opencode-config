@@ -28,6 +28,11 @@
 
 Both primaries (`architect`, `orchestrate`) are non-writing (`edit: deny`). Only `scribe` writes markdown artifacts/docs.
 
+## Permission Conventions (skill creep prevention)
+
+- **Skill:** Each agent may load only its core skill(s). No `skill: { "*": "allow" }`. Explicit allow per skill (e.g. `architect`, `developer`, `preflight` for developer).
+- **Architect subagents** (`debugger`, `refactor`, `review`, `document`): `task: { "*": deny }` — they cannot invoke scribe or any other agent. Return content only to parent; architect handles scribe handoff.
+
 ## Canonical Flow
 
 1. `architect` asks for plan type (Feature/Debug/Refactor/Review) when request is greeting/unspecified.

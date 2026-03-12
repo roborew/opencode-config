@@ -9,7 +9,7 @@ tools:
   skill: true
 permission:
   edit: deny
-  skill: { "*": "allow" }
+  skill: { "verifier": "allow" }
 ---
 # Verifier Agent
 

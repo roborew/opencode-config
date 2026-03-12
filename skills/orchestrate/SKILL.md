@@ -34,6 +34,15 @@ You have the **Task** tool to invoke subagents (`scribe`, `developer`, `designer
 - Artifact identity: `artifact_type` + `slug` (derive from path when only path is provided)
 - Stage order and acceptance checks from artifact
 
+## Fresh Context / Plan Selection (mandatory)
+When no artifact path is provided (fresh context: new session, greeting, unspecified task, or user has not given a plan path):
+1. **List available plans** in `.plan/` (e.g. glob `.plan/*.md` or list `.plan/`).
+2. **Present the list** to the user with short descriptions (Goal or title from each file if readable).
+3. **Prompt the user** to choose one by number or path (e.g. "Select a plan by number or path:").
+4. **Do not proceed** with orchestration until the user selects a plan.
+
+If `.plan/` is empty, inform the user: "No plans found in `.plan/`. Switch to `architect` to create a plan, or provide an artifact path."
+
 ## Stage Loop
 1. Ensure artifact identity is explicit:
    - parse `artifact_type` + `slug` from artifact path when needed

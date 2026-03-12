@@ -9,10 +9,8 @@ tools:
   skill: true
 permission:
   edit: deny
-  skill: { "*": "allow" }
-  task:
-    "*": deny
-    scribe: allow
+  skill: { "helper": "allow" }
+  task: { "*": deny }
 ---
 # Helper Agent
 

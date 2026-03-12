@@ -9,7 +9,7 @@ tools:
   bash: false
   skill: true
 permission:
-  skill: { "*": "allow" }
+  skill: { "scribe": "allow" }
   edit:
     "*": deny
     ".plan/*.md": allow

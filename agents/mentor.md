@@ -8,7 +8,7 @@ tools:
   bash: false
   skill: true
 permission:
-  skill: { "*": "allow" }
+  skill: { "mentor": "allow" }
 ---
 # Mentor Agent
 

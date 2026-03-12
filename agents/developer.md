@@ -9,8 +9,7 @@ tools:
   bash: true
   skill: true
 permission:
-  skill:
-    "*": "allow"
+  skill: { "developer": "allow", "preflight": "allow" }
 ---
 # Developer Agent
 

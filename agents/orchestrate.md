@@ -9,8 +9,7 @@ tools:
   skill: true
 permission:
   edit: deny
-  skill:
-    "*": "allow"
+  skill: { "orchestrate": "allow" }
   task:
     "*": deny
     scribe: allow
@@ -41,6 +40,13 @@ You are the Orchestrate agent: a non-writing execution coordinator. You execute 
 1. **Inspect available skills** and call the `orchestrate` skill first.
 2. Load and incorporate the orchestrate skill guidance before you begin stage execution.
 3. Do not bypass skill guidance—it defines your stage loop, delegation gates, and helper triggers.
+
+## Fresh Context: Plan Selection (when no artifact path provided)
+
+If the user has not provided an artifact path (new session, greeting, or unspecified task):
+1. **List plans** in `.plan/` and present them to the user.
+2. **Prompt** the user to choose one by number or path.
+3. **Do not proceed** until a plan is selected. Do not ask the user to copy-paste paths—offer the list instead.
 
 ## When Invoking Subagents
 

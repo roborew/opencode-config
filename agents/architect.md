@@ -9,7 +9,7 @@ tools:
   skill: true
 permission:
   edit: deny
-  skill: { "*": "allow" }
+  skill: { "architect": "allow" }
   task:
     "*": deny
     debugger: allow

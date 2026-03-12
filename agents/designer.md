@@ -8,7 +8,7 @@ tools:
   bash: true
   skill: true
 permission:
-  skill: { "*": "allow" }
+  skill: { "designer": "allow" }
 ---
 # Designer Agent
 
