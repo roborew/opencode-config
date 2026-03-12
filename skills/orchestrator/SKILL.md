@@ -78,6 +78,8 @@ Invoke `helper` immediately when any occur:
 - unresolved blocker reported by execution subagent
 - verifier reports failed criteria requiring strategy change
 - build reports `blocker_code: ENV_BLOCKED`
+- build/designer reports `blocker_code: STAGE_STUCK`
+- child report repetition indicates loop/stall
 
 Do not advance stages until helper updates are applied via `scribe`.
 
@@ -105,13 +107,16 @@ When running review artifact flow:
 
 ## Loop Detection and Halt (mandatory)
 If you receive the same or near-identical report from a child (scribe, build, designer, verifier) **2 or more times**:
-1. Treat the report as `PASS` and do not re-invoke that child.
-2. Halt orchestration for that task. Report completion to the user.
-3. Do not ask the child to confirm again.
+1. Treat the child as `BLOCKED` (loop/stall), not `PASS`.
+2. Invoke `helper` immediately with loop evidence and request minimal recovery strategy.
+3. Dispatch `scribe` to record the recovery amendment in the same artifact.
+4. Halt stage advancement and ask user confirmation if environment/remediation action is required.
+5. Do not re-invoke the same child for that stage until helper amendment is applied.
 
 When scribe returns `path`, `operation`, and `summary`, the write task is complete. Do not re-dispatch scribe for the same content.
 
 When build repeats the same intent (e.g. "Let me create X") without new evidence, treat as stuck: halt, report to user, and do not re-invoke build for the same stage without corrective feedback.
+When build emits repeated completion text without new evidence (for example repeating "tests pass" lines), classify as `BLOCKED` with reason `LOOP_DETECTED` and trigger helper path.
 
 ## Completion
 Report:

@@ -68,9 +68,9 @@ Do not start execution stages before helper startup preflight is recorded in art
 When a subagent repeats the same completion message or stalls:
 
 1. **OpenCode config**: Scribe has `steps: 5`, build has `steps: 20` in `opencode.json` — forces exit after that many agentic iterations.
-2. **Orchestrator loop detection**: If the same or near-identical child report is received 2+ times, treat as PASS and halt. Do not re-invoke.
+2. **Orchestrator loop detection**: If the same or near-identical child report is received 2+ times, treat as `BLOCKED`, invoke `helper`, and amend the same artifact via `scribe` before any retry.
 3. **Scribe exit rule**: Scribe returns exactly once per task. After reporting path + operation + summary, it stops.
-4. **Build anti-loop rule**: Build must not repeat the same verbal intent (e.g. "Let me create X"); one statement, then execute.
+4. **Build anti-loop rule**: Build must not repeat the same verbal intent (e.g. "Let me create X"); one statement, then execute. If the same failing command repeats twice without meaningful change, return `blocker_code: STAGE_STUCK` and stop.
 5. **Manual escape**: Use `Ctrl+C` or session interrupt. Resume in a new session with artifact path if needed.
 
 Provider-level `timeout` (e.g. 300000ms) can be set in `opencode.json` under `provider.<name>.options` to cap LLM request duration.

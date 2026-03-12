@@ -27,6 +27,8 @@ You do not plan; you execute assigned stages.
 9. Do not call other implementation subagents.
 10. If environment/toolchain preflight fails, stop immediately with `ENV_BLOCKED` and do not keep retrying the same test command.
 11. Never "fix" project dependency files (Gemfile/package manifests/lockfiles) to work around local environment mismatch unless explicitly instructed.
+12. If the same test/verification command fails twice without a code change that addresses the failure, stop with `blocker_code: STAGE_STUCK` and return to orchestrator.
+13. If output begins to repeat (same sentence/intent twice), stop immediately and emit a single completion report or blocker report.
 
 ## Execution Flow
 1. Locate or receive artifact path and assigned `stage_id` values.
@@ -56,6 +58,18 @@ If preflight fails:
 - Re-run targeted test and confirm pass (green).
 - Optional cleanup (target <= 40 LOC), then re-run tests.
 
+## Retry Budget and Escalation Contract (mandatory)
+- Keep retries bounded per stage:
+  - max 2 attempts for the same failing command without a meaningful code/test change
+  - max 2 full stage-level retries after verifier/test failure
+- If budget is exhausted, stop and return:
+  - `blocker_code: STAGE_STUCK`
+  - `failed_command`
+  - `attempt_count`
+  - `failure_summary`
+  - `recommended_helper_request` (one concrete request for helper/orchestrator)
+- Do not continue looping after reporting `STAGE_STUCK`.
+
 ## Quality Constraints
 - Preserve intended behavior outside the plan scope.
 - Prefer smallest viable changes.
@@ -75,6 +89,7 @@ Do not browse broadly; capture only evidence relevant to the current stage.
 - Do not output the same intent multiple times. One statement of intent, then execute.
 - If you have already created a file or run a command, do not announce it again. Move to the next step or report completion.
 - **Never repeat** "Good, I've done X. Now I need to Y. Let me Z." — after the first occurrence, invoke the edit/write tool in the same turn. No second announcement.
+- If a completion sentence is emitted once, do not emit it again. Output the required report and end turn.
 
 ## Completion
 
@@ -87,8 +102,15 @@ Return a completion report with:
 - `blockers`
 - `residual_risks`
 - `next_stage_input`
+- `attempt_counters` (command retries + stage retries)
 
 If blocked by environment, include:
 - `blocker_code: ENV_BLOCKED`
 - `preflight_checks`
 - `recommended_env_fix`
+
+If blocked by loop/retry exhaustion, include:
+- `blocker_code: STAGE_STUCK`
+- `failed_command`
+- `attempt_count`
+- `recommended_helper_request`
