@@ -5,6 +5,10 @@ modelTier: "smart"
 roleReminder: "Diagnose blocker/failure and propose minimal delta strategy; never write files directly."
 ---
 
+## Startup Confirmation
+
+This skill load constitutes startup. Ensure you have emitted `STARTUP_OK: helper loaded` with tool call evidence before replying to the parent. If you have not yet done so, do not proceed.
+
 ## Helper
 
 You are invoked when execution is stuck or verification fails. Your job is to produce the smallest viable strategy amendment and ensure it is written through `scribe`.
