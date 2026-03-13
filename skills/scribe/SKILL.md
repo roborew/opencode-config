@@ -33,6 +33,7 @@ You are the dedicated markdown writer for architect and orchestrate agents. You 
     - `debug` -> `.plan/debug.<slug>.md`
     - `refactor` -> `.plan/refactor.<slug>.md`
     - `review` -> `.plan/review.<slug>.md`
+    - `design` -> `.plan/design.<slug>.md`
 - Optional `mode`: `create` or `update`
 
 ## Workflow

@@ -15,11 +15,11 @@ For serious features, refactors, or multi-stage work, use the custom **Architect
 
 - **Primary planning:** `architect` (default agent) — read-only: exploration, reporting, drafting plans; also owns review and documentation after implementation
 - **Primary execution:** `orchestrate` — coordinates execution; never writes directly; prompts user back to architect on completion
-- **Planning specialists (architect subagents):** `debugger`, `refactor`, `review` — read-only; return plan drafts
+- **Planning specialists (architect subagents):** `debugger`, `refactor`, `review`, `designer` — read-only; return plan drafts
 - **Documentation generator:** `document` — read-only; generates changelog/guides/architecture content; architect invokes, then scribe writes
 - **Artifact writer:** `scribe` — only agent that writes plan artifacts and docs (invoked by architect and orchestrate)
 - **Recovery replanner:** `helper`
-- **Execution subagents (orchestrate only):** `developer`, `frontend-dev` — coding agents; architect never invokes these
+- **Execution subagents (orchestrate only):** `developer`, `frontend-dev`, `ux-dev` — coding agents; architect never invokes these. `ux-dev` generates HTML-only framework-agnostic prototypes from design briefs into `.prototype/<slug>/`.
 - **Verification gate:** `verifier`
 - **Image/layout reviewer:** `vision` — invoked by orchestrate only when the model needs to see the UI (layout, design, visual regression). Not triggered on every test run.
 - **Optional mentor:** `mentor`
@@ -29,8 +29,8 @@ For serious features, refactors, or multi-stage work, use the custom **Architect
 ## How the Custom Pipeline Works
 
 **Phase 1 — Planning**
-1. `architect` asks what type of plan is needed (Feature, Debug, Refactor, Review) when prompt is greeting/unspecified.
-2. `architect` drafts content (and invokes specialist subagents when needed).
+1. `architect` asks what type of plan is needed (Feature, Debug, Refactor, Review, Document, Prototype Design) when prompt is greeting/unspecified.
+2. `architect` drafts content (and invokes specialist subagents when needed). For Prototype Design: architect prompts for design intake (purpose, audience, feel, color scheme, icon set, sections, accessibility, reference assets), enforces HTML-only framework-agnostic prototype output, invokes `designer` for brief synthesis, then scribe writes `.plan/design.<slug>.md`.
 3. `architect` invokes `scribe` to write the artifact to `.plan/<type>.<slug>.md` — the scribe step is mandatory.
 4. Switch to `orchestrate`.
 
@@ -42,7 +42,8 @@ For serious features, refactors, or multi-stage work, use the custom **Architect
    - `.plan/debug.<slug>.md`
    - `.plan/refactor.<slug>.md`
    - `.plan/review.<slug>.md`
-8. `orchestrate` dispatches one stage at a time to `developer` or `frontend-dev`.
+   - `.plan/design.<slug>.md` (prototype design brief)
+8. `orchestrate` dispatches one stage at a time to `developer`, `frontend-dev`, or `ux-dev`. Design artifacts (`Owner: ux-dev`) are executed by `ux-dev`, which generates HTML-only prototype code into `.prototype/<slug>/`.
 9. Execution subagents return completion reports with evidence.
 10. `orchestrate` grades each child report (`PASS` / `NEEDS_RETRY` / `BLOCKED`) before progressing.
 11. `verifier` checks acceptance criteria with evidence before completion.
@@ -85,6 +86,7 @@ Templates live in:
 - `docs/changelog/TEMPLATE.md`
 - `docs/guides/TEMPLATE.md`
 - `docs/architecture/TEMPLATE.md`
+- `docs/prototypes/HTML_PROTOTYPE_TEMPLATE.md` (reference prompt for HTML-only prototype generation)
 
 ## Desktop App Shell Environment Fix
 

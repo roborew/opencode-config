@@ -8,7 +8,7 @@ All `.plan/<type>.<slug>.md` files follow this structure. Primary agents produce
 |---------|---------|
 | **Context** | Brief background, constraints, and assumptions |
 | **Goal** | One-sentence objective |
-| **StagePlan** | Ordered stages with `stage_id`, **Owner** (`frontend-dev` or `developer`), objective, and dependencies |
+| **StagePlan** | Ordered stages with `stage_id`, **Owner** (`frontend-dev`, `developer`, or `ux-dev`), objective, and dependencies |
 | **Tasks** | Numbered tasks mapped to a `stage_id` |
 | **FilesToChange** | Paths and explanations mapped to a `stage_id` |
 | **StageAcceptanceChecks** | Verification gates for each stage (tests, commands, criteria) |
@@ -45,6 +45,7 @@ If environment is blocked:
 - `debug.<slug>.md` - Bug fix (from `debugger`)
 - `refactor.<slug>.md` - Refactor migration (from `refactor`)
 - `review.<slug>.md` - Review changes (from `review`)
+- `design.<slug>.md` - Prototype design brief (from `designer`); orchestrate dispatches `ux-dev` to generate code in `.prototype/<slug>/`
 
 ## Example Skeleton
 
@@ -58,7 +59,7 @@ If environment is blocked:
 ...
 
 ## StagePlan
-Each stage MUST have Owner. Orchestrate dispatches by Owner: `frontend-dev` for UI/design, `developer` for logic/backend.
+Each stage MUST have Owner. Orchestrate dispatches by Owner: `frontend-dev` for UI/design, `developer` for logic/backend, `ux-dev` for prototype generation from design artifacts.
 
 1. `stage_id: stage-ui`
    - Owner: `frontend-dev`

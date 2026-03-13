@@ -41,6 +41,9 @@
         },
         "qwen/qwen3-vl-235b-a22b-instruct": {
           "name": "Qwen3 VL 235B (vision)"
+        },
+        "google/gemini-3.1-pro-preview": {
+          "name": "Gemini 3.1 Pro Preview"
         }
       }
     }
@@ -103,6 +106,14 @@
     "vision": {
       "mode": "subagent",
       "model": "openrouter/qwen/qwen3-vl-235b-a22b-instruct"
+    },
+    "designer": {
+      "mode": "subagent",
+      "model": "openrouter/google/gemini-3.1-pro-preview"
+    },
+    "ux-dev": {
+      "mode": "subagent",
+      "model": "openrouter/google/gemini-3.1-pro-preview"
     }
   }
 }

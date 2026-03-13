@@ -3,11 +3,11 @@
 ## Overview
 
 - **Built-in agents:** `plan` and `build` remain OpenCode defaults (Codex model) for generic/quick tasks.
-- **Primary planning mode** (`architect`) — read-only: exploration, reporting, drafting plans; also owns review and documentation after implementation. Invokes: `debugger`, `refactor`, `review`, `document`, `scribe`. Never invokes `frontend-dev`, `developer`, or `orchestrate`. Prompts user to switch to orchestrate when done; receives user back for review + docs after orchestrate completes.
+- **Primary planning mode** (`architect`) — read-only: exploration, reporting, drafting plans; also owns review and documentation after implementation. Invokes: `debugger`, `refactor`, `review`, `document`, `designer`, `scribe`. Never invokes `frontend-dev`, `developer`, or `orchestrate`. Prompts user to switch to orchestrate when done; receives user back for review + docs after orchestrate completes.
 - **Primary execution mode** (`orchestrate`) runs delegated stage execution and recovery flow. On completion, prompts user to switch to architect for review and documentation.
-- **Planning specialists** (`debugger`, `refactor`, `review`) — read-only subagents of architect; return plan drafts, never write code.
+- **Planning specialists** (`debugger`, `refactor`, `review`, `designer`) — read-only subagents of architect; return plan drafts, never write code. `designer` synthesizes design briefs for Prototype Design.
 - **Documentation generator** (`document`) — read-only; generates changelog/guides/architecture content; architect invokes, then scribe writes.
-- **Execution subagents** (`developer`, `frontend-dev`) — coding agents invoked by orchestrate only; architect never invokes them.
+- **Execution subagents** (`developer`, `frontend-dev`, `ux-dev`) — coding agents invoked by orchestrate only; architect never invokes them. `ux-dev` generates HTML-only framework-agnostic prototypes from design briefs into `.prototype/<slug>/`.
 - **Artifact writer** (`scribe`) — only write path; writes plan artifacts and docs (invoked by architect and orchestrate).
 - **Recovery replanner** (`helper`) diagnoses stuck/failed states and amends existing artifacts through `scribe`.
 - **Verifier** (`verifier`) is an independent evidence gate and never writes code.
@@ -19,11 +19,11 @@
 |---|---|---|---|
 | Primary (planning) | `architect` | smart | Read-only: explore, report, draft. Plan mode: scribe writes artifact → switch to orchestrate. Post-implementation: review → sign-off → document → scribe writes docs |
 | Coordinator | `orchestrate` | smart | Execute artifact stages, grade child reports, enforce helper-triggered recovery, dispatch scribe for docs |
-| Planning specialists | `debugger`, `refactor`, `review` | smart | Return type-specific plan drafts to architect |
+| Planning specialists | `debugger`, `refactor`, `review`, `designer` | smart | Return type-specific plan drafts to architect. `designer` uses Gemini Pro for design brief synthesis. |
 | Documentation generator | `document` | fast | Generate changelog/guides/architecture content; architect invokes, scribe writes |
 | Artifact writer | `scribe` | fast | Write/update markdown artifacts and docs from architect/orchestrate content |
 | Recovery | `helper` | fast | Replan minimal strategy deltas and trigger artifact amendment |
-| Execution | `developer`, `frontend-dev` | fast | Execute assigned `stage_id` tasks with micro-TDD |
+| Execution | `developer`, `frontend-dev`, `ux-dev` | smart/fast | Execute assigned `stage_id` tasks. `ux-dev` uses Gemini Pro for HTML-only prototype generation into `.prototype/<slug>/`. |
 | Verification | `verifier` | fast | Verify acceptance criteria with traceable evidence |
 
 Both primaries (`architect`, `orchestrate`) are non-writing (`edit: deny`). Only `scribe` writes markdown artifacts/docs.
@@ -31,19 +31,19 @@ Both primaries (`architect`, `orchestrate`) are non-writing (`edit: deny`). Only
 ## Permission Conventions (skill creep prevention)
 
 - **Skill:** Each agent may load only its core skill(s). No `skill: { "*": "allow" }`. Explicit allow per skill (e.g. `architect`, `developer`, `preflight` for developer).
-- **Architect subagents** (`debugger`, `refactor`, `review`, `document`): `task: { "*": deny }` — they cannot invoke scribe or any other agent. Return content only to parent; architect handles scribe handoff.
+- **Architect subagents** (`debugger`, `refactor`, `review`, `document`, `designer`): `task: { "*": deny }` — they cannot invoke scribe or any other agent. Return content only to parent; architect handles scribe handoff.
 
 ## Canonical Flow
 
-1. `architect` asks for plan type (Feature/Debug/Refactor/Review) when request is greeting/unspecified.
-2. `architect` invokes matching specialist subagent (`debugger`/`refactor`/`review`) as needed and produces artifact draft content.
+1. `architect` asks for plan type (Feature/Debug/Refactor/Review/Document/Prototype Design) when request is greeting/unspecified.
+2. `architect` invokes matching specialist subagent (`debugger`/`refactor`/`review`/`designer`) as needed and produces artifact draft content. For Prototype Design: architect prompts for design intake (purpose, audience, feel, color scheme, icon set, sections, accessibility, reference assets), enforces HTML-only framework-agnostic output mode, invokes `designer`, then scribe writes `.plan/design.<slug>.md`.
 3. `architect` invokes `scribe` to write the artifact to `.plan/<type>.<slug>.md` (mandatory step).
 4. User switches to `orchestrate`.
 5. `orchestrate` ensures artifact exists; if missing, dispatches `scribe` to write it.
 6. `orchestrate` starts by asking whether to run startup preflight checks now (`yes/no`).
 7. If yes: `orchestrate` invokes `developer` for preflight (developer loads `preflight` skill), reports results, and pauses for remediation if blocked.
 8. If no (or preflight is ready): `orchestrate` lists existing plans and asks user to select one or switch to `architect` to create a new plan.
-9. `orchestrate` dispatches one stage at a time to `developer` or `frontend-dev`.
+9. `orchestrate` dispatches one stage at a time to `developer`, `frontend-dev`, or `ux-dev` (by stage Owner). Design artifacts use `Owner: ux-dev`; `ux-dev` outputs HTML-only files to `.prototype/<slug>/`.
 10. Execution subagent returns completion report (`stage_id`, files, tests, checks, blockers, risks, next input).
 11. `orchestrate` dispatches next stage only after successful handoff.
 12. For final completion, run `verifier`.
@@ -126,6 +126,7 @@ Use templates in:
 - `docs/changelog/TEMPLATE.md`
 - `docs/guides/TEMPLATE.md`
 - `docs/architecture/TEMPLATE.md`
+- `docs/prototypes/HTML_PROTOTYPE_TEMPLATE.md`
 
 ## Stage Dispatch Template
 
@@ -158,7 +159,7 @@ Constraints: markdown only, approved paths only
 - Helper is invoked on repeated verifier failure or unresolved blockers.
 - Environment/toolchain blockers (`ENV_BLOCKED`) halt stage progression and require helper+scribe amendment before retry.
 - Stage dispatch is one-at-a-time with completion handoff.
-- UI work routes to `frontend-dev`; non-UI work routes to `developer`.
+- UI work routes to `frontend-dev`; non-UI work routes to `developer`; prototype generation from design briefs routes to `ux-dev` (outputs to `.prototype/<slug>/`).
 - Orchestrator prompts "Switch to architect for review and documentation" on completion.
 - Verifier receives original feature artifact and review artifact (if present).
 - Verifier report includes criterion-level evidence.

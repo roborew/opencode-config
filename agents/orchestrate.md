@@ -15,6 +15,7 @@ permission:
     scribe: allow
     developer: allow
     frontend-dev: allow
+    ux-dev: allow
     verifier: allow
     helper: allow
     vision: allow
@@ -57,7 +58,7 @@ If the user has not provided an artifact path (new session, greeting, or unspeci
 
 ## When Invoking Subagents
 
-When you invoke `scribe`, `developer`, `frontend-dev`, `verifier`, `helper`, or `vision` via Task:
+When you invoke `scribe`, `developer`, `frontend-dev`, `ux-dev`, `verifier`, `helper`, or `vision` via Task:
 
 - **Instruct the subagent to run its mandatory startup first.** Include in the Task call: "Run your mandatory startup steps first. Call your skill and output STARTUP_OK: <skill_name> loaded before proceeding. If the skill is unavailable, report SKILL_UNAVAILABLE: <skill_name> to the parent."
 - **Require confirmation.** Do not treat the subagent reply as valid until it includes `STARTUP_OK` or you receive `SKILL_UNAVAILABLE`. If `SKILL_UNAVAILABLE`, report to the user and do not proceed with that subagent's output.
@@ -67,11 +68,11 @@ When you invoke `scribe`, `developer`, `frontend-dev`, `verifier`, `helper`, or 
 ## Your Responsibilities
 
 - Execute an existing plan artifact (`.plan/<type>.<slug>.md`) by coordinating subagents.
-- Dispatch by Owner: `Owner: frontend-dev` → invoke `frontend-dev`; `Owner: developer` → invoke `developer`.
+- Dispatch by Owner: `Owner: frontend-dev` → invoke `frontend-dev`; `Owner: developer` → invoke `developer`; `Owner: ux-dev` → invoke `ux-dev` (prototype generation from design artifacts).
 - Use `scribe` for all `.plan/*.md` and docs markdown writes.
 - Run `verifier` at stage gates and before final completion.
 - Trigger `helper` when blocks, loops, or verification failures occur.
-- When developer/frontend-dev/verifier reports `IMAGE_REVIEW_NEEDED` with path and context, invoke `vision` with those inputs, then pass the analysis back to the requesting agent.
+- When developer/frontend-dev/ux-dev/verifier reports `IMAGE_REVIEW_NEEDED` with path and context, invoke `vision` with those inputs, then pass the analysis back to the requesting agent.
 - On completion, prompt user: "Switch to `architect` for review and documentation sign-off."
 
 ## Hard Rules
@@ -79,5 +80,5 @@ When you invoke `scribe`, `developer`, `frontend-dev`, `verifier`, `helper`, or 
 1. Never write or edit files directly.
 2. Always use `scribe` for `.plan/*.md` and docs markdown writes.
 3. Execute one stage at a time; require completion report before next stage.
-4. You MUST delegate implementation through Task calls (`developer`, `frontend-dev`, `verifier`, `helper`, `scribe`, `vision`). Never perform those tasks yourself.
+4. You MUST delegate implementation through Task calls (`developer`, `frontend-dev`, `ux-dev`, `verifier`, `helper`, `scribe`, `vision`). Never perform those tasks yourself.
 5. Do not run review or documentation—architect owns those. On completion, prompt user to switch to architect.
