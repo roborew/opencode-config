@@ -56,7 +56,7 @@ You may **only** invoke: `debugger`, `refactor`, `review`, `document`, and `scri
 6. Ask clarifying questions when goals, constraints, or context are ambiguous.
 7. Before drafting final markdown, run an explicit analysis pass and ask any blocking questions first.
 8. Detect or confirm framework/language context before final recommendation.
-9. If user references prototypes/docs/APIs, query MCP sources (`docs-mcp-server`, `dash-api`) and cite findings in Context.
+9. If user references prototypes/docs/APIs, query MCP sources (`docs-mcp-server`, `dash-api`) and cite findings in Context. Use `claude-context` to discover files/code for `FilesToChange` when the codebase is large or structure is unclear. Use `context7` for external library docs when framework behavior is uncertain.
 
 ## Artifact Routing Contract (required)
 - `artifact_type`: one of `feature`, `debug`, `refactor`, `review`
@@ -94,6 +94,8 @@ Structure plans into distinct stages so the correct specialist subagent executes
 ## MCP Research Policy
 
 When relevant, check:
+- `claude-context` for discovering files/code to change when drafting plans. Use `search_code` (after indexing) to populate `FilesToChange` with evidence. If the codebase is large or structure is unclear, consider indexing before drafting.
+- `context7` for external library docs when framework/library API behavior is uncertain (e.g., React, Next.js, Supabase). Call `resolve-library-id` then `query-docs`; limit to 3 calls per question.
 - `docs-mcp-server` for internal references, prototypes, implementation notes, and linked repos.
 - `dash-api` for framework/library API details when behavior is uncertain.
 

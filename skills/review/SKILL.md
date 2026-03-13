@@ -76,6 +76,14 @@ Merge-ready / Blocked / Needs changes.
 - Explicitly excluded from this review
 ```
 
+## MCP Usage Policy
+
+Use MCP when it materially reduces uncertainty:
+- `claude-context` for discovering changed files when PR context is incomplete or scope is unclear.
+- `context7` when library usage in changed code needs verification against current docs.
+- `docs-mcp-server` for internal design references.
+- `dash-api` for API contract lookup when reviewing usage.
+
 ## Completion
 
 Report:

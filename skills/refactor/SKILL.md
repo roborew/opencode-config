@@ -73,6 +73,14 @@ One-sentence refactor objective (behavior-preserving).
 - Explicitly excluded changes
 ```
 
+## MCP Usage Policy
+
+Use MCP when it materially reduces uncertainty:
+- `claude-context` for discovering files to refactor and populating `FilesToChange` with evidence.
+- `context7` for external library docs when refactor touches framework APIs.
+- `docs-mcp-server` for internal references and implementation notes.
+- `dash-api` for API contract lookup when behavior is unclear.
+
 ## Completion
 
 Report:

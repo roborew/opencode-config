@@ -95,6 +95,16 @@ Before writing interface code, search the codebase to understand existing patter
 7. **Interact**: Add all states (hover, focus, active, disabled, loading, error)
 8. **Verify**: Check accessibility, responsiveness, consistency
 
+## MCP Usage Policy
+
+Use MCP sources when they materially reduce uncertainty for assigned work:
+- `claude-context`: Do NOT use for discovery; `FilesToChange` comes from the plan. Only use if the plan is ambiguous and the stage requires locating design system files (tokens, components, patterns) not listed in the artifact.
+- `context7` for framework/component library docs (e.g., Radix, Tailwind, React) when API usage or patterns are unclear.
+- `docs-mcp-server` for internal design references and prototypes.
+- `dash-api` for API contract lookup when component or styling behavior is uncertain.
+
+Do not browse broadly; capture only evidence relevant to the current stage.
+
 ## Pre-Completion Checklist
 
 Before delivering, verify:

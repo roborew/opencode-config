@@ -65,8 +65,10 @@ If verification fails during execution, orchestrate invokes `helper` and `scribe
 
 Use MCP selectively when it helps resolve uncertainty:
 
-- `docs-mcp-server` for internal docs, prototypes, and linked references.
-- `dash-api` for API/library contract lookup.
+- **`claude-context`**: Semantic code search in workspace. Use during planning to discover files/code to change and populate `FilesToChange` with evidence. Requires indexing (`index_codebase`) before search; consider indexing before planning large features.
+- **`context7`**: Up-to-date docs for 9000+ external libraries. Use when framework/library API behavior is uncertain (e.g., React, Next.js, Supabase). Limit to 3 calls per question.
+- **`docs-mcp-server`**: Internal docs, prototypes, and linked references.
+- **`dash-api`**: API/library contract lookup.
 
 If a request says "look at the prototype", check `docs-mcp-server` first.
 

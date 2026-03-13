@@ -105,10 +105,14 @@ Provider-level `timeout` (e.g. 300000ms) can be set in `opencode.json` under `pr
 
 Primaries and execution agents should use MCP only when it reduces uncertainty:
 
-- `docs-mcp-server`: internal docs, prototypes, linked repos, architecture notes.
-- `dash-api`: API/library contract lookup when behavior is unclear.
+- **`claude-context`**: Semantic code search in workspace. Use during planning (architect, debugger, refactor, review) to discover files/code to change and populate `FilesToChange` with evidence. Requires indexing (`index_codebase`) before search. Before planning large features, ensure the workspace is indexed if claude-context is available.
+- **`context7`**: Up-to-date docs for 9000+ external libraries. Use when framework/library API behavior is uncertain. Limit to 3 calls per question.
+- **`docs-mcp-server`**: Internal docs, prototypes, linked repos, architecture notes.
+- **`dash-api`**: API/library contract lookup when behavior is unclear.
 
 If a user says "look at the prototype", check `docs-mcp-server` first and record what was used.
+
+**Execution phase**: Developer and frontend-dev receive `FilesToChange` from the plan; do not use claude-context for discovery unless the plan is ambiguous and the assigned stage requires locating additional files.
 
 ## Documentation Gate (Required)
 
