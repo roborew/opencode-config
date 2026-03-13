@@ -94,7 +94,7 @@ Structure plans into distinct stages so the correct specialist subagent executes
 ## MCP Research Policy
 
 When relevant, check:
-- `claude-context` for discovering files/code to change when drafting plans. Use `search_code` (after indexing) to populate `FilesToChange` with evidence. If the codebase is large or structure is unclear, consider indexing before drafting.
+- `claude-context` for discovering files/code to change when drafting plans. Use `search_code` to populate `FilesToChange` with evidence. Preflight ensures the codebase is indexed before planning.
 - `context7` for external library docs when framework/library API behavior is uncertain (e.g., React, Next.js, Supabase). Call `resolve-library-id` then `query-docs`; limit to 3 calls per question.
 - `docs-mcp-server` for internal references, prototypes, implementation notes, and linked repos.
 - `dash-api` for framework/library API details when behavior is uncertain.

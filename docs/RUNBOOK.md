@@ -105,7 +105,7 @@ Provider-level `timeout` (e.g. 300000ms) can be set in `opencode.json` under `pr
 
 Primaries and execution agents should use MCP only when it reduces uncertainty:
 
-- **`claude-context`**: Semantic code search in workspace. Use during planning (architect, debugger, refactor, review) to discover files/code to change and populate `FilesToChange` with evidence. Requires indexing (`index_codebase`) before search. Before planning large features, ensure the workspace is indexed if claude-context is available.
+- **`claude-context`**: Semantic code search in workspace. Use during planning (architect, debugger, refactor, review) to discover files/code to change and populate `FilesToChange` with evidence. Preflight checks ensure the codebase is indexed; if not, preflight runs `index_codebase` and verifies readiness before passing.
 - **`context7`**: Up-to-date docs for 9000+ external libraries. Use when framework/library API behavior is uncertain. Limit to 3 calls per question.
 - **`docs-mcp-server`**: Internal docs, prototypes, linked repos, architecture notes.
 - **`dash-api`**: API/library contract lookup when behavior is unclear.

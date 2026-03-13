@@ -25,11 +25,13 @@ You run environment readiness checks when requested at startup (or after environ
    - e.g. `node -v`, `ruby -v`, `bundle -v`, `pnpm -v`
 3. **Command resolution** — Confirm test/build runner resolves from current shell context.
 4. **Smoke check** — Execute a tiny test-command smoke check (or equivalent verification command) if project defines one.
+5. **Claude-context indexing** — If `claude-context` MCP is available: call `get_indexing_status` for the workspace path. If not indexed, call `index_codebase` to index the codebase, then verify with `get_indexing_status` until ready. Preflight does not pass until the codebase is indexed (or claude-context is unavailable). If claude-context is not configured, skip this check.
 
 ## Output
 Produce structured readiness content:
 - `Status`: `Ready` or `Blocked`
 - `preflight_checks` / `Runtime checks`: exact commands run and their output (or failure details)
+- `claude_context_index`: `indexed` | `skipped` (MCP unavailable) | `failed` — include indexing status or error if applicable
 - `stderr summaries`: for any failures
 - `Notes`: version manager assumptions, required shell initialization, remediation steps if Blocked
 
