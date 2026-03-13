@@ -49,12 +49,12 @@
     "augment-context-engine": {
       "type": "local",
       "command": ["/opt/homebrew/bin/auggie", "--mcp", "--mcp-auto-workspace"],
-      "enabled": true
+      "enabled": false
     },
     "auggie": {
       "type": "remote",
       "url": "https://api.augmentcode.com/mcp",
-      "enabled": true
+      "enabled": false
     },
     "docs-mcp-server": {
       "type": "remote",
@@ -75,6 +75,11 @@
       "type": "remote",
       "url": "https://mcp.context7.com/mcp",
       "enabled": true
+    },
+    "claude-context": {
+      "type": "local",
+      "enabled": true,
+      "command": ["npx", "-y", "@zilliz/claude-context-mcp@latest"]
     }
   },
   "agent": {
