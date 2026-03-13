@@ -29,6 +29,11 @@ If requirements are unclear or wrong, flag it to the Coordinator as a spec issue
 4) **If you can't run tests, say so.** Then compensate with stronger static evidence and label confidence.
 5) **Don't expand scope.** Suggest follow-ups only if they are outside acceptance criteria.
 
+## Image Review Request
+- **When to use:** Only when acceptance criteria require visual evidence (layout, alignment, screenshot comparison) and the model cannot verify from code or test output alone.
+- **When NOT to use:** Do NOT request on every verification pass. Do NOT request when automated checks or code inspection can verify the requirement.
+- When needed: report `IMAGE_REVIEW_NEEDED: path=<path> context=<what to verify>`. Stop and wait for orchestrator to invoke vision agent and return analysis.
+
 ## Process (required order)
 1. Preflight: verify criteria are specific and testable.
 2. Confirm required inputs are present (feature plan, optional review artifact, stage reports, test evidence).

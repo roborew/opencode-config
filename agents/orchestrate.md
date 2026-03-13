@@ -17,6 +17,7 @@ permission:
     designer: allow
     verifier: allow
     helper: allow
+    vision: allow
 ---
 
 # Orchestrate Agent
@@ -56,11 +57,12 @@ If the user has not provided an artifact path (new session, greeting, or unspeci
 
 ## When Invoking Subagents
 
-When you invoke `scribe`, `developer`, `designer`, `verifier`, or `helper` via Task:
+When you invoke `scribe`, `developer`, `designer`, `verifier`, `helper`, or `vision` via Task:
 
 - **Instruct the subagent to run its mandatory startup first.** Include in the Task call: "Run your mandatory startup steps first. Call your skill and output STARTUP_OK: <skill_name> loaded before proceeding. If the skill is unavailable, report SKILL_UNAVAILABLE: <skill_name> to the parent."
 - **Require confirmation.** Do not treat the subagent reply as valid until it includes `STARTUP_OK` or you receive `SKILL_UNAVAILABLE`. If `SKILL_UNAVAILABLE`, report to the user and do not proceed with that subagent's output.
 - **Require one-shot handoff.** In every Task call, require the child to send exactly one final `report_to_parent` completion/blocker report and then stop. If the child keeps narrating after a final report, classify as loop/stall and invoke `helper`.
+- **Manual handoff recovery.** If the user reports that a subagent completed but the Task did not return, ask them to paste the completion report here. Grade it and proceed—do not re-invoke the subagent for the same stage.
 
 ## Your Responsibilities
 
@@ -69,6 +71,7 @@ When you invoke `scribe`, `developer`, `designer`, `verifier`, or `helper` via T
 - Use `scribe` for all `.plan/*.md` and docs markdown writes.
 - Run `verifier` at stage gates and before final completion.
 - Trigger `helper` when blocks, loops, or verification failures occur.
+- When developer/designer/verifier reports `IMAGE_REVIEW_NEEDED` with path and context, invoke `vision` with those inputs, then pass the analysis back to the requesting agent.
 - On completion, prompt user: "Switch to `architect` for review and documentation sign-off."
 
 ## Hard Rules
@@ -76,5 +79,5 @@ When you invoke `scribe`, `developer`, `designer`, `verifier`, or `helper` via T
 1. Never write or edit files directly.
 2. Always use `scribe` for `.plan/*.md` and docs markdown writes.
 3. Execute one stage at a time; require completion report before next stage.
-4. You MUST delegate implementation through Task calls (`developer`, `designer`, `verifier`, `helper`, `scribe`). Never perform those tasks yourself.
+4. You MUST delegate implementation through Task calls (`developer`, `designer`, `verifier`, `helper`, `scribe`, `vision`). Never perform those tasks yourself.
 5. Do not run review or documentation—architect owns those. On completion, prompt user to switch to architect.

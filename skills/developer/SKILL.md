@@ -79,6 +79,11 @@ If preflight fails:
 - Avoid hard-coded environment-specific test values.
 - Keep touched files minimal and scoped to assigned stage.
 
+## Image Review Request
+- **When to use:** Only when the model explicitly needs to see the UI to verify layout, design, or visual correctness—e.g., layout check, visual regression, or when test output is insufficient.
+- **When NOT to use:** Do NOT request image review on every test run or every front-end test. Do NOT request when passing/failing tests or code inspection is sufficient.
+- When needed: report `IMAGE_REVIEW_NEEDED: path=<path> context=<what to verify>`. Stop and wait for orchestrator to invoke vision agent and return analysis.
+
 ## MCP Usage Policy
 
 Use MCP sources when they materially reduce uncertainty for assigned work:
@@ -107,7 +112,9 @@ Call `report_to_parent` once with:
 - `next_stage_input`
 - `attempt_counters` (command retries + stage retries)
 
-After emitting the completion report, end your turn immediately and return control to orchestrate.
+After emitting the completion report, output `HANDOFF_COMPLETE` on its own line, then end your turn immediately and return control to orchestrate.
+
+**Post-completion guard (mandatory):** If you have already emitted a completion report in this session and receive any subsequent user message (e.g. "continue", "what next?", "run again"), respond ONLY with: "Task complete. Switch to the `orchestrate` agent to continue to the next stage. Do not re-execute or repeat work." Do not run stages, re-run tests, or produce another report.
 
 If blocked by environment, include:
 - `blocker_code: ENV_BLOCKED`

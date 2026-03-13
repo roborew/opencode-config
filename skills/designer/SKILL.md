@@ -79,6 +79,11 @@ Before writing interface code, search the codebase to understand existing patter
 - PREFER CSS animations over JavaScript when possible
 - PREFER semantic tokens (`var(--color-primary)`) over raw values
 
+## Image Review Request
+- **When to use:** Only when the model needs to visually inspect a screenshot/mockup to verify design—e.g., layout, spacing, or visual regression.
+- **When NOT to use:** Do NOT request on every test run. Do NOT request when code or test output is sufficient.
+- When needed: report `IMAGE_REVIEW_NEEDED: path=<path> context=<what to verify>`. Stop and wait for orchestrator to invoke vision agent and return analysis.
+
 ## Workflow
 
 1. **Discover**: Search codebase for design system, tokens, existing components
@@ -113,3 +118,5 @@ Call `report_to_parent` with:
 - acceptance check status
 - blockers
 - residual risks and design tradeoffs
+
+After emitting the completion report, output `HANDOFF_COMPLETE` on its own line, then end your turn. **Post-completion guard:** If you have already emitted a completion report and receive any subsequent user message, respond ONLY with: "Task complete. Switch to the `orchestrate` agent to continue. Do not re-execute or repeat work."

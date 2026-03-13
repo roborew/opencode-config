@@ -21,6 +21,7 @@ For serious features, refactors, or multi-stage work, use the custom **Architect
 - **Recovery replanner:** `helper`
 - **Execution subagents (orchestrate only):** `developer`, `designer` — coding agents; architect never invokes these
 - **Verification gate:** `verifier`
+- **Image/layout reviewer:** `vision` — invoked by orchestrate only when the model needs to see the UI (layout, design, visual regression). Not triggered on every test run.
 - **Optional mentor:** `mentor`
 
 **Responsibility boundary:** Architect owns planning, review, and documentation. Orchestrator owns execution only. User switches: architect → orchestrate (to execute) → architect (for review + docs).

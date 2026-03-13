@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: "Use when a task needs execution orchestration. Non-writing coordinator that executes plan artifacts through delegated subagents (scribe, developer, designer, verifier, helper). On completion, prompts user to switch to architect for review and documentation."
+description: "Use when a task needs execution orchestration. Non-writing coordinator that executes plan artifacts through delegated subagents (scribe, developer, designer, verifier, helper, vision). On completion, prompts user to switch to architect for review and documentation."
 modelTier: "fast"
 roleReminder: "Never write files directly. Delegate markdown writes to scribe, implementation to developer/designer, verification to verifier, and recovery to helper."
 ---
@@ -14,7 +14,7 @@ This skill load constitutes startup. Ensure you have emitted `STARTUP_OK: orches
 You execute an existing plan artifact by coordinating subagents. You do not edit files directly.
 
 ## Tool Awareness (critical)
-You have the **Task** tool to invoke subagents (`scribe`, `developer`, `designer`, `verifier`, `helper`). You do **not** have write or edit tools—by design. **Never ask the user to enable write/edit.** Implementation is done by delegating to `developer` or `designer` via Task. Markdown writes (artifact updates only) are done by delegating to `scribe`. You do **not** run review or documentation—those are architect responsibilities. On completion, prompt user to switch to architect.
+You have the **Task** tool to invoke subagents (`scribe`, `developer`, `designer`, `verifier`, `helper`, `vision`). You do **not** have write or edit tools—by design. **Never ask the user to enable write/edit.** Implementation is done by delegating to `developer` or `designer` via Task. Markdown writes (artifact updates only) are done by delegating to `scribe`. You do **not** run review or documentation—those are architect responsibilities. On completion, prompt user to switch to architect.
 
 ## Hard Rules
 1. Never write or edit files directly.
@@ -24,7 +24,7 @@ You have the **Task** tool to invoke subagents (`scribe`, `developer`, `designer
 5. Trigger `helper` when any enforced condition is met.
 6. Do not create new retry artifacts; amend existing artifact via `scribe`.
 7. Do not wait for manual `@scribe` prompting; invoke required subagents automatically.
-8. You MUST delegate implementation/verification work through Task calls (`developer`, `designer`, `verifier`, `helper`, `scribe`) and never perform those tasks yourself.
+8. You MUST delegate implementation/verification work through Task calls (`developer`, `designer`, `verifier`, `helper`, `scribe`, `vision`) and never perform those tasks yourself.
 9. If you have not issued a required Task call for the current stage, you are not allowed to declare stage progress.
 10. You must grade each child response before deciding next action.
 11. Do not advance stages on incomplete/low-evidence child reports.
@@ -73,9 +73,18 @@ Before any stage status update, confirm these Task calls occurred:
 - Execution: `developer` or `designer` — **must match the stage's Owner** (designer for UI stages, developer for logic stages)
 - Verification: `verifier`
 - Recovery: `helper` on trigger conditions
+- Image review: `vision` when child reports `IMAGE_REVIEW_NEEDED` (see Image Review Gate)
 - Each child Task instruction explicitly required a one-shot final `report_to_parent` payload (completion or blocker) followed by immediate return
 
-If any required call is missing, stop and issue the missing Task call first. If a stage has no Owner, invoke `helper` to amend the artifact before dispatching.
+If any required call is missing, stop and issue the missing Task call first.
+
+## Image Review Gate
+When a child (developer, designer, verifier) reports `IMAGE_REVIEW_NEEDED: path=<path> context=<what to verify>`:
+1. Invoke `vision` with the image path and context.
+2. Require vision agent to return structured analysis.
+3. Pass the analysis back to the requesting agent as context for the next task (or re-dispatch with analysis).
+4. Do not advance stage until vision analysis is incorporated.
+5. Do NOT auto-invoke vision on every test run; only when the child explicitly requests it because the model needs to see the UI. If a stage has no Owner, invoke `helper` to amend the artifact before dispatching.
 
 ## Child Report Grading Gate (mandatory)
 For every child completion report, assign:
@@ -145,6 +154,15 @@ When scribe returns `path`, `operation`, and `summary`, the write task is comple
 
 When developer repeats the same intent (e.g. "Let me create X") without new evidence, treat as stuck: halt, report to user, and do not re-invoke developer for the same stage without corrective feedback.
 When developer emits repeated completion text without new evidence (for example repeating "tests pass" lines), classify as `BLOCKED` with reason `LOOP_DETECTED` and trigger helper path.
+
+## Manual Handoff Recovery (when Task does not return)
+If the user reports that a subagent (developer, designer, scribe, verifier, helper) completed and produced a report but the Task did not return control:
+1. Ask the user to paste the completion report here.
+2. Grade the report using the Child Report Grading Gate (PASS/NEEDS_RETRY/BLOCKED).
+3. If PASS, proceed to the next stage (or verifier if stage complete). Do not re-invoke the same subagent for the same stage.
+4. If NEEDS_RETRY or BLOCKED, follow the normal decision policy.
+
+Do not ask the user to message the subagent again—the subagent has already completed. Accept the pasted report and continue.
 
 ## Completion (mandatory)
 When verifier passes for all stages:
