@@ -3,11 +3,11 @@
 ## Overview
 
 - **Built-in agents:** `plan` and `build` remain OpenCode defaults (Codex model) for generic/quick tasks.
-- **Primary planning mode** (`architect`) — read-only: exploration, reporting, drafting plans; also owns review and documentation after implementation. Invokes: `debugger`, `refactor`, `review`, `document`, `scribe`. Never invokes `designer`, `developer`, or `orchestrate`. Prompts user to switch to orchestrate when done; receives user back for review + docs after orchestrate completes.
+- **Primary planning mode** (`architect`) — read-only: exploration, reporting, drafting plans; also owns review and documentation after implementation. Invokes: `debugger`, `refactor`, `review`, `document`, `scribe`. Never invokes `frontend-dev`, `developer`, or `orchestrate`. Prompts user to switch to orchestrate when done; receives user back for review + docs after orchestrate completes.
 - **Primary execution mode** (`orchestrate`) runs delegated stage execution and recovery flow. On completion, prompts user to switch to architect for review and documentation.
 - **Planning specialists** (`debugger`, `refactor`, `review`) — read-only subagents of architect; return plan drafts, never write code.
 - **Documentation generator** (`document`) — read-only; generates changelog/guides/architecture content; architect invokes, then scribe writes.
-- **Execution subagents** (`developer`, `designer`) — coding agents invoked by orchestrate only; architect never invokes them.
+- **Execution subagents** (`developer`, `frontend-dev`) — coding agents invoked by orchestrate only; architect never invokes them.
 - **Artifact writer** (`scribe`) — only write path; writes plan artifacts and docs (invoked by architect and orchestrate).
 - **Recovery replanner** (`helper`) diagnoses stuck/failed states and amends existing artifacts through `scribe`.
 - **Verifier** (`verifier`) is an independent evidence gate and never writes code.
@@ -23,7 +23,7 @@
 | Documentation generator | `document` | fast | Generate changelog/guides/architecture content; architect invokes, scribe writes |
 | Artifact writer | `scribe` | fast | Write/update markdown artifacts and docs from architect/orchestrate content |
 | Recovery | `helper` | fast | Replan minimal strategy deltas and trigger artifact amendment |
-| Execution | `developer`, `designer` | fast | Execute assigned `stage_id` tasks with micro-TDD |
+| Execution | `developer`, `frontend-dev` | fast | Execute assigned `stage_id` tasks with micro-TDD |
 | Verification | `verifier` | fast | Verify acceptance criteria with traceable evidence |
 
 Both primaries (`architect`, `orchestrate`) are non-writing (`edit: deny`). Only `scribe` writes markdown artifacts/docs.
@@ -43,7 +43,7 @@ Both primaries (`architect`, `orchestrate`) are non-writing (`edit: deny`). Only
 6. `orchestrate` starts by asking whether to run startup preflight checks now (`yes/no`).
 7. If yes: `orchestrate` invokes `developer` for preflight (developer loads `preflight` skill), reports results, and pauses for remediation if blocked.
 8. If no (or preflight is ready): `orchestrate` lists existing plans and asks user to select one or switch to `architect` to create a new plan.
-9. `orchestrate` dispatches one stage at a time to `developer` or `designer`.
+9. `orchestrate` dispatches one stage at a time to `developer` or `frontend-dev`.
 10. Execution subagent returns completion report (`stage_id`, files, tests, checks, blockers, risks, next input).
 11. `orchestrate` dispatches next stage only after successful handoff.
 12. For final completion, run `verifier`.
@@ -154,7 +154,7 @@ Constraints: markdown only, approved paths only
 - Helper is invoked on repeated verifier failure or unresolved blockers.
 - Environment/toolchain blockers (`ENV_BLOCKED`) halt stage progression and require helper+scribe amendment before retry.
 - Stage dispatch is one-at-a-time with completion handoff.
-- UI work routes to `designer`; non-UI work routes to `developer`.
+- UI work routes to `frontend-dev`; non-UI work routes to `developer`.
 - Orchestrator prompts "Switch to architect for review and documentation" on completion.
 - Verifier receives original feature artifact and review artifact (if present).
 - Verifier report includes criterion-level evidence.

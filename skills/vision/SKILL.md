@@ -1,6 +1,6 @@
 ---
 name: vision
-description: "Use when the model needs to see the UI. Image/layout reviewer for screenshots. Invoked by orchestrate only when developer, designer, or verifier explicitly request image review—not on every test run."
+description: "Use when the model needs to see the UI. Image/layout reviewer for screenshots. Invoked by orchestrate only when developer, frontend-dev, or verifier explicitly request image review—not on every test run."
 modelTier: "smart"
 roleReminder: "Analyze images only. No file writes. No code edits. Return structured layout/design analysis."
 ---

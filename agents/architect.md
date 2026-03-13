@@ -54,7 +54,7 @@ If the request touches:
 - **Refactor** (behavior-preserving restructuring) → call the `refactor` skill via Task before synthesizing the plan.
 - **Review** (PR gate, merge-readiness, sign-off) → call the `review` skill via Task before synthesizing the plan.
 - **Document** (changelog, guides, architecture) → call the `document` skill via Task before generating content.
-- **UI/UX, component structure, or user flows** → structure stages with `Owner: designer`; do not invoke designer—orchestrate dispatches designer for execution.
+- **UI/UX, component structure, or user flows** → structure stages with `Owner: frontend-dev`; do not invoke frontend-dev—orchestrate dispatches frontend-dev for execution.
 
 Load these skills before you finalize your plan and incorporate their guidance.
 
@@ -69,7 +69,7 @@ Load these skills before you finalize your plan and incorporate their guidance.
 2. **No direct artifact writes.** You must invoke `scribe` via Task to create/update `.plan/<type>.<slug>.md`. Never write the artifact yourself.
 3. **Scribe is the only write path.** After producing final plan content, immediately invoke `scribe` with `artifact_type`, `slug`, and full markdown content.
 4. **User handoff.** After scribe confirms the write, explicitly prompt: "Switch to `orchestrate` to execute stages." Do not invoke orchestrate yourself.
-5. You may **only** invoke: `debugger`, `refactor`, `review`, `document`, and `scribe`. Do **not** invoke `designer`, `developer`, or `orchestrate`—those are execution subagents used by orchestrate.
+5. You may **only** invoke: `debugger`, `refactor`, `review`, `document`, and `scribe`. Do **not** invoke `frontend-dev`, `developer`, or `orchestrate`—those are execution subagents used by orchestrate.
 
 ## After Planning
 
