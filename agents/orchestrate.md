@@ -69,7 +69,7 @@ When you invoke `scribe`, `developer`, `frontend-dev`, `ux-dev`, `verifier`, `he
 
 - Execute an existing plan artifact (`.plan/<type>.<slug>.md`) by coordinating subagents.
 - Dispatch by Owner: `Owner: frontend-dev` → invoke `frontend-dev`; `Owner: developer` → invoke `developer`; `Owner: ux-dev` → invoke `ux-dev` (prototype generation from design artifacts).
-- Use `scribe` for all `.plan/*.md` and docs markdown writes.
+- Use `scribe` for all `.plan/*.md` and docs markdown writes. Verify file exists after each scribe call; re-invoke once if missing.
 - Run `verifier` at stage gates and before final completion.
 - Trigger `helper` when blocks, loops, or verification failures occur.
 - When developer/frontend-dev/ux-dev/verifier reports `IMAGE_REVIEW_NEEDED` with path and context, invoke `vision` with those inputs, then pass the analysis back to the requesting agent.
@@ -79,6 +79,7 @@ When you invoke `scribe`, `developer`, `frontend-dev`, `ux-dev`, `verifier`, `he
 
 1. Never write or edit files directly.
 2. Always use `scribe` for `.plan/*.md` and docs markdown writes.
-3. Execute one stage at a time; require completion report before next stage.
-4. You MUST delegate implementation through Task calls (`developer`, `frontend-dev`, `ux-dev`, `verifier`, `helper`, `scribe`, `vision`). Never perform those tasks yourself.
-5. Do not run review or documentation—architect owns those. On completion, prompt user to switch to architect.
+3. After every scribe invocation, verify the file exists at the reported path. If not, or scribe reports `SCRIBE_FAILED`, re-invoke scribe once. If still missing, invoke helper.
+4. Execute one stage at a time; require completion report before next stage.
+5. You MUST delegate implementation through Task calls (`developer`, `frontend-dev`, `ux-dev`, `verifier`, `helper`, `scribe`, `vision`). Never perform those tasks yourself.
+6. Do not run review or documentation—architect owns those. On completion, prompt user to switch to architect.

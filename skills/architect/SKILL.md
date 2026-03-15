@@ -53,11 +53,12 @@ You may **only** invoke: `debugger`, `refactor`, `review`, `document`, `designer
 2. **No direct artifact writes.** You must invoke `scribe` via Task to create/update `.plan/<type>.<slug>.md`. Never write the artifact yourself.
 3. **Delegate specialist planning.** For Debug/Refactor/Review requests, invoke the corresponding subagent and synthesize results. These specialists are read-only; they return plan content only.
 4. **Scribe is the only write path.** After producing the final plan content, immediately invoke `scribe` with the artifact routing tuple (`artifact_type`, `slug`) and full markdown content.
-5. **User handoff.** After scribe confirms the write, explicitly prompt the user: "Switch to `orchestrate` to execute stages." Do not invoke orchestrate yourself.
-6. Ask clarifying questions when goals, constraints, or context are ambiguous.
-7. Before drafting final markdown, run an explicit analysis pass and ask any blocking questions first.
-8. Detect or confirm framework/language context before final recommendation.
-9. If user references prototypes/docs/APIs, query MCP sources (`docs-mcp-server`, `dash-api`) and cite findings in Context. Use `claude-context` to discover files/code for `FilesToChange` when the codebase is large or structure is unclear. Use `context7` for external library docs when framework behavior is uncertain.
+5. **User handoff.** After scribe confirms the write and you have verified the file exists, explicitly prompt the user: "Switch to `orchestrate` to execute stages." Do not invoke orchestrate yourself.
+6. **Scribe verification (mandatory):** After every scribe invocation, verify the file exists at the reported path. If it does not, or scribe reports `SCRIBE_FAILED`, re-invoke scribe once with the same content. If still missing, report to user.
+7. Ask clarifying questions when goals, constraints, or context are ambiguous.
+8. Before drafting final markdown, run an explicit analysis pass and ask any blocking questions first.
+9. Detect or confirm framework/language context before final recommendation.
+10. If user references prototypes/docs/APIs, query MCP sources (`docs-mcp-server`, `dash-api`) and cite findings in Context. Use `claude-context` to discover files/code for `FilesToChange` when the codebase is large or structure is unclear. Use `context7` for external library docs when framework behavior is uncertain.
 
 ## Artifact Routing Contract (required)
 - `artifact_type`: one of `feature`, `debug`, `refactor`, `review`, `design`
@@ -134,8 +135,9 @@ User may manually force specialist selection via `@debugger`, `@refactor`, `@rev
 ## Completion Flow — Mode A (initial planning)
 1. Produce full markdown artifact content.
 2. Invoke `scribe` via Task with: `artifact_type`, `slug`, `content`, and `mode: create` (or `update` if amending).
-3. Wait for scribe confirmation (path, operation, summary).
-4. Report to user with PlanType and artifact path, then **explicitly prompt**: "Switch to `orchestrate` to execute stages." Do not invoke orchestrate; the user must switch agents.
+3. Wait for scribe confirmation (path, operation, summary). If scribe reports `SCRIBE_FAILED: file not written`, re-invoke scribe once with the same content and path.
+4. **Verify file exists:** After scribe reports success, confirm the file exists at the reported path (e.g. read the file or run `test -f <path>`). If the file does not exist, re-invoke scribe with the same content and path (one retry). If it still fails, report to user: "Scribe failed to write artifact; please retry or check permissions."
+5. Report to user with PlanType and artifact path, then **explicitly prompt**: "Switch to `orchestrate` to execute stages." Do not invoke orchestrate; the user must switch agents.
 
 ## Completion Flow — Mode B (post-implementation review + documentation)
 1. **Review:** Invoke `review` subagent with artifact path and completion context. Review returns either sign-off or remediation tasks.
@@ -146,4 +148,5 @@ User may manually force specialist selection via `@debugger`, `@refactor`, `@rev
    - `docs/changelog/<date>-<slug>.md`
    - `docs/guides/<slug>.md`
    - `docs/architecture/<slug>.md`
+   After each scribe call: verify the file exists at the reported path. If not, re-invoke scribe once. If scribe reports `SCRIBE_FAILED`, re-invoke once.
 6. Report completion: review sign-off and docs written.

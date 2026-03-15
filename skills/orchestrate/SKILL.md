@@ -57,7 +57,7 @@ If `.plan/` is empty, inform the user: "No plans found in `.plan/`. Switch to `a
 1. Ensure artifact identity is explicit:
    - parse `artifact_type` + `slug` from artifact path when needed
    - pass identity fields to `scribe` on every artifact write/update call
-2. Ensure artifact exists; if missing, dispatch `scribe` to write it from approved content.
+2. Ensure artifact exists; if missing, dispatch `scribe` to write it from approved content. After scribe returns, verify the file exists at the reported path; if not, re-invoke scribe once.
 3. **Dispatch by Owner:** Read the current stage's `Owner` from the artifact `StagePlan`. Dispatch to that subagent only:
    - `Owner: frontend-dev` → invoke `frontend-dev` (UI/design specialist)
    - `Owner: developer` → invoke `developer` (logic/backend specialist)
@@ -70,7 +70,7 @@ If `.plan/` is empty, inform the user: "No plans found in `.plan/`. Switch to `a
 
 ## Delegation Gate (mandatory)
 Before any stage status update, confirm these Task calls occurred:
-- Artifact write/update: `scribe` (when needed)
+- Artifact write/update: `scribe` (when needed). After scribe returns, verify the file exists at the reported path; if not, re-invoke scribe once.
 - Execution: `developer`, `frontend-dev`, or `ux-dev` — **must match the stage's Owner** (frontend-dev for UI stages, developer for logic stages, ux-dev for prototype stages from design artifacts)
 - Verification: `verifier`
 - Recovery: `helper` on trigger conditions
@@ -151,7 +151,7 @@ If you receive the same or near-identical report from a child (scribe, developer
 4. Halt stage advancement and ask user confirmation if environment/remediation action is required.
 5. Do not re-invoke the same child for that stage until helper amendment is applied.
 
-When scribe returns `path`, `operation`, and `summary`, the write task is complete. Do not re-dispatch scribe for the same content.
+When scribe returns `path`, `operation`, and `summary`, verify the file exists at that path (e.g. read the file or list the directory). If the file does not exist, or scribe reports `SCRIBE_FAILED: file not written`, re-invoke scribe once with the same content and path. If still missing, treat as `BLOCKED` and invoke helper. Do not re-dispatch scribe for the same content after a successful verification.
 
 When developer repeats the same intent (e.g. "Let me create X") without new evidence, treat as stuck: halt, report to user, and do not re-invoke developer for the same stage without corrective feedback.
 When developer emits repeated completion text without new evidence (for example repeating "tests pass" lines), classify as `BLOCKED` with reason `LOOP_DETECTED` and trigger helper path.
