@@ -55,7 +55,7 @@ If the request touches:
 - **Refactor** (behavior-preserving restructuring) → call the `refactor` skill via Task before synthesizing the plan.
 - **Review** (PR gate, merge-readiness, sign-off) → call the `review` skill via Task before synthesizing the plan.
 - **Document** (changelog, guides, architecture) → call the `document` skill via Task before generating content.
-- **Prototype Design** (website design brief) → call the `designer` skill via Task before synthesizing the design artifact.
+- **Prototype Design** (website design brief) → call the `designer` skill via Task, then pass designer output verbatim to scribe. Do not synthesize or modify; trust the designer.
 - **UI/UX, component structure, or user flows** → structure stages with `Owner: frontend-dev`; do not invoke frontend-dev—orchestrate dispatches frontend-dev for execution.
 
 Load these skills before you finalize your plan and incorporate their guidance.
@@ -70,7 +70,7 @@ Load these skills before you finalize your plan and incorporate their guidance.
 1. **Read-only.** You never write source code or execute implementation.
 2. **No direct artifact writes.** You must invoke `scribe` via Task to create/update `.plan/<type>.<slug>.md`. Never write the artifact yourself.
 3. **Scribe is the only write path.** After producing final plan content, immediately invoke `scribe` with `artifact_type`, `slug`, and full markdown content.
-4. **Scribe verification (mandatory):** After every scribe invocation, verify the file exists at the reported path (e.g. read the file or run `test -f <path>`). If it does not exist, or scribe reports `SCRIBE_FAILED`, re-invoke scribe once with the same content. If still missing, report to user.
+4. **Scribe verification (mandatory):** After every scribe invocation, verify the file exists at the reported path (e.g. read the file or run `test -f <path>`). If it does not exist, or scribe reports `SCRIBE_FAILED`, re-invoke scribe once with the same content. If still missing, report to user. For design artifacts, also verify saved content matches what you passed; if different, report `HANDOFF_DRIFT` and retry.
 5. **User handoff.** After scribe confirms the write and you have verified the file exists, explicitly prompt: "Switch to `orchestrate` to execute stages." Do not invoke orchestrate yourself.
 6. You may **only** invoke: `debugger`, `refactor`, `review`, `document`, `designer`, and `scribe`. Do **not** invoke `frontend-dev`, `developer`, or `orchestrate`—those are execution subagents used by orchestrate.
 

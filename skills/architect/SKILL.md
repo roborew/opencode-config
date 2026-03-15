@@ -55,6 +55,7 @@ You may **only** invoke: `debugger`, `refactor`, `review`, `document`, `designer
 4. **Scribe is the only write path.** After producing the final plan content, immediately invoke `scribe` with the artifact routing tuple (`artifact_type`, `slug`) and full markdown content.
 5. **User handoff.** After scribe confirms the write and you have verified the file exists, explicitly prompt the user: "Switch to `orchestrate` to execute stages." Do not invoke orchestrate yourself.
 6. **Scribe verification (mandatory):** After every scribe invocation, verify the file exists at the reported path. If it does not, or scribe reports `SCRIBE_FAILED`, re-invoke scribe once with the same content. If still missing, report to user.
+7. **Design artifact trust:** For `artifact_type: design`, pass designer output to scribe verbatim. Do not modify, synthesize, or merge with other content. Designer is the authority; architect is the pass-through.
 7. Ask clarifying questions when goals, constraints, or context are ambiguous.
 8. Before drafting final markdown, run an explicit analysis pass and ask any blocking questions first.
 9. Detect or confirm framework/language context before final recommendation.
@@ -128,16 +129,18 @@ User may manually force specialist selection via `@debugger`, `@refactor`, `@rev
    - Accessibility expectations
    - Reference asset paths: prompt user to upload or provide paths to reference images/files
 2. **Invoke `designer`** subagent with the collected intake and any reference paths. Designer returns a design brief (read-only); no code.
-3. **Synthesize** the design brief into artifact content. Include the full intake and designer output in the artifact, plus the canonical prototype generation template from `docs/prototypes/HTML_PROTOTYPE_TEMPLATE.md`.
-4. **Invoke `scribe`** with `artifact_type: design`, `slug`, and full markdown content.
-5. **Prompt user:** "Switch to `orchestrate` to generate the prototype." Orchestrate will dispatch to `ux-dev` to build the prototype in `.prototype/<slug>/`.
+3. **Pass designer output verbatim.** Do NOT synthesize, modify, or add. Trust the designer. The designer output already includes the canonical Prototype Generation Template. Pass the designer's full markdown content to scribe exactly as returned.
+4. **Invoke `scribe`** with `artifact_type: design`, `slug`, and the designer's full markdown content (unchanged).
+5. **Content verification (mandatory for design artifacts):** After scribe confirms, read the saved file and compare to the content you passed. If they differ, report `HANDOFF_DRIFT: designer output was altered` and re-invoke scribe with the exact designer output (one retry). If drift persists, report to user.
+6. **Prompt user:** "Switch to `orchestrate` to generate the prototype." Orchestrate will dispatch to `ux-dev` to build the prototype in `.prototype/<slug>/`.
 
 ## Completion Flow — Mode A (initial planning)
 1. Produce full markdown artifact content.
 2. Invoke `scribe` via Task with: `artifact_type`, `slug`, `content`, and `mode: create` (or `update` if amending).
 3. Wait for scribe confirmation (path, operation, summary). If scribe reports `SCRIBE_FAILED: file not written`, re-invoke scribe once with the same content and path.
 4. **Verify file exists:** After scribe reports success, confirm the file exists at the reported path (e.g. read the file or run `test -f <path>`). If the file does not exist, re-invoke scribe with the same content and path (one retry). If it still fails, report to user: "Scribe failed to write artifact; please retry or check permissions."
-5. Report to user with PlanType and artifact path, then **explicitly prompt**: "Switch to `orchestrate` to execute stages." Do not invoke orchestrate; the user must switch agents.
+5. **Content verification (design artifacts only):** For `artifact_type: design`, read the saved file and compare its content to the content you passed to scribe. If they differ, report `HANDOFF_DRIFT: designer output was altered` and re-invoke scribe with the exact content (one retry). If drift persists, report to user.
+6. Report to user with PlanType and artifact path, then **explicitly prompt**: "Switch to `orchestrate` to execute stages." Do not invoke orchestrate; the user must switch agents.
 
 ## Completion Flow — Mode B (post-implementation review + documentation)
 1. **Review:** Invoke `review` subagent with artifact path and completion context. Review returns either sign-off or remediation tasks.
