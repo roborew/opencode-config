@@ -8,6 +8,7 @@
 - **Planning specialists** (`debugger`, `refactor`, `review`, `designer`) — read-only subagents of architect; return plan drafts, never write code. `designer` synthesizes design briefs for Prototype Design.
 - **Documentation generator** (`document`) — read-only; generates changelog/guides/architecture content; architect invokes, then scribe writes.
 - **Execution subagents** (`developer`, `frontend-dev`, `ux-dev`) — coding agents invoked by orchestrate only; architect never invokes them. `ux-dev` generates HTML-only framework-agnostic prototypes from design briefs into `.prototype/<slug>/`.
+- **Senior-dev** (`senior-dev`) — orchestrator subagent; operator-triggered escalation when developer is stuck. Diagnosis + fix; no preflight. Hand back to orchestrator when blocker fixed so it can resume with developer.
 - **Artifact writer** (`scribe`) — only write path; writes plan artifacts and docs (invoked by architect and orchestrate).
 - **Recovery replanner** (`helper`) diagnoses stuck/failed states and amends existing artifacts through `scribe`.
 - **Verifier** (`verifier`) is an independent evidence gate and never writes code.
@@ -24,6 +25,7 @@
 | Artifact writer | `scribe` | fast | Write/update markdown artifacts and docs from architect/orchestrate content |
 | Recovery | `helper` | fast | Replan minimal strategy deltas and trigger artifact amendment |
 | Execution | `developer`, `frontend-dev`, `ux-dev` | smart/fast | Execute assigned `stage_id` tasks. `ux-dev` uses Gemini Pro for HTML-only prototype generation into `.prototype/<slug>/`. |
+| Operator escalation | `senior-dev` | smart | Orchestrator subagent. Operator-triggered when developer stuck. Diagnose + fix blocker; no preflight. Hand back to orchestrator to resume with developer. |
 | Verification | `verifier` | fast | Verify acceptance criteria with traceable evidence |
 
 Both primaries (`architect`, `orchestrate`) are non-writing (`edit: deny`). Only `scribe` writes markdown artifacts/docs.
@@ -71,6 +73,8 @@ Recovery loop:
 Do not advance stages until helper amendment is applied.
 Do not allow repeated test-command retries under unresolved environment mismatch.
 Use startup preflight as an optional session gate; do not require artifact writes for preflight output.
+
+**Senior-dev escalation (operator-triggered):** When developer reports `STAGE_STUCK` and the operator asks to escalate, orchestrate invokes `senior-dev` via Task with artifact path, stage_id, and failure evidence. Senior-dev diagnoses, implements fix, reports `HANDOFF_TO_DEVELOPER` when blocker is fixed. Orchestrate then resumes with developer for remaining stage work. Senior-dev is never auto-invoked—only when operator explicitly asks.
 
 ## Subagent Loop Exit Strategy (enforced)
 
@@ -160,6 +164,7 @@ Constraints: markdown only, approved paths only
 - Environment/toolchain blockers (`ENV_BLOCKED`) halt stage progression and require helper+scribe amendment before retry.
 - Stage dispatch is one-at-a-time with completion handoff.
 - UI work routes to `frontend-dev`; non-UI work routes to `developer`; prototype generation from design briefs routes to `ux-dev` (outputs to `.prototype/<slug>/`).
+- Senior-dev is operator-triggered escalation only; orchestrate invokes when operator asks (developer stuck); senior-dev reports `HANDOFF_TO_DEVELOPER` then orchestrate resumes with developer.
 - Orchestrator prompts "Switch to architect for review and documentation" on completion.
 - Verifier receives original feature artifact and review artifact (if present).
 - Verifier report includes criterion-level evidence.

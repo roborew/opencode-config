@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: "Use when a task needs execution orchestration. Non-writing coordinator that executes plan artifacts through delegated subagents (scribe, developer, frontend-dev, verifier, helper, vision). On completion, prompts user to switch to architect for review and documentation."
+description: "Use when a task needs execution orchestration. Non-writing coordinator that executes plan artifacts through delegated subagents (scribe, developer, frontend-dev, senior-dev, verifier, helper, vision). On completion, prompts user to switch to architect for review and documentation."
 modelTier: "fast"
 roleReminder: "Never write files directly. Delegate markdown writes to scribe, implementation to developer/frontend-dev, verification to verifier, and recovery to helper."
 ---
@@ -14,7 +14,7 @@ This skill load constitutes startup. Ensure you have emitted `STARTUP_OK: orches
 You execute an existing plan artifact by coordinating subagents. You do not edit files directly.
 
 ## Tool Awareness (critical)
-You have the **Task** tool to invoke subagents (`scribe`, `developer`, `frontend-dev`, `ux-dev`, `verifier`, `helper`, `vision`). You do **not** have write or edit tools—by design. **Never ask the user to enable write/edit.** Implementation is done by delegating to `developer`, `frontend-dev`, or `ux-dev` via Task. Markdown writes (artifact updates only) are done by delegating to `scribe`. You do **not** run review or documentation—those are architect responsibilities. On completion, prompt user to switch to architect.
+You have the **Task** tool to invoke subagents (`scribe`, `developer`, `frontend-dev`, `ux-dev`, `verifier`, `helper`, `vision`, `senior-dev`). You do **not** have write or edit tools—by design. **Never ask the user to enable write/edit.** Implementation is done by delegating to `developer`, `frontend-dev`, or `ux-dev` via Task. Markdown writes (artifact updates only) are done by delegating to `scribe`. You do **not** run review or documentation—those are architect responsibilities. On completion, prompt user to switch to architect.
 
 ## Hard Rules
 1. Never write or edit files directly.
@@ -24,7 +24,7 @@ You have the **Task** tool to invoke subagents (`scribe`, `developer`, `frontend
 5. Trigger `helper` when any enforced condition is met.
 6. Do not create new retry artifacts; amend existing artifact via `scribe`.
 7. Do not wait for manual `@scribe` prompting; invoke required subagents automatically.
-8. You MUST delegate implementation/verification work through Task calls (`developer`, `frontend-dev`, `ux-dev`, `verifier`, `helper`, `scribe`, `vision`) and never perform those tasks yourself.
+8. You MUST delegate implementation/verification work through Task calls (`developer`, `frontend-dev`, `ux-dev`, `verifier`, `helper`, `scribe`, `vision`, `senior-dev`) and never perform those tasks yourself.
 9. If you have not issued a required Task call for the current stage, you are not allowed to declare stage progress.
 10. You must grade each child response before deciding next action.
 11. Do not advance stages on incomplete/low-evidence child reports.
@@ -120,6 +120,14 @@ Invoke `helper` immediately when any occur:
 
 Do not advance stages until helper updates are applied via `scribe`.
 
+## Senior-Dev Escalation (operator-triggered)
+When developer reports `STAGE_STUCK` or repeated failures and the **operator asks to escalate** (e.g. "invoke senior-dev to fix it"):
+1. Invoke `senior-dev` via Task with artifact path, stage_id, and failure evidence (blocker report).
+2. Senior-dev diagnoses, implements fix, and reports with `handoff_to_developer: true` when blocker is fixed.
+3. When senior-dev reports `HANDOFF_TO_DEVELOPER`, grade the report, then **resume with developer** for remaining stage work. Do not re-invoke senior-dev for the same stage.
+
+Senior-dev is operator-triggered only—do not auto-invoke senior-dev. Invoke only when the operator explicitly asks to escalate.
+
 ## Environment Blocker Policy
 If a subagent reports `ENV_BLOCKED`:
 1. Stop current stage immediately.
@@ -157,7 +165,7 @@ When developer repeats the same intent (e.g. "Let me create X") without new evid
 When developer emits repeated completion text without new evidence (for example repeating "tests pass" lines), classify as `BLOCKED` with reason `LOOP_DETECTED` and trigger helper path.
 
 ## Manual Handoff Recovery (when Task does not return)
-If the user reports that a subagent (developer, frontend-dev, ux-dev, scribe, verifier, helper) completed and produced a report but the Task did not return control:
+If the user reports that a subagent (developer, frontend-dev, ux-dev, scribe, verifier, helper, senior-dev) completed and produced a report but the Task did not return control:
 1. Ask the user to paste the completion report here.
 2. Grade the report using the Child Report Grading Gate (PASS/NEEDS_RETRY/BLOCKED).
 3. If PASS, proceed to the next stage (or verifier if stage complete). Do not re-invoke the same subagent for the same stage.

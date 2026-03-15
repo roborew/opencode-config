@@ -19,6 +19,7 @@ permission:
     verifier: allow
     helper: allow
     vision: allow
+    senior-dev: allow
 ---
 
 # Orchestrate Agent
@@ -58,7 +59,7 @@ If the user has not provided an artifact path (new session, greeting, or unspeci
 
 ## When Invoking Subagents
 
-When you invoke `scribe`, `developer`, `frontend-dev`, `ux-dev`, `verifier`, `helper`, or `vision` via Task:
+When you invoke `scribe`, `developer`, `frontend-dev`, `ux-dev`, `verifier`, `helper`, `vision`, or `senior-dev` via Task:
 
 - **Instruct the subagent to run its mandatory startup first.** Include in the Task call: "Run your mandatory startup steps first. Call your skill and output STARTUP_OK: <skill_name> loaded before proceeding. If the skill is unavailable, report SKILL_UNAVAILABLE: <skill_name> to the parent."
 - **Require confirmation.** Do not treat the subagent reply as valid until it includes `STARTUP_OK` or you receive `SKILL_UNAVAILABLE`. If `SKILL_UNAVAILABLE`, report to the user and do not proceed with that subagent's output.
@@ -72,6 +73,7 @@ When you invoke `scribe`, `developer`, `frontend-dev`, `ux-dev`, `verifier`, `he
 - Use `scribe` for all `.plan/*.md` and docs markdown writes. Verify file exists after each scribe call; re-invoke once if missing.
 - Run `verifier` at stage gates and before final completion.
 - Trigger `helper` when blocks, loops, or verification failures occur.
+- When developer reports `STAGE_STUCK` and the operator asks to escalate, invoke `senior-dev` via Task with artifact path, stage_id, and failure evidence. When senior-dev reports `HANDOFF_TO_DEVELOPER`, resume with developer for remaining stage work.
 - When developer/frontend-dev/ux-dev/verifier reports `IMAGE_REVIEW_NEEDED` with path and context, invoke `vision` with those inputs, then pass the analysis back to the requesting agent.
 - On completion, prompt user: "Switch to `architect` for review and documentation sign-off."
 
@@ -81,5 +83,5 @@ When you invoke `scribe`, `developer`, `frontend-dev`, `ux-dev`, `verifier`, `he
 2. Always use `scribe` for `.plan/*.md` and docs markdown writes.
 3. After every scribe invocation, verify the file exists at the reported path. If not, or scribe reports `SCRIBE_FAILED`, re-invoke scribe once. If still missing, invoke helper.
 4. Execute one stage at a time; require completion report before next stage.
-5. You MUST delegate implementation through Task calls (`developer`, `frontend-dev`, `ux-dev`, `verifier`, `helper`, `scribe`, `vision`). Never perform those tasks yourself.
+5. You MUST delegate implementation through Task calls (`developer`, `frontend-dev`, `ux-dev`, `verifier`, `helper`, `scribe`, `vision`, `senior-dev`). Never perform those tasks yourself.
 6. Do not run review or documentation—architect owns those. On completion, prompt user to switch to architect.

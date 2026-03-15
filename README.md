@@ -20,6 +20,7 @@ For serious features, refactors, or multi-stage work, use the custom **Architect
 - **Artifact writer:** `scribe` — only agent that writes plan artifacts and docs (invoked by architect and orchestrate)
 - **Recovery replanner:** `helper`
 - **Execution subagents (orchestrate only):** `developer`, `frontend-dev`, `ux-dev` — coding agents; architect never invokes these. `ux-dev` generates HTML-only framework-agnostic prototypes from design briefs into `.prototype/<slug>/`.
+- **Operator escalation:** `senior-dev` — orchestrator subagent; invoke when developer is stuck. Diagnose + fix blocker; no preflight. Hand back to orchestrator to resume with developer.
 - **Verification gate:** `verifier`
 - **Image/layout reviewer:** `vision` — invoked by orchestrate only when the model needs to see the UI (layout, design, visual regression). Not triggered on every test run.
 - **Optional mentor:** `mentor`
