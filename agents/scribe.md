@@ -1,7 +1,7 @@
 ---
 description: Markdown artifact and docs writer
 mode: subagent
-model: openrouter/inception/mercury-2
+model: openrouter/stepfun/step-3.5-flash:free
 steps: 5
 tools:
   write: true
