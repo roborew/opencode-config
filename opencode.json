@@ -52,7 +52,11 @@
           "name": "Gemini 3 Flash Preview"
         },
         "xiaomi/mimo-v2-pro": {
-          "name": "Xiaomi Mimo V2 Pro"
+          "name": "Xiaomi Mimo V2 Pro",
+          "options": {
+            "frequency_penalty": 2.0,
+            "temperature": 0.3
+          }
         },
         "deepseek/deepseek-v3.2": {
           "name": "DeepSeek V3.2"
