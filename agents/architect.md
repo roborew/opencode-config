@@ -1,7 +1,7 @@
 ---
 description: High-level planner for serious features and refactors. Plans only, delegates scribe to persist .plan artifact, then hands off to orchestrate.
 mode: primary
-model: openrouter/openai/gpt-5.3-codex
+model: openrouter/xiaomi/mimo-v2-pro
 tools:
   write: false
   edit: false

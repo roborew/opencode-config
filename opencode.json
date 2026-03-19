@@ -44,6 +44,12 @@
         },
         "google/gemini-3.1-pro-preview": {
           "name": "Gemini 3.1 Pro Preview"
+        },
+        "xiaomi/mimo-v2-pro": {
+          "name": "Xiaomi Mimo V2 Pro"
+        },
+        "deepseek/deepseek-v3.2": {
+          "name": "DeepSeek V3.2"
         }
       }
     }
@@ -87,7 +93,7 @@
   },
   "agent": {
     "architect": {
-      "model": "openrouter/openai/gpt-5.3-codex"
+      "model": "openrouter/xiaomi/mimo-v2-pro"
     },
     "orchestrate": {
       "model": "openrouter/qwen/qwen3.5-plus-02-15"
@@ -119,6 +125,10 @@
     "ux-dev": {
       "mode": "subagent",
       "model": "openrouter/google/gemini-3.1-pro-preview"
+    },
+    "helper": {
+      "mode": "subagent",
+      "model": "openrouter/deepseek/deepseek-v3.2"
     }
   }
 }

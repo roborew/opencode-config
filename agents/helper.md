@@ -1,7 +1,7 @@
 ---
 description: Recovery replanner for blocked or failed stages
 mode: subagent
-model: openrouter/openai/gpt-5.3-codex
+model: openrouter/deepseek/deepseek-v3.2
 tools:
   write: false
   edit: false
