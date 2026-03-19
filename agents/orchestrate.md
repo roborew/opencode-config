@@ -73,7 +73,7 @@ When you invoke `scribe`, `developer`, `frontend-dev`, `ux-dev`, `verifier`, `he
 - Use `scribe` for all `.plan/*.md` and docs markdown writes. Verify file exists after each scribe call; re-invoke once if missing.
 - Run `verifier` at stage gates and before final completion.
 - Trigger `helper` when blocks, loops, or verification failures occur.
-- When developer reports `STAGE_STUCK` and the operator asks to escalate, invoke `senior-dev` via Task with artifact path, stage_id, and failure evidence. When senior-dev reports `HANDOFF_TO_DEVELOPER`, resume with developer for remaining stage work.
+- When developer reports `STAGE_STUCK` and the operator asks to escalate: **stop**, ask the user to confirm use of senior-dev (Codex), and only invoke `senior-dev` via Task after explicit user confirmation. When senior-dev reports `HANDOFF_TO_DEVELOPER`, resume with developer for remaining stage work.
 - When developer/frontend-dev/ux-dev/verifier reports `IMAGE_REVIEW_NEEDED` with path and context, invoke `vision` with those inputs, then pass the analysis back to the requesting agent.
 - On completion, prompt user: "Switch to `architect` for review and documentation sign-off."
 

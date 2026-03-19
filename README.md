@@ -20,7 +20,7 @@ For serious features, refactors, or multi-stage work, use the custom **Architect
 - **Artifact writer:** `scribe` — only agent that writes plan artifacts and docs (invoked by architect and orchestrate)
 - **Recovery replanner:** `helper`
 - **Execution subagents (orchestrate only):** `developer`, `frontend-dev`, `ux-dev` — coding agents; architect never invokes these. `ux-dev` generates HTML-only framework-agnostic prototypes from design briefs into `.prototype/<slug>/`.
-- **Operator escalation:** `senior-dev` — orchestrator subagent; invoke when developer is stuck. Diagnose + fix blocker; no preflight. Hand back to orchestrator to resume with developer.
+- **Operator escalation:** `senior-dev` — orchestrator subagent; invoke when developer is stuck. Orchestrator stops and asks user to confirm before invoking. Diagnose + fix blocker; no preflight. Hand back to orchestrator to resume with developer.
 - **Verification gate:** `verifier`
 - **Image/layout reviewer:** `vision` — invoked by orchestrate only when the model needs to see the UI (layout, design, visual regression). Not triggered on every test run.
 - **Optional mentor:** `mentor`
@@ -30,20 +30,20 @@ For serious features, refactors, or multi-stage work, use the custom **Architect
 ## How the Custom Pipeline Works
 
 **Phase 1 — Planning**
+
 1. `architect` asks what type of plan is needed (Feature, Debug, Refactor, Review, Document, Prototype Design) when prompt is greeting/unspecified.
 2. `architect` drafts content (and invokes specialist subagents when needed). For Prototype Design: architect prompts for design intake (purpose, audience, feel, color scheme, icon set, sections, accessibility, reference assets), enforces HTML-only framework-agnostic prototype output, invokes `designer` for brief synthesis, then scribe writes `.plan/design.<slug>.md`.
 3. `architect` invokes `scribe` to write the artifact to `.plan/<type>.<slug>.md` — the scribe step is mandatory.
 4. Switch to `orchestrate`.
 
-**Phase 2 — Execution**
-5. `orchestrate` starts by asking whether to run startup preflight checks now (`yes/no`).
-6. If yes, `orchestrate` invokes `developer` preflight (developer loads `preflight` skill), reports results, and pauses for remediation if blocked.
-7. If no (or preflight is ready), `orchestrate` ensures artifact exists (architect already wrote it via scribe). If missing, dispatches `scribe` to create it:
-   - `.plan/feature.<slug>.md`
-   - `.plan/debug.<slug>.md`
-   - `.plan/refactor.<slug>.md`
-   - `.plan/review.<slug>.md`
-   - `.plan/design.<slug>.md` (prototype design brief)
+**Phase 2 — Execution** 5. `orchestrate` starts by asking whether to run startup preflight checks now (`yes/no`). 6. If yes, `orchestrate` invokes `developer` preflight (developer loads `preflight` skill), reports results, and pauses for remediation if blocked. 7. If no (or preflight is ready), `orchestrate` ensures artifact exists (architect already wrote it via scribe). If missing, dispatches `scribe` to create it:
+
+- `.plan/feature.<slug>.md`
+- `.plan/debug.<slug>.md`
+- `.plan/refactor.<slug>.md`
+- `.plan/review.<slug>.md`
+- `.plan/design.<slug>.md` (prototype design brief)
+
 8. `orchestrate` dispatches one stage at a time to `developer`, `frontend-dev`, or `ux-dev`. Design artifacts (`Owner: ux-dev`) are executed by `ux-dev`, which generates HTML-only prototype code into `.prototype/<slug>/`.
 9. Execution subagents return completion reports with evidence.
 10. `orchestrate` grades each child report (`PASS` / `NEEDS_RETRY` / `BLOCKED`) before progressing.
@@ -51,10 +51,7 @@ For serious features, refactors, or multi-stage work, use the custom **Architect
 12. If execution is stuck, child output is low quality, verifier fails repeatedly, or environment blocks, `orchestrate` invokes `helper`, then `scribe` updates the existing artifact before retry.
 13. When verifier passes for all stages, orchestrate prompts: **"Implementation complete. Switch to architect for review and documentation sign-off."**
 
-**Phase 3 — Review and Documentation (architect)**
-14. User switches back to `architect`.
-15. `architect` invokes `review` for final sign-off. If remediation needed: `scribe` writes review artifact → user switches to orchestrate to apply fixes → repeat Phase 2.
-16. If sign-off: `architect` invokes `document` to generate changelog/guides/architecture content, then `scribe` writes the docs.
+**Phase 3 — Review and Documentation (architect)** 14. User switches back to `architect`. 15. `architect` invokes `review` for final sign-off. If remediation needed: `scribe` writes review artifact → user switches to orchestrate to apply fixes → repeat Phase 2. 16. If sign-off: `architect` invokes `document` to generate changelog/guides/architecture content, then `scribe` writes the docs.
 
 ## Verifier and Review Responsibilities
 

@@ -8,7 +8,7 @@
 - **Planning specialists** (`debugger`, `refactor`, `review`, `designer`) — read-only subagents of architect; return plan drafts, never write code. `designer` synthesizes design briefs for Prototype Design.
 - **Documentation generator** (`document`) — read-only; generates changelog/guides/architecture content; architect invokes, then scribe writes.
 - **Execution subagents** (`developer`, `frontend-dev`, `ux-dev`) — coding agents invoked by orchestrate only; architect never invokes them. `ux-dev` generates HTML-only framework-agnostic prototypes from design briefs into `.prototype/<slug>/`.
-- **Senior-dev** (`senior-dev`) — orchestrator subagent; operator-triggered escalation when developer is stuck. Diagnosis + fix; no preflight. Hand back to orchestrator when blocker fixed so it can resume with developer.
+- **Senior-dev** (`senior-dev`) — orchestrator subagent; operator-triggered escalation when developer is stuck. Orchestrator stops and asks user to confirm before invoking. Diagnosis + fix; no preflight. Hand back to orchestrator when blocker fixed so it can resume with developer.
 - **Artifact writer** (`scribe`) — only write path; writes plan artifacts and docs (invoked by architect and orchestrate).
 - **Recovery replanner** (`helper`) diagnoses stuck/failed states and amends existing artifacts through `scribe`.
 - **Verifier** (`verifier`) is an independent evidence gate and never writes code.
@@ -16,17 +16,17 @@
 
 ## Agent Matrix
 
-| Role | Agents | Model Tier | Responsibility |
-|---|---|---|---|
-| Primary (planning) | `architect` | smart | Read-only: explore, report, draft. Plan mode: scribe writes artifact → switch to orchestrate. Post-implementation: review → sign-off → document → scribe writes docs |
-| Coordinator | `orchestrate` | smart | Execute artifact stages, grade child reports, enforce helper-triggered recovery, dispatch scribe for docs |
-| Planning specialists | `debugger`, `refactor`, `review`, `designer` | smart | Return type-specific plan drafts to architect. `designer` uses Gemini Pro for design brief synthesis. |
-| Documentation generator | `document` | fast | Generate changelog/guides/architecture content; architect invokes, scribe writes |
-| Artifact writer | `scribe` | fast | Write/update markdown artifacts and docs from architect/orchestrate content |
-| Recovery | `helper` | fast | Replan minimal strategy deltas and trigger artifact amendment |
-| Execution | `developer`, `frontend-dev`, `ux-dev` | smart/fast | Execute assigned `stage_id` tasks. `ux-dev` uses Gemini Pro for HTML-only prototype generation into `.prototype/<slug>/`. |
-| Operator escalation | `senior-dev` | smart | Orchestrator subagent. Operator-triggered when developer stuck. Diagnose + fix blocker; no preflight. Hand back to orchestrator to resume with developer. |
-| Verification | `verifier` | fast | Verify acceptance criteria with traceable evidence |
+| Role                    | Agents                                       | Model Tier | Responsibility                                                                                                                                                       |
+| ----------------------- | -------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Primary (planning)      | `architect`                                  | smart      | Read-only: explore, report, draft. Plan mode: scribe writes artifact → switch to orchestrate. Post-implementation: review → sign-off → document → scribe writes docs |
+| Coordinator             | `orchestrate`                                | smart      | Execute artifact stages, grade child reports, enforce helper-triggered recovery, dispatch scribe for docs                                                            |
+| Planning specialists    | `debugger`, `refactor`, `review`, `designer` | smart      | Return type-specific plan drafts to architect. `designer` uses Gemini Pro for design brief synthesis.                                                                |
+| Documentation generator | `document`                                   | fast       | Generate changelog/guides/architecture content; architect invokes, scribe writes                                                                                     |
+| Artifact writer         | `scribe`                                     | fast       | Write/update markdown artifacts and docs from architect/orchestrate content                                                                                          |
+| Recovery                | `helper`                                     | fast       | Replan minimal strategy deltas and trigger artifact amendment                                                                                                        |
+| Execution               | `developer`, `frontend-dev`, `ux-dev`        | smart/fast | Execute assigned `stage_id` tasks. `ux-dev` uses Gemini Pro for HTML-only prototype generation into `.prototype/<slug>/`.                                            |
+| Operator escalation     | `senior-dev`                                 | smart      | Orchestrator subagent. Operator-triggered when developer stuck. Orchestrator stops and asks user to confirm before invoking. Diagnose + fix blocker; no preflight. Hand back to orchestrator to resume with developer.            |
+| Verification            | `verifier`                                   | fast       | Verify acceptance criteria with traceable evidence                                                                                                                   |
 
 Both primaries (`architect`, `orchestrate`) are non-writing (`edit: deny`). Only `scribe` writes markdown artifacts/docs.
 
@@ -53,6 +53,7 @@ Both primaries (`architect`, `orchestrate`) are non-writing (`edit: deny`). Only
 14. Architect (post-implementation): invokes `review` for sign-off. If remediation: scribe writes review artifact → user switches to orchestrate → developer applies fixes → verifier. If sign-off: architect invokes `document` → scribe writes docs.
 
 At each stage handoff, orchestrate grades child output:
+
 - `PASS` -> continue
 - `NEEDS_RETRY` -> corrective feedback and rerun stage
 - `BLOCKED` -> helper + scribe amendment path
@@ -60,12 +61,14 @@ At each stage handoff, orchestrate grades child output:
 ## Escalation and Recovery (enforced)
 
 Invoke `helper` immediately when any occurs:
+
 - same stage fails verification twice
 - unresolved blocker reported by execution subagent
 - verifier reports failed criteria requiring strategy change
 - execution reports `ENV_BLOCKED` (runtime/toolchain mismatch)
 
 Recovery loop:
+
 1. `helper` diagnoses and proposes minimal amendment.
 2. `scribe` updates existing artifact in place.
 3. resume with next indicated stage.
@@ -74,7 +77,7 @@ Do not advance stages until helper amendment is applied.
 Do not allow repeated test-command retries under unresolved environment mismatch.
 Use startup preflight as an optional session gate; do not require artifact writes for preflight output.
 
-**Senior-dev escalation (operator-triggered):** When developer reports `STAGE_STUCK` and the operator asks to escalate, orchestrate invokes `senior-dev` via Task with artifact path, stage_id, and failure evidence. Senior-dev diagnoses, implements fix, reports `HANDOFF_TO_DEVELOPER` when blocker is fixed. Orchestrate then resumes with developer for remaining stage work. Senior-dev is never auto-invoked—only when operator explicitly asks.
+**Senior-dev escalation (operator-triggered, user confirmation required):** When developer reports `STAGE_STUCK` and the operator asks to escalate, orchestrate stops, asks the user to confirm use of senior-dev (Codex), and only invokes `senior-dev` via Task after explicit user confirmation. Senior-dev diagnoses, implements fix, reports `HANDOFF_TO_DEVELOPER` when blocker is fixed. Orchestrate then resumes with developer for remaining stage work. Senior-dev is never auto-invoked—only when operator explicitly asks and user confirms.
 
 ## Subagent Loop Exit Strategy (enforced)
 
@@ -127,6 +130,7 @@ After architect's review sign-off, architect invokes `document` to generate cont
 - `docs/architecture/<feature-slug>.md`
 
 Use templates in:
+
 - `docs/changelog/TEMPLATE.md`
 - `docs/guides/TEMPLATE.md`
 - `docs/architecture/TEMPLATE.md`
@@ -164,7 +168,7 @@ Constraints: markdown only, approved paths only
 - Environment/toolchain blockers (`ENV_BLOCKED`) halt stage progression and require helper+scribe amendment before retry.
 - Stage dispatch is one-at-a-time with completion handoff.
 - UI work routes to `frontend-dev`; non-UI work routes to `developer`; prototype generation from design briefs routes to `ux-dev` (outputs to `.prototype/<slug>/`).
-- Senior-dev is operator-triggered escalation only; orchestrate invokes when operator asks (developer stuck); senior-dev reports `HANDOFF_TO_DEVELOPER` then orchestrate resumes with developer.
+- Senior-dev is operator-triggered escalation only; orchestrate stops and asks user to confirm before invoking when operator asks (developer stuck); senior-dev reports `HANDOFF_TO_DEVELOPER` then orchestrate resumes with developer.
 - Orchestrator prompts "Switch to architect for review and documentation" on completion.
 - Verifier receives original feature artifact and review artifact (if present).
 - Verifier report includes criterion-level evidence.

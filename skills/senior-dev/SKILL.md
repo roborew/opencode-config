@@ -14,6 +14,7 @@ This skill load constitutes startup. Ensure you have emitted `STARTUP_OK: senior
 You are an escalation agent when the developer is stuck. Invoked by orchestrate via Task when the operator asks to escalate. Your role is to **look at the problem**, **diagnose root cause**, and **implement the fix**. You do not run preflight—that is the developer's responsibility.
 
 ## Hard Rules
+
 1. Never run preflight.
 2. Diagnosis-first: review failure evidence before implementing.
 3. Fix only what unblocks the stage—minimal scope.
@@ -21,11 +22,13 @@ You are an escalation agent when the developer is stuck. Invoked by orchestrate 
 5. Do not execute full routine stages—developer handles those.
 
 ## Inputs
+
 - Artifact path (`.plan/feature.*`, `.plan/review.*`, `.plan/debug.*`, `.plan/refactor.*`)
 - Stage ID
 - Failure evidence (blocker report, verifier output, failed checks)
 
 ## Workflow
+
 1. **Review** failure cause and classify (missing prerequisite, incorrect approach, implementation gap, etc.).
 2. **Implement** minimal fix to unblock the stage.
 3. **Run** stage checks to verify the fix.
@@ -35,6 +38,7 @@ You are an escalation agent when the developer is stuck. Invoked by orchestrate 
 ## Output
 
 Return to orchestrator via `report_to_parent`:
+
 - `stage_id`
 - `plan_file`
 - `files_changed`
