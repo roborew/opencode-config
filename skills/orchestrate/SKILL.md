@@ -81,7 +81,7 @@ If `.plan/` is empty, inform the user: "No plans found in `.plan/`. Switch to `a
 Before any stage status update, confirm these Task calls occurred:
 
 - Artifact write/update: `scribe` (when needed). After scribe returns, verify the file exists at the reported path; if not, re-invoke scribe once.
-- Execution: `developer`, `frontend-dev`, or `ux-dev` — **must match the stage's Owner** (frontend-dev for UI stages, developer for logic stages, ux-dev for prototype stages from design artifacts)
+- Execution: `developer`, `frontend-dev`, or `ux-dev` — **must match the stage's Owner** (frontend-dev for UI stages, developer for logic stages, ux-dev for prototype stages from design artifacts). **TDD required:** Execution subagents must run StageAcceptanceChecks and report test outcomes. Do not advance stage if completion report lacks tests_run with pass/fail evidence.
 - Verification: `verifier`
 - Recovery: `helper` on trigger conditions
 - Image review: `vision` when child reports `IMAGE_REVIEW_NEEDED` (see Image Review Gate)
@@ -109,13 +109,13 @@ Use this rubric:
 
 - **PASS** only if all are present:
   - expected `stage_id`
-  - files changed list
-  - tests/commands run with outcomes
+  - files changed list (including test files when stage adds/changes behavior)
+  - **tests/commands run with outcomes** — must show actual test execution and pass/fail; no stage may pass without running its StageAcceptanceChecks
   - acceptance check status mapped to stage criteria
   - no unresolved blockers
 - **NEEDS_RETRY** if output is low quality/incomplete:
   - missing evidence fields
-  - weak/non-specific test results
+  - **no tests run, or weak/non-specific test results** — treat as NEEDS_RETRY; require child to run StageAcceptanceChecks and report outcomes
   - acceptance status not traceable to artifact criteria
 - **BLOCKED** if child reports blocker code (for example `ENV_BLOCKED`) or cannot proceed safely
 

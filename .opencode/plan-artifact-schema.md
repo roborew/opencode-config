@@ -11,7 +11,7 @@ All `.plan/<type>.<slug>.md` files follow this structure. Primary agents produce
 | **StagePlan** | Ordered stages with `stage_id`, **Owner** (`frontend-dev`, `developer`, or `ux-dev`), objective, and dependencies |
 | **Tasks** | Numbered tasks mapped to a `stage_id` |
 | **FilesToChange** | Paths and explanations mapped to a `stage_id` |
-| **StageAcceptanceChecks** | Verification gates for each stage (tests, commands, criteria) |
+| **StageAcceptanceChecks** | Verification gates for each stage — **every stage MUST include at least one executable test or verification command** |
 | **AcceptanceChecks** | End-to-end completion checks |
 | **CompletionReport** | Required executor handoff fields back to primary |
 | **ReviewDecisionGate** | Prompt behavior after feature completion: start review now or defer |
@@ -47,6 +47,15 @@ If environment is blocked:
 - `review.<slug>.md` - Review changes (from `review`)
 - `design.<slug>.md` - Prototype design brief (from `designer`); orchestrate dispatches `ux-dev` to generate code in `.prototype/<slug>/`
 
+## Test-Driven Development (TDD) — Mandatory
+
+**Every stage must be testable.** Plans that omit tests are invalid.
+
+1. **StageAcceptanceChecks:** Each stage MUST have at least one executable test or verification command (e.g. `pnpm test path/to/file.test.ts`, `npm run lint`, `playwright test component.spec.ts`). No stage may have empty or placeholder-only checks.
+2. **Task ordering:** For behavior changes, Tasks MUST order test-first: add/update test → run and confirm failure (red) → implement → run and confirm pass (green).
+3. **FilesToChange:** Include test file paths for each stage that adds or changes behavior. Map test files to `stage_id` alongside production files.
+4. **AcceptanceChecks:** End-to-end checks MUST include running the full test suite (or targeted tests) for changed code paths.
+
 ## Example Skeleton
 
 ```markdown
@@ -69,16 +78,18 @@ Each stage MUST have Owner. Orchestrate dispatches by Owner: `frontend-dev` for 
    - Objective: ...
 
 ## Tasks
-1. [stage-ui] ...
-2. [stage-core] ...
+(TDD: test-first for behavior changes. Order: add test → red → implement → green.)
+1. [stage-ui] Add component test for new UI behavior; run and confirm fail. Implement component. Run and confirm pass.
+2. [stage-core] Add unit test for new logic; run and confirm fail. Implement logic. Run and confirm pass.
 
 ## FilesToChange
-- [stage-ui] path/to/ui-file.tsx: explanation
-- [stage-core] path/to/core-file.ts: explanation
+- [stage-ui] path/to/ui-file.tsx: explanation; path/to/ui.test.tsx: component test
+- [stage-core] path/to/core-file.ts: explanation; path/to/core.test.ts: unit test
 
 ## StageAcceptanceChecks
-- [stage-ui] Run `pnpm test path/to/ui.test.tsx`
-- [stage-core] Run `pnpm test path/to/core.test.ts`
+(Every stage MUST have at least one executable test. No stage without tests.)
+- [stage-ui] Run `pnpm test path/to/ui.test.tsx` (or equivalent component test)
+- [stage-core] Run `pnpm test path/to/core.test.ts` (or equivalent unit test)
 
 ## AcceptanceChecks
 - Run targeted tests

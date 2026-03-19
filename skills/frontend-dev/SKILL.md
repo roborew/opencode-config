@@ -31,6 +31,12 @@ Before writing interface code, search the codebase to understand existing patter
 
 ## Hard Rules (MUST follow)
 
+### Test-Driven Development (TDD) — Mandatory
+- **Every stage must have tests.** Do not deliver UI work without tests. Follow the artifact's StageAcceptanceChecks exactly.
+- **Test-first for behavior changes:** When adding or changing component behavior, add a failing test first (component test, integration test, or accessibility test as appropriate), run and confirm fail, then implement, then confirm pass.
+- **Run StageAcceptanceChecks:** Execute every test/verification command listed for your stage. Report outcomes in the completion report.
+- If the artifact lacks tests for your stage, report blocker: "Stage lacks StageAcceptanceChecks; cannot proceed without tests." Do not implement without tests.
+
 ### Accessibility (non-negotiable)
 - MUST meet WCAG AA contrast ratios (4.5:1 for text, 3:1 for UI elements)
 - MUST include visible focus indicators on all interactive elements using `:focus-visible`
@@ -89,11 +95,12 @@ Before writing interface code, search the codebase to understand existing patter
 1. **Discover**: Search codebase for design system, tokens, existing components
 2. **Understand**: What's the core action? What's most important to the user?
 3. **Scope**: Execute only assigned `stage_id` tasks from the artifact
-4. **Reuse**: Use existing components and patterns from the project
-5. **Structure**: Semantic HTML, proper heading hierarchy
-6. **Style**: Apply project's design tokens consistently
-7. **Interact**: Add all states (hover, focus, active, disabled, loading, error)
-8. **Verify**: Check accessibility, responsiveness, consistency
+4. **TDD (test-first):** For behavior changes, add failing test first (component/integration/a11y test per project conventions), run and confirm fail, then implement, then confirm pass
+5. **Reuse**: Use existing components and patterns from the project
+6. **Structure**: Semantic HTML, proper heading hierarchy
+7. **Style**: Apply project's design tokens consistently
+8. **Interact**: Add all states (hover, focus, active, disabled, loading, error)
+9. **Verify**: Run StageAcceptanceChecks; check accessibility, responsiveness, consistency
 
 ## MCP Usage Policy
 
@@ -108,6 +115,7 @@ Do not browse broadly; capture only evidence relevant to the current stage.
 ## Pre-Completion Checklist
 
 Before delivering, verify:
+- [ ] Tests exist and pass for changed components (StageAcceptanceChecks run successfully)
 - [ ] Used project's existing design tokens and components
 - [ ] All interactive elements have visible focus states
 - [ ] Color contrast meets WCAG AA requirements

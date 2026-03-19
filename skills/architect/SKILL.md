@@ -78,8 +78,8 @@ Pass this contract to `scribe` when invoking the Task: `artifact_type`, `slug`, 
 
 Follow `.opencode/plan-artifact-schema.md` exactly. At minimum include:
 - `Context`, `Goal`
-- `StagePlan`, `Tasks`, `FilesToChange`
-- `StageAcceptanceChecks`, `AcceptanceChecks`
+- `StagePlan`, `Tasks`, `FilesToChange` — **Tasks must order test-first; FilesToChange must include test file paths per stage**
+- `StageAcceptanceChecks`, `AcceptanceChecks` — **every stage MUST have at least one executable test; reject plans where any stage lacks tests**
 - `CompletionReport`, `ReviewDecisionGate`, `VerifierInputs`, `DocumentationOutputs`
 - `Risks`, `OutOfScope`
 
@@ -96,6 +96,7 @@ Structure plans into distinct stages so the correct specialist subagent executes
 - Separate design stages from logic stages. Do not mix UI and backend work in the same stage.
 - Order stages by dependency (e.g. design shell first, then wiring to logic).
 - Each stage must have: `stage_id`, `Owner`, objective, and dependencies (if any).
+- **TDD mandatory:** Every stage must have executable StageAcceptanceChecks (tests). Tasks must order test-first. FilesToChange must list test files. Before passing specialist output to scribe, verify every stage has at least one executable test. If any stage lacks tests, re-invoke the specialist with: "Add tests for every stage. Every stage must have at least one executable test in StageAcceptanceChecks and test file paths in FilesToChange."
 
 ## MCP Research Policy
 

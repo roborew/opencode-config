@@ -49,8 +49,9 @@ Use MCP when it materially reduces uncertainty:
 ## Artifact Schema (Required Structure)
 
 Every `.plan/debug.<slug>.md` must include schema sections from `.opencode/plan-artifact-schema.md`, including:
-- `StagePlan`, `StageAcceptanceChecks`, `CompletionReport`
+- `StagePlan`, `StageAcceptanceChecks` (every stage MUST have at least one executable test), `CompletionReport`
 - `VerifierInputs`
+- **TDD:** Every stage must have executable StageAcceptanceChecks. Tasks must order test-first where applicable. FilesToChange must include test file paths.
 
 ```markdown
 # Debug: <slug>
