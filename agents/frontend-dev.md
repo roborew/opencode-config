@@ -1,7 +1,7 @@
 ---
 description: UI specialist
 mode: subagent
-model: openrouter/minimax/minimax-m2.7
+model: openrouter/minimax/minimax-m2.5
 tools:
   write: true
   edit: true

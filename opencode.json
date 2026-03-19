@@ -21,6 +21,9 @@
         "timeout": 300000
       },
       "models": {
+        "minimax/minimax-m2.5": {
+          "name": "MiniMax M2.5"
+        },
         "minimax/minimax-m2.7": {
           "name": "MiniMax M2.7"
         },
@@ -106,7 +109,7 @@
     },
     "developer": {
       "mode": "subagent",
-      "model": "openrouter/minimax/minimax-m2.7",
+      "model": "openrouter/minimax/minimax-m2.5",
       "steps": 60
     },
     "senior-dev": {
@@ -129,6 +132,39 @@
     "helper": {
       "mode": "subagent",
       "model": "openrouter/deepseek/deepseek-v3.2"
+    },
+    "debugger": {
+      "mode": "subagent",
+      "model": "openrouter/minimax/minimax-m2.5"
+    },
+    "scribe": {
+      "mode": "subagent",
+      "model": "openrouter/stepfun/step-3.5-flash:free",
+      "steps": 5
+    },
+    "verifier": {
+      "mode": "subagent",
+      "model": "openrouter/minimax/minimax-m2.5"
+    },
+    "review": {
+      "mode": "subagent",
+      "model": "openrouter/minimax/minimax-m2.5"
+    },
+    "document": {
+      "mode": "subagent",
+      "model": "openrouter/minimax/minimax-m2.5"
+    },
+    "mentor": {
+      "mode": "subagent",
+      "model": "openrouter/minimax/minimax-m2.5"
+    },
+    "refactor": {
+      "mode": "subagent",
+      "model": "openrouter/minimax/minimax-m2.5"
+    },
+    "frontend-dev": {
+      "mode": "subagent",
+      "model": "openrouter/minimax/minimax-m2.5"
     }
   }
 }
