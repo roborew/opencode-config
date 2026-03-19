@@ -1,7 +1,7 @@
 ---
 description: Planning specialist for debugger-style plans
 mode: subagent
-model: openrouter/minimax/minimax-m2.5
+model: openrouter/deepseek/deepseek-v3.2
 tools:
   write: false
   edit: false

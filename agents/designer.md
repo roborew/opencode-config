@@ -1,7 +1,7 @@
 ---
 description: Planning specialist for design brief synthesis. Read-only; returns design brief content to architect.
 mode: subagent
-model: openrouter/google/gemini-3.1-pro-preview
+model: openrouter/google/gemini-3-flash-preview
 tools:
   write: false
   edit: false

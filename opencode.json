@@ -48,6 +48,9 @@
         "google/gemini-3.1-pro-preview": {
           "name": "Gemini 3.1 Pro Preview"
         },
+        "google/gemini-3-flash-preview": {
+          "name": "Gemini 3 Flash Preview"
+        },
         "xiaomi/mimo-v2-pro": {
           "name": "Xiaomi Mimo V2 Pro"
         },
@@ -102,14 +105,14 @@
       "model": "openrouter/qwen/qwen3.5-plus-02-15"
     },
     "plan": {
-      "model": "openrouter/openai/gpt-5.3-codex"
+      "model": "openrouter/xiaomi/mimo-v2-pro"
     },
     "build": {
-      "model": "openrouter/openai/gpt-5.3-codex"
+      "model": "openrouter/minimax/minimax-m2.7"
     },
     "developer": {
       "mode": "subagent",
-      "model": "openrouter/minimax/minimax-m2.5",
+      "model": "openrouter/minimax/minimax-m2.7",
       "steps": 60
     },
     "senior-dev": {
@@ -123,11 +126,11 @@
     },
     "designer": {
       "mode": "subagent",
-      "model": "openrouter/google/gemini-3.1-pro-preview"
+      "model": "openrouter/google/gemini-3-flash-preview"
     },
     "ux-dev": {
       "mode": "subagent",
-      "model": "openrouter/google/gemini-3.1-pro-preview"
+      "model": "openrouter/google/gemini-3-flash-preview"
     },
     "helper": {
       "mode": "subagent",
@@ -135,7 +138,7 @@
     },
     "debugger": {
       "mode": "subagent",
-      "model": "openrouter/minimax/minimax-m2.5"
+      "model": "openrouter/deepseek/deepseek-v3.2"
     },
     "scribe": {
       "mode": "subagent",
@@ -144,27 +147,27 @@
     },
     "verifier": {
       "mode": "subagent",
-      "model": "openrouter/minimax/minimax-m2.5"
+      "model": "openrouter/minimax/minimax-m2.7"
     },
     "review": {
       "mode": "subagent",
-      "model": "openrouter/minimax/minimax-m2.5"
+      "model": "openrouter/minimax/minimax-m2.7"
     },
     "document": {
       "mode": "subagent",
-      "model": "openrouter/minimax/minimax-m2.5"
+      "model": "openrouter/minimax/minimax-m2.7"
     },
     "mentor": {
       "mode": "subagent",
-      "model": "openrouter/minimax/minimax-m2.5"
+      "model": "openrouter/minimax/minimax-m2.7"
     },
     "refactor": {
       "mode": "subagent",
-      "model": "openrouter/minimax/minimax-m2.5"
+      "model": "openrouter/minimax/minimax-m2.7"
     },
     "frontend-dev": {
       "mode": "subagent",
-      "model": "openrouter/minimax/minimax-m2.5"
+      "model": "openrouter/minimax/minimax-m2.7"
     }
   }
 }
