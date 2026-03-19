@@ -99,7 +99,8 @@
   },
   "agent": {
     "architect": {
-      "model": "openrouter/xiaomi/mimo-v2-pro"
+      "model": "openrouter/xiaomi/mimo-v2-pro",
+      "steps": 15
     },
     "orchestrate": {
       "model": "openrouter/qwen/qwen3.5-plus-02-15"
