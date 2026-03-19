@@ -41,6 +41,16 @@ Return a structured response with one entry per doc:
 <full markdown content>
 ```
 
+## MCP Usage Policy
+
+Use MCP when it materially reduces uncertainty:
+- `claude-context` for discovering artifact files and related code when artifact path is unclear or scope is large.
+- `context7` for external library docs when documenting framework usage, API patterns, or implementation details.
+- `docs-mcp-server` for internal design references, prototype notes, and linked implementation docs.
+- `dash-api` for API contract lookup when documenting usage or integration patterns.
+
+Capture which MCP source informed which decision.
+
 ## Content Guidelines
 
 **Changelog** (`docs/changelog/<date>-<slug>.md`):

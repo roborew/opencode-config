@@ -85,6 +85,16 @@ Act as an expert frontend developer and UX/UI designer. Your task is to generate
 - Keep prototype output framework-agnostic. Framework integration is a later step.
 ```
 
+## MCP Usage Policy
+
+Use MCP when it materially reduces uncertainty:
+- `context7` for design system docs, component library patterns (e.g., Tailwind, Radix), and accessibility guidelines.
+- `dash-api` for component/library API lookup when specifying interactive behavior or styling constraints.
+- `docs-mcp-server` for internal design references, existing prototypes, and implementation notes.
+- `claude-context` for discovering existing design tokens, component patterns, or layout conventions in the codebase when relevant.
+
+Capture which MCP source informed which decision.
+
 ## Workflow
 1. **Gather** — Receive design intake and reference paths from parent.
 2. **Interpret** — If reference assets are provided, describe how they inform layout, color, typography, or feel.
