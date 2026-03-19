@@ -13,7 +13,7 @@ if [ -x "$HOME/.local/bin/mise" ]; then
 fi
 
 if [ "$#" -lt 1 ]; then
-  echo "Usage: ./.opencode/agent-run.zsh '<command>'"
+  echo "Usage: ./scripts/agent-run.zsh '<command>'"
   exit 1
 fi
 

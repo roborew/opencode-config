@@ -40,7 +40,7 @@ You are a Feature planning specialist. Produce a feature plan draft and return i
 
 ## Artifact Schema (Required Structure)
 
-Every `.plan/feature.<slug>.md` must include schema sections from `.opencode/plan-artifact-schema.md`, including:
+Every `.plan/feature.<slug>.md` must include schema sections from `docs/plan-artifact-schema.md`, including:
 - `Context`, `Goal`
 - `StagePlan` (with Owner per stage)
 - `Tasks`, `FilesToChange` — **Tasks must order test-first; FilesToChange must include test file paths per stage**

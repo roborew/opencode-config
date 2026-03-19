@@ -76,7 +76,7 @@ Pass this contract to `scribe` when invoking the Task: `artifact_type`, `slug`, 
 
 ## Artifact Schema (Required Structure)
 
-Follow `.opencode/plan-artifact-schema.md` exactly. At minimum include:
+Follow `docs/plan-artifact-schema.md` exactly. At minimum include:
 - `Context`, `Goal`
 - `StagePlan`, `Tasks`, `FilesToChange` — **Tasks must order test-first; FilesToChange must include test file paths per stage**
 - `StageAcceptanceChecks`, `AcceptanceChecks` — **every stage MUST have at least one executable test; reject plans where any stage lacks tests**

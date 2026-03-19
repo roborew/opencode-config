@@ -142,7 +142,7 @@ export EXAMPLE_BASE_URL="https://example.com"
 If a subagent still behaves inconsistently, execute commands through:
 
 ```sh
-./.opencode/agent-run.zsh 'which ruby && ruby -v'
+./scripts/agent-run.zsh 'which ruby && ruby -v'
 ```
 
 This wrapper loads `~/.opencode-agent-env`, applies `mise env`, and runs the command in a login zsh.
