@@ -55,7 +55,7 @@
           "name": "Xiaomi Mimo V2 Pro",
           "options": {
             "frequency_penalty": 2.0,
-            "temperature": 0.3
+            "temperature": 0.2
           }
         },
         "deepseek/deepseek-v3.2": {
@@ -98,7 +98,11 @@
     "claude-context": {
       "type": "local",
       "enabled": true,
-      "command": ["npx", "-y", "@zilliz/claude-context-mcp@latest"]
+      "command": [
+        "/Users/robo/.local/share/mise/installs/node/22.22.1/bin/npx",
+        "-y",
+        "@zilliz/claude-context-mcp@latest"
+      ]
     }
   },
   "agent": {
@@ -114,7 +118,8 @@
     },
     "strategist": {
       "mode": "subagent",
-      "model": "openrouter/xiaomi/mimo-v2-pro"
+      "model": "openrouter/xiaomi/mimo-v2-pro",
+      "steps": 8
     },
     "build": {
       "model": "openrouter/minimax/minimax-m2.7"
