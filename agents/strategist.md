@@ -1,7 +1,7 @@
 ---
 description: Scoped feature planning specialist. Receives an isolated sub-problem from architect and returns a concise investigation report. Read-only; does not write files.
 mode: subagent
-model: openrouter/xiaomi/mimo-v2-pro
+model: openrouter/moonshotai/kimi-k2.5
 tools:
   write: false
   edit: false

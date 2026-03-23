@@ -60,6 +60,9 @@
         },
         "deepseek/deepseek-v3.2": {
           "name": "DeepSeek V3.2"
+        },
+        "moonshotai/kimi-k2.5": {
+          "name": "Kimi K2.5"
         }
       }
     }
@@ -118,7 +121,7 @@
     },
     "strategist": {
       "mode": "subagent",
-      "model": "openrouter/xiaomi/mimo-v2-pro",
+      "model": "openrouter/moonshotai/kimi-k2.5",
       "steps": 8
     },
     "build": {
