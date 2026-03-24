@@ -1,7 +1,7 @@
 ---
 description: Markdown artifact and docs writer
 mode: subagent
-model: openrouter/stepfun/step-3.5-flash:free
+model: openrouter/nvidia/nemotron-3-super-120b-a12b:free
 steps: 5
 tools:
   write: true

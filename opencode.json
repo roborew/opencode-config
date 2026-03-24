@@ -42,6 +42,13 @@
         "stepfun/step-3.5-flash:free": {
           "name": "Stepfun Step 3.5 Flash (Free)"
         },
+        "nvidia/nemotron-3-super-120b-a12b:free": {
+          "name": "NVIDIA Nemotron 3 Super 120B A12B (Free)",
+          "options": {
+            "temperature": 0.1,
+            "top_p": 0.9
+          }
+        },
         "qwen/qwen3-vl-235b-a22b-instruct": {
           "name": "Qwen3 VL 235B (vision)"
         },
@@ -159,7 +166,7 @@
     },
     "scribe": {
       "mode": "subagent",
-      "model": "openrouter/stepfun/step-3.5-flash:free",
+      "model": "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
       "steps": 5
     },
     "verifier": {
