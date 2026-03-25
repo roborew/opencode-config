@@ -8,6 +8,7 @@ All `.plan/<type>.<slug>.md` files follow this structure. Primary agents produce
 |---------|---------|
 | **Context** | Brief background, constraints, and assumptions |
 | **Goal** | One-sentence objective |
+| **Difficulty** | `easy`, `medium`, or `hard` — set by architect during planning; orchestrate uses this to scale post-implementation verification gates |
 | **StagePlan** | Ordered stages with `stage_id`, **Owner** (`frontend-dev`, `developer`, or `ux-dev`), objective, and dependencies |
 | **Tasks** | Numbered tasks mapped to a `stage_id` |
 | **FilesToChange** | Paths and explanations mapped to a `stage_id` |
@@ -66,6 +67,9 @@ If environment is blocked:
 
 ## Goal
 ...
+
+## Difficulty
+One of: `easy`, `medium`, `hard` (architect sets at planning time).
 
 ## StagePlan
 Each stage MUST have Owner. Orchestrate dispatches by Owner: `frontend-dev` for UI/design, `developer` for logic/backend, `ux-dev` for prototype generation from design artifacts.

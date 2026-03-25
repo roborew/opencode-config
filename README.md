@@ -4,7 +4,7 @@ This repository uses a stage-based orchestration model to keep cheaper models fo
 
 ## Built-in Agents (OpenCode Defaults)
 
-OpenCode's built-in `plan` and `build` remain untouched for generic/quick tasks. Both use the Codex model by default in this config.
+OpenCode's built-in `plan` and `build` are configured in `opencode.json`: **`plan`** uses Qwen3.5 Plus; **`build`** uses MiniMax M2.7 for generic/quick tasks.
 
 - **`plan`** — Built-in primary agent for analysis and planning without edits. Use for quick planning or review.
 - **`build`** — Built-in primary agent with full tools. Use for ad-hoc coding or generic development.
@@ -13,14 +13,14 @@ OpenCode's built-in `plan` and `build` remain untouched for generic/quick tasks.
 
 For serious features, refactors, or multi-stage work, use the custom **Architect → Orchestrator → Subagents** pipeline:
 
-- **Primary planning:** `architect` (default agent) — read-only: exploration, reporting, drafting plans; also owns review and documentation after implementation
+- **Primary planning:** `architect` — read-only: exploration, drafting plans with **`## Difficulty`** (`easy` \| `medium` \| `hard`); easy features skip strategists; medium/hard use scoped strategists; also owns review and documentation after implementation
 - **Primary execution:** `orchestrate` — coordinates execution; never writes directly; prompts user back to architect on completion
 - **Planning specialists (architect subagents):** `debugger`, `refactor`, `review`, `designer` — read-only; return plan drafts
 - **Documentation generator:** `document` — read-only; generates changelog/guides/architecture content; architect invokes, then scribe writes
 - **Artifact writer:** `scribe` — only agent that writes plan artifacts and docs (invoked by architect and orchestrate)
 - **Recovery replanner:** `helper`
 - **Execution subagents (orchestrate only):** `developer`, `frontend-dev`, `ux-dev` — coding agents; architect never invokes these. `ux-dev` generates HTML-only framework-agnostic prototypes from design briefs into `.prototype/<slug>/`.
-- **Operator escalation:** `senior-dev` — orchestrator subagent; invoke when developer is stuck. Orchestrator stops and asks user to confirm before invoking. Diagnose + fix blocker; no preflight. Hand back to orchestrator to resume with developer.
+- **Senior-dev:** mid-stage escalation when developer is stuck (user confirmation). For **`Difficulty: hard`**, orchestrate also invokes senior-dev after final verifier for a scheduled post-implementation review (no confirmation).
 - **Verification gate:** `verifier`
 - **Image/layout reviewer:** `vision` — invoked by orchestrate only when the model needs to see the UI (layout, design, visual regression). Not triggered on every test run.
 - **Optional mentor:** `mentor`

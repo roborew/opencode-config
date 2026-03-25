@@ -2,18 +2,6 @@
   "$schema": "https://opencode.ai/config.json",
   "default_agent": "orchestrate",
   "provider": {
-    "ollama": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "Ollama (local)",
-      "options": {
-        "baseURL": "http://localhost:11434/v1"
-      },
-      "models": {
-        "qwen3-coder:30b": {
-          "name": "Qwen3 Coder 30B"
-        }
-      }
-    },
     "openrouter": {
       "npm": "@openrouter/ai-sdk-provider",
       "name": "OpenRouter",
@@ -21,58 +9,52 @@
         "timeout": 300000
       },
       "models": {
-        "minimax/minimax-m2.5": {
-          "name": "MiniMax M2.5"
-        },
         "minimax/minimax-m2.7": {
-          "name": "MiniMax M2.7"
+          "name": "MiniMax M2.7",
+          "options": {
+            "temperature": 0.3,
+            "top_p": 0.95
+          }
         },
         "openai/gpt-5.3-codex": {
-          "name": "GPT-5.3-Codex"
-        },
-        "qwen/qwen3-coder-next": {
-          "name": "Qwen3 Coder Next"
+          "name": "GPT-5.3-Codex",
+          "options": {
+            "temperature": 0.3
+          }
         },
         "qwen/qwen3.5-plus-02-15": {
-          "name": "Qwen3.5 Plus"
+          "name": "Qwen3.5 Plus",
+          "options": {
+            "temperature": 0.4,
+            "top_p": 0.95
+          }
         },
-        "z-ai/glm-4.7": {
-          "name": "GLM 4.7"
-        },
-        "stepfun/step-3.5-flash:free": {
-          "name": "Stepfun Step 3.5 Flash (Free)"
-        },
-        "nvidia/nemotron-3-super-120b-a12b:free": {
-          "name": "NVIDIA Nemotron 3 Super 120B A12B (Free)",
+        "qwen/qwen3-next-80b-a3b-instruct": {
+          "name": "Qwen3 Next 80B A3B Instruct",
           "options": {
             "temperature": 0.1,
             "top_p": 0.9
           }
         },
-        "qwen/qwen3-next-80b-a3b-instruct:free": {
-          "name": "Qwen3 Next 80B A3B Instruct (Free)"
-        },
         "qwen/qwen3-vl-235b-a22b-instruct": {
-          "name": "Qwen3 VL 235B (vision)"
-        },
-        "google/gemini-3.1-pro-preview": {
-          "name": "Gemini 3.1 Pro Preview"
-        },
-        "google/gemini-3-flash-preview": {
-          "name": "Gemini 3 Flash Preview"
-        },
-        "xiaomi/mimo-v2-pro": {
-          "name": "Xiaomi Mimo V2 Pro",
+          "name": "Qwen3 VL 235B (vision)",
           "options": {
-            "frequency_penalty": 2.0,
             "temperature": 0.2
           }
         },
-        "deepseek/deepseek-v3.2": {
-          "name": "DeepSeek V3.2"
+        "google/gemini-3-flash-preview": {
+          "name": "Gemini 3 Flash Preview",
+          "options": {
+            "temperature": 0.5
+          }
         },
-        "moonshotai/kimi-k2.5": {
-          "name": "Kimi K2.5"
+        "deepseek/deepseek-v3.2": {
+          "name": "DeepSeek V3.2",
+          "options": {
+            "temperature": 0.3,
+            "top_p": 0.9,
+            "frequency_penalty": 0.3
+          }
         }
       }
     }
@@ -121,13 +103,14 @@
   "agent": {
     "architect": {
       "model": "openrouter/qwen/qwen3.5-plus-02-15",
-      "steps": 15
+      "steps": 30
     },
     "orchestrate": {
-      "model": "openrouter/qwen/qwen3.5-plus-02-15"
+      "model": "openrouter/qwen/qwen3.5-plus-02-15",
+      "steps": 50
     },
     "plan": {
-      "model": "openrouter/xiaomi/mimo-v2-pro"
+      "model": "openrouter/qwen/qwen3.5-plus-02-15"
     },
     "strategist": {
       "mode": "subagent",
@@ -135,7 +118,8 @@
       "steps": 15
     },
     "build": {
-      "model": "openrouter/minimax/minimax-m2.7"
+      "model": "openrouter/minimax/minimax-m2.7",
+      "steps": 30
     },
     "developer": {
       "mode": "subagent",
@@ -149,52 +133,63 @@
     },
     "vision": {
       "mode": "subagent",
-      "model": "openrouter/qwen/qwen3-vl-235b-a22b-instruct"
+      "model": "openrouter/qwen/qwen3-vl-235b-a22b-instruct",
+      "steps": 5
     },
     "designer": {
       "mode": "subagent",
-      "model": "openrouter/google/gemini-3-flash-preview"
+      "model": "openrouter/google/gemini-3-flash-preview",
+      "steps": 10
     },
     "ux-dev": {
       "mode": "subagent",
-      "model": "openrouter/google/gemini-3-flash-preview"
+      "model": "openrouter/google/gemini-3-flash-preview",
+      "steps": 30
     },
     "helper": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v3.2"
+      "model": "openrouter/deepseek/deepseek-v3.2",
+      "steps": 15
     },
     "debugger": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v3.2"
+      "model": "openrouter/deepseek/deepseek-v3.2",
+      "steps": 15
     },
     "scribe": {
       "mode": "subagent",
-      "model": "openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
+      "model": "openrouter/qwen/qwen3-next-80b-a3b-instruct",
       "steps": 5
     },
     "verifier": {
       "mode": "subagent",
-      "model": "openrouter/minimax/minimax-m2.7"
+      "model": "openrouter/minimax/minimax-m2.7",
+      "steps": 10
     },
     "review": {
       "mode": "subagent",
-      "model": "openrouter/minimax/minimax-m2.7"
+      "model": "openrouter/minimax/minimax-m2.7",
+      "steps": 15
     },
     "document": {
       "mode": "subagent",
-      "model": "openrouter/minimax/minimax-m2.7"
+      "model": "openrouter/minimax/minimax-m2.7",
+      "steps": 10
     },
     "mentor": {
       "mode": "subagent",
-      "model": "openrouter/minimax/minimax-m2.7"
+      "model": "openrouter/minimax/minimax-m2.7",
+      "steps": 10
     },
     "refactor": {
       "mode": "subagent",
-      "model": "openrouter/minimax/minimax-m2.7"
+      "model": "openrouter/minimax/minimax-m2.7",
+      "steps": 15
     },
     "frontend-dev": {
       "mode": "subagent",
-      "model": "openrouter/minimax/minimax-m2.7"
+      "model": "openrouter/minimax/minimax-m2.7",
+      "steps": 60
     }
   }
 }

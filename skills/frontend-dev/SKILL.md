@@ -62,6 +62,9 @@ Before writing interface code, search the codebase to understand existing patter
 - MUST specify explicit dimensions for images to prevent layout shift
 - MUST test layouts at different viewport sizes
 
+### Strategy traceability
+- When implementing, cite the plan (e.g. "Implementing `stage_id` <id>, Task N: <short description>"). Tie UI edits to artifact `Tasks` / `StagePlan`; do not expand scope beyond the stage.
+
 ### Code Quality
 - NEVER use `transition: all`-explicitly list animated properties
 - MUST honor `prefers-reduced-motion` for animations
@@ -131,6 +134,7 @@ Call `report_to_parent` with:
 - `plan_file`
 - summary of interface work created
 - files changed
+- `changes` — array of `{ file, summary, strategy_step }` where `strategy_step` is `stage_id` + task index or label from the plan
 - tests/commands run and outcomes
 - accessibility verification status
 - acceptance check status

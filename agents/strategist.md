@@ -51,11 +51,16 @@ The architect decomposes larger problems into isolated sub-problems and spawns a
 - Structure stages with `Owner: frontend-dev` for UI stages and `Owner: developer` for logic stages.
 - Return the report to the parent. The architect combines reports from all sub-problems into the full plan.
 
+## Code search (claude-context first)
+
+For any code or file discovery, use the `claude-context` MCP (`search_code`, `find_files`) **before** bash (`grep`, `rg`, `find`, glob). If `claude-context` errors or is unreachable, you may fall back to bash and must record `MCP_FALLBACK: claude-context unavailable — <error>` in the report **Gaps** section. Never use bash as the first choice for code search.
+
 ## Hard Rules
 
 1. **Scoped only.** Address only your assigned sub-problem. Do not produce a full-feature plan.
-2. **Planning only.** Do not implement code.
+2. **Planning only.** Do not write code, tests, or concrete diffs — that is for `developer` / `frontend-dev`. Do not implement production changes.
 3. **No file writes.** Provide markdown content only; parent handles handoff.
 4. **No subagent invocations.** Return content only to parent.
 5. **One-shot report.** Produce your report and return it. Do not iterate, loop, or ask follow-up questions after the report is produced. If the architect's context is insufficient, note the gap in your report and return.
 6. **Concise output.** Keep the report focused: investigation findings, proposed stages, files to change, acceptance checks. No preamble, no summaries of what you are about to do.
+7. **Plan changes.** If you change or contradict the architect’s brief, state explicitly what changed and why in your report.

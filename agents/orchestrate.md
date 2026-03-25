@@ -20,6 +20,7 @@ permission:
     helper: allow
     vision: allow
     senior-dev: allow
+    review: allow
 ---
 
 # Orchestrate Agent
@@ -59,7 +60,7 @@ If the user has not provided an artifact path (new session, greeting, or unspeci
 
 ## When Invoking Subagents
 
-When you invoke `scribe`, `developer`, `frontend-dev`, `ux-dev`, `verifier`, `helper`, `vision`, or `senior-dev` via Task:
+When you invoke `scribe`, `developer`, `frontend-dev`, `ux-dev`, `verifier`, `helper`, `vision`, `senior-dev`, or `review` via Task:
 
 - **Instruct the subagent to run its mandatory startup first.** Include in the Task call: "Run your mandatory startup steps first. Call your skill and output STARTUP_OK: <skill_name> loaded before proceeding. If the skill is unavailable, report SKILL_UNAVAILABLE: <skill_name> to the parent."
 - **Require confirmation.** Do not treat the subagent reply as valid until it includes `STARTUP_OK` or you receive `SKILL_UNAVAILABLE`. If `SKILL_UNAVAILABLE`, report to the user and do not proceed with that subagent's output.
@@ -72,8 +73,9 @@ When you invoke `scribe`, `developer`, `frontend-dev`, `ux-dev`, `verifier`, `he
 - Dispatch by Owner: `Owner: frontend-dev` → invoke `frontend-dev`; `Owner: developer` → invoke `developer`; `Owner: ux-dev` → invoke `ux-dev` (prototype generation from design artifacts).
 - Use `scribe` for all `.plan/*.md` and docs markdown writes. Verify file exists after each scribe call; re-invoke once if missing.
 - Run `verifier` at stage gates and before final completion.
+- Read `## Difficulty` from the plan artifact (`easy` \| `medium` \| `hard`); if missing, treat as `medium`. After **all** stages pass the **final** verifier, run **difficulty completion gates** (see orchestrate skill): **medium** → invoke `review`; **hard** → invoke `senior-dev` (scheduled review gate), then `helper` (strategy conformance). **easy** → skip these gates.
 - Trigger `helper` when blocks, loops, or verification failures occur.
-- When developer reports `STAGE_STUCK` and the operator asks to escalate: **stop**, ask the user to confirm use of senior-dev (Codex), and only invoke `senior-dev` via Task after explicit user confirmation. When senior-dev reports `HANDOFF_TO_DEVELOPER`, resume with developer for remaining stage work.
+- When developer reports `STAGE_STUCK` and the operator asks to escalate: **stop**, ask the user to confirm use of senior-dev (Codex), and only invoke `senior-dev` via Task after explicit user confirmation. **Exception:** for `Difficulty: hard`, after all stages pass verifier, you may invoke `senior-dev` for **scheduled post-implementation review** without that confirmation (this is not escalation). When senior-dev reports `HANDOFF_TO_DEVELOPER`, resume with developer for remaining stage work.
 - When developer/frontend-dev/ux-dev/verifier reports `IMAGE_REVIEW_NEEDED` with path and context, invoke `vision` with those inputs, then pass the analysis back to the requesting agent.
 - On completion, prompt user: "Switch to `architect` for review and documentation sign-off."
 

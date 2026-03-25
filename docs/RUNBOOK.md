@@ -2,15 +2,15 @@
 
 ## Overview
 
-- **Built-in agents:** `plan` and `build` remain OpenCode defaults (Codex model) for generic/quick tasks.
+- **Built-in agents:** `plan` uses Qwen3.5 Plus; `build` uses MiniMax M2.7 in `opencode.json` for generic/quick tasks.
 - **Primary planning mode** (`architect`) — read-only: exploration, reporting, drafting plans; also owns review and documentation after implementation. Invokes: `debugger`, `refactor`, `review`, `document`, `designer`, `scribe`. Never invokes `frontend-dev`, `developer`, or `orchestrate`. Prompts user to switch to orchestrate when done; receives user back for review + docs after orchestrate completes.
-- **Primary execution mode** (`orchestrate`) runs delegated stage execution and recovery flow. On completion, prompts user to switch to architect for review and documentation.
+- **Primary execution mode** (`orchestrate`) runs delegated stage execution and recovery flow. Reads `## Difficulty` from the artifact (`easy` \| `medium` \| `hard`; default `medium` if missing). After all stages pass the final verifier: **easy** — no extra gates; **medium** — invokes `review` for a post-execution check; **hard** — invokes `senior-dev` (scheduled review, no user confirmation) then `helper` (strategy conformance). On completion, prompts user to switch to architect for review and documentation.
 - **Planning specialists** (`debugger`, `refactor`, `review`, `designer`) — read-only subagents of architect; return plan drafts, never write code. `designer` synthesizes design briefs for Prototype Design.
 - **Documentation generator** (`document`) — read-only; generates changelog/guides/architecture content; architect invokes, then scribe writes.
 - **Execution subagents** (`developer`, `frontend-dev`, `ux-dev`) — coding agents invoked by orchestrate only; architect never invokes them. `ux-dev` generates HTML-only framework-agnostic prototypes from design briefs into `.prototype/<slug>/`.
-- **Senior-dev** (`senior-dev`) — orchestrator subagent; operator-triggered escalation when developer is stuck. Orchestrator stops and asks user to confirm before invoking. Diagnosis + fix; no preflight. Hand back to orchestrator when blocker fixed so it can resume with developer.
+- **Senior-dev** (`senior-dev`) — orchestrator subagent. **Escalation:** operator-triggered when developer is stuck; orchestrator asks user to confirm before invoking. **Scheduled gate:** for `Difficulty: hard`, after all stages pass verifier, orchestrate invokes senior-dev for post-implementation review **without** that confirmation. Diagnosis + fix on escalation; read-only review on scheduled gate unless scope says otherwise.
 - **Artifact writer** (`scribe`) — only write path; writes plan artifacts and docs (invoked by architect and orchestrate).
-- **Recovery replanner** (`helper`) diagnoses stuck/failed states and amends existing artifacts through `scribe`.
+- **Recovery replanner** (`helper`) diagnoses stuck/failed states and amends existing artifacts through `scribe`. On **hard** Difficulty, orchestrate may also invoke helper for **strategy conformance** (reasoning-only compare plan vs implementation summary).
 - **Verifier** (`verifier`) is an independent evidence gate and never writes code.
 - **Mentor** (`mentor`) is optional and explanatory only.
 
@@ -19,13 +19,13 @@
 | Role                    | Agents                                       | Model Tier | Responsibility                                                                                                                                                       |
 | ----------------------- | -------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Primary (planning)      | `architect`                                  | smart      | Read-only: explore, report, draft. Plan mode: scribe writes artifact → switch to orchestrate. Post-implementation: review → sign-off → document → scribe writes docs |
-| Coordinator             | `orchestrate`                                | smart      | Execute artifact stages, grade child reports, enforce helper-triggered recovery, dispatch scribe for docs                                                            |
-| Planning specialists    | `debugger`, `refactor`, `review`, `designer` | smart      | Return type-specific plan drafts to architect. `designer` uses Gemini Pro for design brief synthesis.                                                                |
+| Coordinator             | `orchestrate`                                | smart      | Execute stages, grade children, helper recovery, optional `review` (medium) / `senior-dev`+`helper` (hard) after final verifier, dispatch scribe                       |
+| Planning specialists    | `debugger`, `refactor`, `review`, `designer` | smart      | Return type-specific plan drafts to architect. `designer` uses Gemini 3 Flash. `review` may also be invoked by orchestrate on **medium** Difficulty after execution.    |
 | Documentation generator | `document`                                   | fast       | Generate changelog/guides/architecture content; architect invokes, scribe writes                                                                                     |
 | Artifact writer         | `scribe`                                     | fast       | Write/update markdown artifacts and docs from architect/orchestrate content                                                                                          |
 | Recovery                | `helper`                                     | fast       | Replan minimal strategy deltas and trigger artifact amendment                                                                                                        |
 | Execution               | `developer`, `frontend-dev`, `ux-dev`        | smart/fast | Execute assigned `stage_id` tasks. `ux-dev` uses Gemini Pro for HTML-only prototype generation into `.prototype/<slug>/`.                                            |
-| Operator escalation     | `senior-dev`                                 | smart      | Orchestrator subagent. Operator-triggered when developer stuck. Orchestrator stops and asks user to confirm before invoking. Diagnose + fix blocker; no preflight. Hand back to orchestrator to resume with developer.            |
+| Operator escalation     | `senior-dev`                                 | smart      | Escalation: operator + user confirm when stuck. **Hard** completion gate: auto-invoked post-verifier for scheduled review.                                                                                    |
 | Verification            | `verifier`                                   | fast       | Verify acceptance criteria with traceable evidence                                                                                                                   |
 
 Both primaries (`architect`, `orchestrate`) are non-writing (`edit: deny`). Only `scribe` writes markdown artifacts/docs.
@@ -38,7 +38,7 @@ Both primaries (`architect`, `orchestrate`) are non-writing (`edit: deny`). Only
 ## Canonical Flow
 
 1. `architect` asks for plan type (Feature/Debug/Refactor/Review/Document/Prototype Design) when request is greeting/unspecified.
-2. `architect` invokes matching specialist subagent (`debugger`/`refactor`/`review`/`designer`) as needed and produces artifact draft content. For Prototype Design: architect prompts for design intake (purpose, audience, feel, color scheme, icon set, sections, accessibility, reference assets), enforces HTML-only framework-agnostic output mode, invokes `designer`, then scribe writes `.plan/design.<slug>.md`.
+2. **Features:** architect classifies **`## Difficulty`** (`easy` \| `medium` \| `hard`), investigates with `claude-context`, then either synthesizes the plan (**easy**) or decomposes and spawns scoped **`strategist`** subagents (**medium/hard**). **Strategist** uses `claude-context` first for code search; bash only if MCP fails (`MCP_FALLBACK` in report). Other types: architect invokes matching specialist (`debugger`/`refactor`/`review`/`designer`) as needed. For Prototype Design: design intake → `designer` → scribe writes `.plan/design.<slug>.md`.
 3. `architect` invokes `scribe` to write the artifact to `.plan/<type>.<slug>.md` (mandatory step).
 4. User switches to `orchestrate`.
 5. `orchestrate` ensures artifact exists; if missing, dispatches `scribe` to write it.
@@ -48,9 +48,10 @@ Both primaries (`architect`, `orchestrate`) are non-writing (`edit: deny`). Only
 9. `orchestrate` dispatches one stage at a time to `developer`, `frontend-dev`, or `ux-dev` (by stage Owner). Design artifacts use `Owner: ux-dev`; `ux-dev` outputs HTML-only files to `.prototype/<slug>/`.
 10. Execution subagent returns completion report (`stage_id`, files, tests, checks, blockers, risks, next input).
 11. `orchestrate` dispatches next stage only after successful handoff.
-12. For final completion, run `verifier`.
-13. When verifier passes for all stages: **"Implementation complete. Switch to architect for review and documentation sign-off."** Do not run review or documentation. User switches to architect.
-14. Architect (post-implementation): invokes `review` for sign-off. If remediation: scribe writes review artifact → user switches to orchestrate → developer applies fixes → verifier. If sign-off: architect invokes `document` → scribe writes docs.
+12. For final completion, run `verifier` per stage; run final verifier when all stages complete.
+13. **Difficulty completion gates** (after final verifier passes): **easy** — none. **medium** — orchestrate invokes **`review`** with artifact + completion summary. **hard** — orchestrate invokes **`senior-dev`** (scheduled review), then **`helper`** (strategy conformance). Remediation from these gates may update review artifact via scribe before handoff.
+14. When gates complete: **"Implementation complete. Switch to architect for review and documentation sign-off."** Architect still runs Mode B review + docs (authoritative sign-off).
+15. Architect (post-implementation): invokes `review` for sign-off. If remediation: scribe writes review artifact → user switches to orchestrate → developer applies fixes → verifier. If sign-off: architect invokes `document` → scribe writes docs.
 
 At each stage handoff, orchestrate grades child output:
 
@@ -77,20 +78,20 @@ Do not advance stages until helper amendment is applied.
 Do not allow repeated test-command retries under unresolved environment mismatch.
 Use startup preflight as an optional session gate; do not require artifact writes for preflight output.
 
-**Senior-dev escalation (operator-triggered, user confirmation required):** When developer reports `STAGE_STUCK` and the operator asks to escalate, orchestrate stops, asks the user to confirm use of senior-dev (Codex), and only invokes `senior-dev` via Task after explicit user confirmation. Senior-dev diagnoses, implements fix, reports `HANDOFF_TO_DEVELOPER` when blocker is fixed. Orchestrate then resumes with developer for remaining stage work. Senior-dev is never auto-invoked—only when operator explicitly asks and user confirms.
+**Senior-dev escalation (operator-triggered, user confirmation required):** When developer reports `STAGE_STUCK` and the operator asks to escalate, orchestrate stops, asks the user to confirm, then invokes `senior-dev`. **Exception:** for **`Difficulty: hard`**, after all stages pass the final verifier, orchestrate invokes `senior-dev` for **scheduled post-implementation review** without that confirmation (not the same as mid-stage escalation).
 
 ## Subagent Loop Exit Strategy (enforced)
 
 When a subagent repeats the same completion message or stalls:
 
-1. **OpenCode config**: Scribe has `steps: 5`, developer has `steps: 60` in `opencode.json` — forces exit after that many agentic iterations.
+1. **OpenCode config**: `steps` caps agentic iterations per session — e.g. scribe `5`, developer/frontend-dev `60`, architect `30`, orchestrate `50`, primaries and subagents are bounded. See `opencode.json` `agent` block.
 2. **Orchestrator loop detection**: If the same or near-identical child report is received 2+ times, treat as `BLOCKED`, invoke `helper`, and amend the same artifact via `scribe` before any retry.
 3. **Scribe exit rule**: Scribe returns exactly once per task. After reporting path + operation + summary, it stops.
 4. **Developer anti-loop rule**: Developer must not repeat the same verbal intent (e.g. "Let me create X"); one statement, then execute. If the same failing command repeats twice without meaningful change, return `blocker_code: STAGE_STUCK` and stop.
 5. **Manual escape**: Use `Ctrl+C` or session interrupt. Resume in a new session with artifact path if needed.
 6. **Manual handoff (Task did not return):** If a subagent completed and produced a report but the Task did not return control to the orchestrator, switch to the `orchestrate` agent and paste the completion report. The orchestrator will grade it and proceed to the next stage. Do not message the subagent again—it has already completed.
 
-Provider-level `timeout` (e.g. 300000ms) can be set in `opencode.json` under `provider.<name>.options` to cap LLM request duration.
+Provider-level `timeout` (e.g. 300000ms) and per-model **`temperature` / `top_p` / `frequency_penalty`** are set under `provider.openrouter.models.<id>.options` in `opencode.json` to reduce variance and wasted tokens (e.g. lower temp for execution, gentle `frequency_penalty` for DeepSeek).
 
 `default_agent` is set to `orchestrate` so execution sessions start with the coordinator as the active primary context.
 
@@ -112,7 +113,7 @@ Provider-level `timeout` (e.g. 300000ms) can be set in `opencode.json` under `pr
 
 Primaries and execution agents should use MCP only when it reduces uncertainty:
 
-- **`claude-context`**: Semantic code search in workspace. Use during planning (architect, debugger, refactor, review) to discover files/code to change and populate `FilesToChange` with evidence. Preflight checks ensure the codebase is indexed; if not, preflight runs `index_codebase` and verifies readiness before passing.
+- **`claude-context`**: Semantic code search in workspace. Use during planning (architect, **strategist** — strategist must try MCP **before** bash; bash only on MCP failure with `MCP_FALLBACK` in report), debugger, refactor, review. Preflight ensures indexing where applicable.
 - **`context7`**: Up-to-date docs for 9000+ external libraries. Use when framework/library API behavior is uncertain. Limit to 3 calls per question.
 - **`docs-mcp-server`**: Internal docs, prototypes, linked repos, architecture notes.
 - **`dash-api`**: API/library contract lookup when behavior is unclear.
@@ -146,7 +147,7 @@ Stage IDs: <stage-id-list>
 Scope in: <paths/components>
 Scope out: <explicit exclusions>
 Acceptance checks: <commands>
-Completion report required: stage_id, files_changed, tests_run, acceptance_check_status, blockers, residual_risks, next_stage_input
+Completion report required: stage_id, files_changed, `changes` [{ file, summary, strategy_step }], tests_run, acceptance_check_status, blockers, residual_risks, next_stage_input
 ```
 
 Use this when dispatching markdown writes to `scribe`:
@@ -160,7 +161,7 @@ Constraints: markdown only, approved paths only
 
 ## Smoke Checklist
 
-- Artifact includes required schema sections (`StagePlan`, `StageAcceptanceChecks`, `CompletionReport`, `VerifierInputs`, `DocumentationOutputs`).
+- Artifact includes required schema sections (`Difficulty`, `StagePlan`, `StageAcceptanceChecks`, `CompletionReport`, `VerifierInputs`, `DocumentationOutputs`).
 - Primary agents cannot edit files directly (`edit: deny`).
 - Scribe can write to `.plan` and docs markdown paths only.
 - Helper never writes directly and only amends existing artifacts via `scribe`.
@@ -168,7 +169,8 @@ Constraints: markdown only, approved paths only
 - Environment/toolchain blockers (`ENV_BLOCKED`) halt stage progression and require helper+scribe amendment before retry.
 - Stage dispatch is one-at-a-time with completion handoff.
 - UI work routes to `frontend-dev`; non-UI work routes to `developer`; prototype generation from design briefs routes to `ux-dev` (outputs to `.prototype/<slug>/`).
-- Senior-dev is operator-triggered escalation only; orchestrate stops and asks user to confirm before invoking when operator asks (developer stuck); senior-dev reports `HANDOFF_TO_DEVELOPER` then orchestrate resumes with developer.
+- Senior-dev: user confirmation for mid-stage **escalation**; **no** confirmation for **hard** Difficulty scheduled post-verifier review.
+- Orchestrate may invoke **`review`** after execution for **medium** Difficulty.
 - Orchestrator prompts "Switch to architect for review and documentation" on completion.
 - Verifier receives original feature artifact and review artifact (if present).
 - Verifier report includes criterion-level evidence.
