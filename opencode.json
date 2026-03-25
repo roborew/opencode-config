@@ -49,6 +49,9 @@
             "top_p": 0.9
           }
         },
+        "qwen/qwen3-next-80b-a3b-instruct:free": {
+          "name": "Qwen3 Next 80B A3B Instruct (Free)"
+        },
         "qwen/qwen3-vl-235b-a22b-instruct": {
           "name": "Qwen3 VL 235B (vision)"
         },
@@ -166,7 +169,7 @@
     },
     "scribe": {
       "mode": "subagent",
-      "model": "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
+      "model": "openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
       "steps": 5
     },
     "verifier": {
