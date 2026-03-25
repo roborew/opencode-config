@@ -68,9 +68,6 @@
         "deepseek/deepseek-v3.2": {
           "name": "DeepSeek V3.2"
         },
-        "deepseek/deepseek-v3.2-speciale": {
-          "name": "DeepSeek V3.2 Speciale"
-        },
         "moonshotai/kimi-k2.5": {
           "name": "Kimi K2.5"
         }
@@ -131,8 +128,8 @@
     },
     "strategist": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v3.2-speciale",
-      "steps": 8
+      "model": "openrouter/deepseek/deepseek-v3.2",
+      "steps": 15
     },
     "build": {
       "model": "openrouter/minimax/minimax-m2.7"

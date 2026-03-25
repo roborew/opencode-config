@@ -1,7 +1,7 @@
 ---
 description: Scoped feature planning specialist. Receives an isolated sub-problem from architect and returns a concise investigation report. Read-only; does not write files.
 mode: subagent
-model: openrouter/deepseek/deepseek-v3.2-speciale
+model: openrouter/deepseek/deepseek-v3.2
 tools:
   write: false
   edit: false
