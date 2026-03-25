@@ -6,11 +6,19 @@
       "npm": "@openrouter/ai-sdk-provider",
       "name": "OpenRouter",
       "options": {
-        "timeout": 300000
+        "timeout": 300000,
+        "chunkTimeout": 60000
       },
       "models": {
         "minimax/minimax-m2.7": {
           "name": "MiniMax M2.7",
+          "options": {
+            "temperature": 0.3,
+            "top_p": 0.95
+          }
+        },
+        "minimax/minimax-m2.7:nitro": {
+          "name": "MiniMax M2.7 (nitro)",
           "options": {
             "temperature": 0.3,
             "top_p": 0.95
@@ -24,6 +32,13 @@
         },
         "qwen/qwen3.5-plus-02-15": {
           "name": "Qwen3.5 Plus",
+          "options": {
+            "temperature": 0.4,
+            "top_p": 0.95
+          }
+        },
+        "qwen/qwen3.5-plus-02-15:nitro": {
+          "name": "Qwen3.5 Plus (nitro)",
           "options": {
             "temperature": 0.4,
             "top_p": 0.95
@@ -106,7 +121,7 @@
       "steps": 30
     },
     "orchestrate": {
-      "model": "openrouter/qwen/qwen3.5-plus-02-15",
+      "model": "openrouter/qwen/qwen3.5-plus-02-15:nitro",
       "steps": 50
     },
     "plan": {
@@ -123,7 +138,7 @@
     },
     "developer": {
       "mode": "subagent",
-      "model": "openrouter/minimax/minimax-m2.7",
+      "model": "openrouter/minimax/minimax-m2.7:nitro",
       "steps": 60
     },
     "senior-dev": {
@@ -188,7 +203,7 @@
     },
     "frontend-dev": {
       "mode": "subagent",
-      "model": "openrouter/minimax/minimax-m2.7",
+      "model": "openrouter/minimax/minimax-m2.7:nitro",
       "steps": 60
     }
   }
