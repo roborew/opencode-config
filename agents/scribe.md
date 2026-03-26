@@ -1,7 +1,7 @@
 ---
 description: Markdown artifact and docs writer
 mode: subagent
-model: openrouter/qwen/qwen3-next-80b-a3b-instruct
+model: openrouter/openai/gpt-5-nano
 steps: 5
 tools:
   write: true
