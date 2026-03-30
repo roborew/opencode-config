@@ -17,7 +17,7 @@ For serious features, refactors, or multi-stage work, use the custom **Architect
 - **Primary execution:** `orchestrate` — coordinates execution; never writes directly; prompts user back to architect on completion
 - **Planning specialists (architect subagents):** `debugger`, `refactor`, `review`, `designer` — read-only; return plan drafts
 - **Documentation generator:** `document` — read-only; generates changelog/guides/architecture content; architect invokes, then scribe writes
-- **Artifact writer:** `scribe` — only agent that writes plan artifacts and docs (invoked by architect and orchestrate)
+- **Artifact writer:** `scribe` — only agent that writes plan artifacts, docs under `docs/`, `README.md`, and `.env.example` when given explicit paths (invoked by architect and orchestrate)
 - **Recovery replanner:** `helper`
 - **Execution subagents (orchestrate only):** `developer`, `frontend-dev`, `ux-dev` — coding agents; architect never invokes these. `ux-dev` generates HTML-only framework-agnostic prototypes from design briefs into `.prototype/<slug>/`.
 - **Senior-dev:** mid-stage escalation when developer is stuck (user confirmation). For **`Difficulty: hard`**, orchestrate also invokes senior-dev after final verifier for a scheduled post-implementation review (no confirmation).

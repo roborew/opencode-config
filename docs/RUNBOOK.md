@@ -9,7 +9,7 @@
 - **Documentation generator** (`document`) — read-only; generates changelog/guides/architecture content; architect invokes, then scribe writes.
 - **Execution subagents** (`developer`, `frontend-dev`, `ux-dev`) — coding agents invoked by orchestrate only; architect never invokes them. `ux-dev` generates HTML-only framework-agnostic prototypes from design briefs into `.prototype/<slug>/`.
 - **Senior-dev** (`senior-dev`) — orchestrator subagent. **Escalation:** operator-triggered when developer is stuck; orchestrator asks user to confirm before invoking. **Scheduled gate:** for `Difficulty: hard`, after all stages pass verifier, orchestrate invokes senior-dev for post-implementation review **without** that confirmation. Diagnosis + fix on escalation; read-only review on scheduled gate unless scope says otherwise.
-- **Artifact writer** (`scribe`) — only write path; writes plan artifacts and docs (invoked by architect and orchestrate).
+- **Artifact writer** (`scribe`) — only write path; writes plan artifacts, docs, `README.md`, and `.env.example` when delegated (invoked by architect and orchestrate).
 - **Recovery replanner** (`helper`) diagnoses stuck/failed states and amends existing artifacts through `scribe`. On **hard** Difficulty, orchestrate may also invoke helper for **strategy conformance** (reasoning-only compare plan vs implementation summary).
 - **Verifier** (`verifier`) is an independent evidence gate and never writes code.
 - **Mentor** (`mentor`) is optional and explanatory only.
@@ -22,13 +22,13 @@
 | Coordinator             | `orchestrate`                                | smart      | Execute stages, grade children, helper recovery, optional `review` (medium) / `senior-dev`+`helper` (hard) after final verifier, dispatch scribe                       |
 | Planning specialists    | `debugger`, `refactor`, `review`, `designer` | smart      | Return type-specific plan drafts to architect. `designer` uses Gemini 3 Flash. `review` may also be invoked by orchestrate on **medium** Difficulty after execution.    |
 | Documentation generator | `document`                                   | fast       | Generate changelog/guides/architecture content; architect invokes, scribe writes                                                                                     |
-| Artifact writer         | `scribe`                                     | fast       | Write/update markdown artifacts and docs from architect/orchestrate content                                                                                          |
+| Artifact writer         | `scribe`                                     | fast       | Write/update plan artifacts, docs, `README.md`, `.env.example` from architect/orchestrate content                                                                     |
 | Recovery                | `helper`                                     | fast       | Replan minimal strategy deltas and trigger artifact amendment                                                                                                        |
 | Execution               | `developer`, `frontend-dev`, `ux-dev`        | smart/fast | Execute assigned `stage_id` tasks. `ux-dev` uses Gemini Pro for HTML-only prototype generation into `.prototype/<slug>/`.                                            |
 | Operator escalation     | `senior-dev`                                 | smart      | Escalation: operator + user confirm when stuck. **Hard** completion gate: auto-invoked post-verifier for scheduled review.                                                                                    |
 | Verification            | `verifier`                                   | fast       | Verify acceptance criteria with traceable evidence                                                                                                                   |
 
-Both primaries (`architect`, `orchestrate`) are non-writing (`edit: deny`). Only `scribe` writes markdown artifacts/docs.
+Both primaries (`architect`, `orchestrate`) are non-writing (`edit: deny`). Only `scribe` writes plan artifacts, docs, `README.md`, and `.env.example` in allowed paths.
 
 ## Permission Conventions (skill creep prevention)
 
@@ -153,17 +153,17 @@ Completion report required: stage_id, files_changed, `changes` [{ file, summary,
 Use this when dispatching markdown writes to `scribe`:
 
 ```text
-Target path: .plan/<type>.<slug>.md or docs/<section>/<name>.md
+Target path: .plan/<type>.<slug>.md, docs/<section>/<name>.md, README.md, or .env.example
 Operation: create|update
-Content: full markdown body
-Constraints: markdown only, approved paths only
+Content: full body from parent (markdown or .env.example template lines)
+Constraints: approved paths only; markdown or .env.example only
 ```
 
 ## Smoke Checklist
 
 - Artifact includes required schema sections (`Difficulty`, `StagePlan`, `StageAcceptanceChecks`, `CompletionReport`, `VerifierInputs`, `DocumentationOutputs`).
 - Primary agents cannot edit files directly (`edit: deny`).
-- Scribe can write to `.plan` and docs markdown paths only.
+- Scribe can write to `.plan`, docs markdown paths, `README.md`, and `.env.example` (when parent supplies path and content).
 - Helper never writes directly and only amends existing artifacts via `scribe`.
 - Helper is invoked on repeated verifier failure or unresolved blockers.
 - Environment/toolchain blockers (`ENV_BLOCKED`) halt stage progression and require helper+scribe amendment before retry.

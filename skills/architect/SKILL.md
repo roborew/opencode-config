@@ -238,5 +238,6 @@ User may manually force specialist selection via `@strategist`, `@debugger`, `@r
    - `docs/changelog/<date>-<slug>.md`
    - `docs/guides/<slug>.md`
    - `docs/architecture/<slug>.md`
+   - When needed for onboarding or env setup: `README.md` and/or `.env.example` at the project root (or package subdirectory), same `target_path` + verbatim `content` contract as other scribe writes.
    After each scribe call: verify the file exists at the reported path. If not, re-invoke scribe once. If scribe reports `SCRIBE_FAILED`, re-invoke once.
 6. Report completion: review sign-off and docs written.
