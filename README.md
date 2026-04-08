@@ -4,7 +4,7 @@ This repository uses a stage-based orchestration model to keep cheaper models fo
 
 ## Built-in Agents (OpenCode Defaults)
 
-OpenCode's built-in `plan` and `build` are configured in `opencode.json`: **`plan`** uses Qwen3.5 Plus; **`build`** uses MiniMax M2.7 for generic/quick tasks.
+OpenCode's built-in `plan` and `build` are configured in `opencode.json`: **`plan`** uses Qwen3.6 Plus; **`build`** uses MiniMax M2.7 for generic/quick tasks.
 
 - **`plan`** — Built-in primary agent for analysis and planning without edits. Use for quick planning or review.
 - **`build`** — Built-in primary agent with full tools. Use for ad-hoc coding or generic development.

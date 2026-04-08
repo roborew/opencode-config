@@ -36,15 +36,15 @@
             "temperature": 0.2
           }
         },
-        "qwen/qwen3.5-plus-02-15": {
-          "name": "Qwen3.5 Plus",
+        "qwen/qwen3.6-plus": {
+          "name": "Qwen3.6 Plus",
           "options": {
             "temperature": 0.4,
             "top_p": 0.95
           }
         },
-        "qwen/qwen3.5-plus-02-15:nitro": {
-          "name": "Qwen3.5 Plus (nitro)",
+        "qwen/qwen3.6-plus:nitro": {
+          "name": "Qwen3.6 Plus (nitro)",
           "options": {
             "temperature": 0.4,
             "top_p": 0.95
@@ -123,15 +123,15 @@
   },
   "agent": {
     "architect": {
-      "model": "openrouter/qwen/qwen3.5-plus-02-15",
+      "model": "openrouter/qwen/qwen3.6-plus",
       "steps": 30
     },
     "orchestrate": {
-      "model": "openrouter/qwen/qwen3.5-plus-02-15:nitro",
+      "model": "openrouter/qwen/qwen3.6-plus:nitro",
       "steps": 50
     },
     "plan": {
-      "model": "openrouter/qwen/qwen3.5-plus-02-15"
+      "model": "openrouter/qwen/qwen3.6-plus"
     },
     "strategist": {
       "mode": "subagent",

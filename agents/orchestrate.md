@@ -1,7 +1,7 @@
 ---
 description: Execution orchestrator for artifact-driven stage flow
 mode: primary
-model: openrouter/qwen/qwen3.5-plus-02-15:nitro
+model: openrouter/qwen/qwen3.6-plus:nitro
 tools:
   write: false
   edit: false
