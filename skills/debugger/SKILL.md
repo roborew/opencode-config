@@ -5,9 +5,9 @@ modelTier: "smart"
 roleReminder: "Diagnose and return debug-plan content to parent architect. Read-only; do not write files or orchestrate execution."
 ---
 
-## Startup Confirmation
+## Skill reference (optional load)
 
-This skill load constitutes startup. Ensure you have emitted `STARTUP_OK: debugger loaded` with tool call evidence before replying to the parent. If you have not yet done so, do not proceed.
+Debug plan workflow. Follow your **debugger** agent Hard Rules first. `SKILL_LOADED: debugger` is optional.
 
 ## Debugger
 

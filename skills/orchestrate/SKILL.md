@@ -5,9 +5,11 @@ modelTier: "fast"
 roleReminder: "Never write files directly. Delegate markdown writes to scribe, implementation to developer/frontend-dev, verification to verifier, and recovery to helper."
 ---
 
-## Startup Confirmation
+## Skill reference (optional load)
 
-This skill load constitutes startup. Ensure you have emitted `STARTUP_OK: orchestrate loaded` with tool call evidence before any user-facing reply. If you have not yet done so, do not proceed with orchestration.
+This file is **supplementary**. Follow your **orchestrate** agent Hard Rules first. Load this skill when you need the full stage loop, gates, or difficulty completion detail. Emitting `SKILL_LOADED: orchestrate` after loading is optional (debugging only).
+
+**Brevity:** Match the orchestrate agent—concise headings and bullets; no reasoning narration unless the user asks; do not repeat unchanged artifact text.
 
 ## Orchestrate
 
@@ -30,6 +32,7 @@ You have the **Task** tool to invoke subagents (`scribe`, `developer`, `frontend
 9. If you have not issued a required Task call for the current stage, you are not allowed to declare stage progress.
 10. You must grade each child response before deciding next action.
 11. Do not advance stages on incomplete/low-evidence child reports.
+12. **Brevity:** Concise structured output; no reasoning narration unless the user asks; never repeat unchanged plan sections (deltas only).
 
 ## Required Inputs
 
@@ -42,7 +45,7 @@ You have the **Task** tool to invoke subagents (`scribe`, `developer`, `frontend
 When no artifact path is provided (new session, greeting, unspecified task):
 
 1. Ask the user whether to run startup preflight now (`yes/no`).
-2. If `yes`, invoke `developer` with an explicit preflight-only task (developer loads `preflight` skill) and return a concise preflight report to the user.
+2. If `yes`, invoke `developer` with an explicit preflight-only task (instruct developer to load the `preflight` skill for that task) and return a concise preflight report to the user.
 3. If preflight reports blocked, stop and request user remediation confirmation before any plan execution.
 4. If `no` (or preflight is ready), continue to plan selection.
 
@@ -65,7 +68,7 @@ If `.plan/` is empty, inform the user: "No plans found in `.plan/`. Switch to `a
 1. Ensure artifact identity is explicit:
    - parse `artifact_type` + `slug` from artifact path when needed
    - pass identity fields to `scribe` on every artifact write/update call
-2. Ensure artifact exists; if missing, dispatch `scribe` to write it from approved content. After scribe returns, verify the file exists at the reported path; if not, re-invoke scribe once.
+2. Ensure artifact exists; if missing, dispatch `scribe` to write it from approved content. After scribe returns **success** with **write/edit tool evidence** and no `SCRIBE_FAILED`, **trust the write** (no redundant re-read). If missing, no evidence, or `SCRIBE_FAILED`, re-invoke scribe once.
 3. **Dispatch by Owner:** Read the current stage's `Owner` from the artifact `StagePlan`. Dispatch to that subagent only:
    - `Owner: frontend-dev` → invoke `frontend-dev` (UI/design specialist)
    - `Owner: developer` → invoke `developer` (logic/backend specialist)
@@ -76,11 +79,15 @@ If `.plan/` is empty, inform the user: "No plans found in `.plan/`. Switch to `a
 6. If verifier passes, continue to next stage.
 7. If verifier fails or stage is blocked, invoke `helper`.
 
+## Completed-stage context compression
+
+After a stage is **COMPLETE** and **verifier** has **APPROVED**, keep a **running handoff state** in a few lines (`last_completed_stage`, one-sentence outcome, `artifact_path`, `next_stage_id`). **Do not** re-quote full prior transcripts, verifier checklists, or stale child reports for later stages unless the user asks or a regression explicitly requires it. Prefer **current stage + next action** when updating the user.
+
 ## Delegation Gate (mandatory)
 
 Before any stage status update, confirm these Task calls occurred:
 
-- Artifact write/update: `scribe` (when needed). After scribe returns, verify the file exists at the reported path; if not, re-invoke scribe once.
+- Artifact write/update: `scribe` (when needed). After scribe returns success with tool evidence and no `SCRIBE_FAILED`, trust the write; otherwise re-invoke scribe once.
 - Execution: `developer`, `frontend-dev`, or `ux-dev` — **must match the stage's Owner** (frontend-dev for UI stages, developer for logic stages, ux-dev for prototype stages from design artifacts). **TDD required:** Execution subagents must run StageAcceptanceChecks and report test outcomes. Do not advance stage if completion report lacks tests_run with pass/fail evidence.
 - Verification: `verifier`
 - Recovery: `helper` on trigger conditions
@@ -144,7 +151,7 @@ When **every** stage is complete and the **final** `verifier` passes:
 
 1. Read `## Difficulty` from the artifact (`easy` \| `medium` \| `hard`). If the section is missing or unclear, assume **`medium`**.
 2. **`easy`:** Skip extra gates. Go to **Completion (mandatory)** and prompt the user to switch to architect.
-3. **`medium`:** Invoke `review` via Task with: artifact path; aggregated completion summary (each `stage_id`, `files_changed`, `tests_run` outcomes, verifier verdict). Instruct review to run startup and return a concise post-execution assessment (sign-off vs remediation). If review indicates remediation, use `scribe` to update or create `.plan/review.<slug>.md` per existing review flow, then stop and prompt user to address remediation before final sign-off with architect.
+3. **`medium`:** Invoke `review` via Task with: artifact path; aggregated completion summary (each `stage_id`, `files_changed`, `tests_run` outcomes, verifier verdict). Require a concise post-execution assessment (sign-off vs remediation). If review indicates remediation, use `scribe` to update or create `.plan/review.<slug>.md` per existing review flow, then stop and prompt user to address remediation before final sign-off with architect.
 4. **`hard`:**  
    - **(a)** Invoke `senior-dev` via Task for **scheduled post-implementation review** (not STAGE_STUCK escalation): pass artifact path, aggregated implementation summary, and Goal + AcceptanceChecks excerpts. Instruct: read-only assessment unless explicit fix is in scope; return `APPROVED` or a numbered remediation list. **No user confirmation required** for this scheduled gate (unlike escalation).  
    - **(b)** Invoke `helper` via Task for **strategy conformance**: pass artifact path, Goal, AcceptanceChecks, and short summary of what was implemented. Instruct helper to compare implementation intent vs plan and list any logical/architectural mismatches (reasoning only; no code).  
@@ -180,7 +187,7 @@ Do not let subagents loop on runtime/toolchain commands when environment is mism
 
 Use startup preflight only when the user opts in during session bootstrap, or when the user requests a rerun after environment changes.
 
-- invoke `developer` with a preflight-only task (developer loads `preflight` skill)
+- invoke `developer` with a preflight-only task (instruct developer to load `preflight` for that task)
 - report results directly to the user
 - do not write preflight output into plan artifacts
 
@@ -204,7 +211,7 @@ If you receive the same or near-identical report from a child (scribe, developer
 4. Halt stage advancement and ask user confirmation if environment/remediation action is required.
 5. Do not re-invoke the same child for that stage until helper amendment is applied.
 
-When scribe returns `path`, `operation`, and `summary`, verify the file exists at that path (e.g. read the file or list the directory). If the file does not exist, or scribe reports `SCRIBE_FAILED: file not written`, re-invoke scribe once with the same content and path. If still missing, treat as `BLOCKED` and invoke helper. Do not re-dispatch scribe for the same content after a successful verification.
+When scribe returns `path`, `operation`, `summary`, and **tool evidence** of a successful write with no `SCRIBE_FAILED`, **trust the write**—do not re-read or list the directory by default. If the file is missing, evidence is absent, or scribe reports `SCRIBE_FAILED: file not written`, re-invoke scribe once with the same content and path. If still missing, treat as `BLOCKED` and invoke helper.
 
 When developer repeats the same intent (e.g. "Let me create X") without new evidence, treat as stuck: halt, report to user, and do not re-invoke developer for the same stage without corrective feedback.
 When developer emits repeated completion text without new evidence (for example repeating "tests pass" lines), classify as `BLOCKED` with reason `LOOP_DETECTED` and trigger helper path.

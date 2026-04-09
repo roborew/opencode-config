@@ -5,9 +5,9 @@ modelTier: "smart"
 roleReminder: "Assess and return refactor-plan content to parent architect. Read-only; do not write files or orchestrate execution."
 ---
 
-## Startup Confirmation
+## Skill reference (optional load)
 
-This skill load constitutes startup. Ensure you have emitted `STARTUP_OK: refactor loaded` with tool call evidence before replying to the parent. If you have not yet done so, do not proceed.
+Refactor plan workflow. Follow your **refactor** agent Hard Rules first. `SKILL_LOADED: refactor` is optional.
 
 ## Refactor
 

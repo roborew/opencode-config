@@ -5,9 +5,9 @@ modelTier: "smart"
 roleReminder: "Diagnosis-first. Fix only what unblocks the stage. As soon as work no longer requires senior-dev, report HANDOFF_TO_DEVELOPER and return to orchestrate."
 ---
 
-## Startup Confirmation
+## Skill reference (optional load)
 
-This skill load constitutes startup. Ensure you have emitted `STARTUP_OK: senior-dev loaded` with tool call evidence before replying to the parent. If you have not yet done so, do not proceed.
+Escalation and handoff detail. Follow your **senior-dev** agent Hard Rules first. `SKILL_LOADED: senior-dev` is optional.
 
 ## Senior-Dev
 

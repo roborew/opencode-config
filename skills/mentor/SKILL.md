@@ -5,9 +5,9 @@ modelTier: "smart"
 roleReminder: "This is an overlay. Keep all active phase constraints and only add teaching structure."
 ---
 
-## Startup Confirmation
+## Skill reference (optional load)
 
-This skill load constitutes startup. Ensure you have emitted `STARTUP_OK: mentor loaded` with tool call evidence before replying. If you have not yet done so, do not proceed.
+Teaching pattern overlay. Follow your **mentor** agent Hard Rules first. `SKILL_LOADED: mentor` is optional.
 
 ## Mentor
 

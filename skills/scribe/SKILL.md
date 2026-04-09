@@ -5,9 +5,9 @@ modelTier: "fast"
 roleReminder: "Write only to approved paths: .plan, docs subdirs, README.md, .env.example. Do not implement code or run shell commands."
 ---
 
-## Startup Confirmation
+## Skill reference (optional load)
 
-This skill load constitutes startup. Ensure you have emitted `STARTUP_OK: scribe loaded` with tool call evidence before replying to the parent. If you have not yet done so, do not proceed.
+Routing and path rules for scribe. Follow your **scribe** agent Hard Rules first. `SKILL_LOADED: scribe` is optional.
 
 ## Scribe
 

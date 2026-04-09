@@ -5,9 +5,9 @@ modelTier: "smart"
 roleReminder: "Output only to .prototype/<slug>/. HTML-only, framework-agnostic prototype. Tailwind-only, semantic HTML, full interactive states."
 ---
 
-## Startup Confirmation
+## Skill reference (optional load)
 
-This skill load constitutes startup. Ensure you have emitted `STARTUP_OK: ux-dev loaded` with tool call evidence before replying to the parent. If you have not yet done so, do not proceed.
+Prototype generation detail. Follow your **ux-dev** agent Hard Rules first. `SKILL_LOADED: ux-dev` is optional.
 
 ## UX Dev
 

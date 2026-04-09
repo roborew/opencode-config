@@ -5,9 +5,9 @@ modelTier: "smart"
 roleReminder: "Synthesize design intake into a structured brief. Read-only; do not write files or generate code."
 ---
 
-## Startup Confirmation
+## Skill reference (optional load)
 
-This skill load constitutes startup. Ensure you have emitted `STARTUP_OK: designer loaded` with tool call evidence before replying to the parent. If you have not yet done so, do not proceed.
+Design brief schema. Follow your **designer** agent Hard Rules first. `SKILL_LOADED: designer` is optional.
 
 ## Designer
 

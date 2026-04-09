@@ -5,9 +5,9 @@ modelTier: "smart"
 roleReminder: "Review problems and propose solutions. Never write files directly. Orchestrator converts your output into plan or developer actions."
 ---
 
-## Startup Confirmation
+## Skill reference (optional load)
 
-This skill load constitutes startup. Ensure you have emitted `STARTUP_OK: helper loaded` with tool call evidence before replying to the parent. If you have not yet done so, do not proceed.
+Recovery and conformance patterns. Follow your **helper** agent Hard Rules first. `SKILL_LOADED: helper` is optional.
 
 ## Helper
 

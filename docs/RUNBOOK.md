@@ -35,10 +35,17 @@ Both primaries (`architect`, `orchestrate`) are non-writing (`edit: deny`). Only
 - **Skill:** Each agent may load only its core skill(s). No `skill: { "*": "allow" }`. Explicit allow per skill (e.g. `architect`, `developer`, `preflight` for developer).
 - **Architect subagents** (`debugger`, `refactor`, `review`, `document`, `designer`): `task: { "*": deny }` — they cannot invoke scribe or any other agent. Return content only to parent; architect handles scribe handoff.
 
+## OpenRouter preset (limit “Others” model spend)
+
+OpenCode does not define an in-repo model allowlist beyond [`opencode.json`](../opencode.json). To avoid accidental traffic to untuned models (often grouped as “Others” in OpenRouter Activity):
+
+1. In the [OpenRouter](https://openrouter.ai/) dashboard, create a **preset** whose allowed model list matches **only** the models you use in `opencode.json` (including `:nitro` variants if you use them).
+2. Bind that preset to the **API key** OpenCode uses, per OpenRouter’s current key/preset UX.
+
 ## Canonical Flow
 
 1. `architect` asks for plan type (Feature/Debug/Refactor/Review/Document/Prototype Design) when request is greeting/unspecified.
-2. **Features:** architect classifies **`## Difficulty`** (`easy` \| `medium` \| `hard`), investigates with `claude-context`, then either synthesizes the plan (**easy**) or decomposes and spawns scoped **`strategist`** subagents (**medium/hard**). **Strategist** uses `claude-context` first for code search; bash only if MCP fails (`MCP_FALLBACK` in report). Other types: architect invokes matching specialist (`debugger`/`refactor`/`review`/`designer`) as needed. For Prototype Design: design intake → `designer` → scribe writes `.plan/design.<slug>.md`.
+2. **Features:** architect classifies **`## Difficulty`** (`easy` \| `medium` \| `hard`), investigates with `claude-context`, then **easy** or **medium** (single-domain, sufficient investigation) → synthesizes the plan without strategists; **medium** (multi-domain / high uncertainty / cross-cutting) or **hard** → decomposes and spawns scoped **`strategist`** subagents. **Strategist** uses `claude-context` first for code search; bash only if MCP fails (`MCP_FALLBACK` in report). Stage sizing: aim **3–7 stages**; split stages that would exceed **~15 developer tool rounds** or **>3 substantive files** each. Other types: architect invokes matching specialist (`debugger`/`refactor`/`review`/`designer`) as needed. For Prototype Design: design intake → `designer` → scribe writes `.plan/design.<slug>.md`.
 3. `architect` invokes `scribe` to write the artifact to `.plan/<type>.<slug>.md` (mandatory step).
 4. User switches to `orchestrate`.
 5. `orchestrate` ensures artifact exists; if missing, dispatches `scribe` to write it.

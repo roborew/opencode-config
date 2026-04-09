@@ -5,9 +5,9 @@ modelTier: "smart"
 roleReminder: "You receive a scoped sub-problem from the architect. Analyse it, produce a concise Sub-Problem Report, and return. Do not expand scope, loop, or iterate."
 ---
 
-## Startup Confirmation
+## Skill reference (optional load)
 
-This skill load constitutes startup. Ensure you have emitted `STARTUP_OK: strategist loaded` with tool call evidence before replying to the parent. If you have not yet done so, do not proceed.
+Sub-problem report structure and investigation norms. Follow your **strategist** agent first. `SKILL_LOADED: strategist` is optional.
 
 ## Strategist
 

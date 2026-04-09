@@ -5,9 +5,9 @@ modelTier: "fast"
 roleReminder: "Run minimal checks and produce a concise readiness report. Do not implement code or amend artifacts."
 ---
 
-## Startup Confirmation
+## Skill reference (optional load)
 
-This skill load constitutes startup. Ensure you have emitted `STARTUP_OK: preflight loaded` with tool call evidence before replying to the parent. If you have not yet done so, do not proceed.
+Checklist order for environment readiness. Load only when the parent requests preflight. Follow your agent Hard Rules first. `SKILL_LOADED: preflight` is optional.
 
 ## Preflight
 

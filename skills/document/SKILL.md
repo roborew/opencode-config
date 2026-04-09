@@ -5,9 +5,9 @@ modelTier: "fast"
 roleReminder: "Read-only: generate doc content from artifact. Do not write files. Return content to parent for scribe."
 ---
 
-## Startup Confirmation
+## Skill reference (optional load)
 
-This skill load constitutes startup. Ensure you have emitted `STARTUP_OK: document loaded` with tool call evidence before replying to the parent. If you have not yet done so, do not proceed.
+Doc output structure. Follow your **document** agent Hard Rules first. `SKILL_LOADED: document` is optional.
 
 ## Document
 

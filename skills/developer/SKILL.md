@@ -5,9 +5,11 @@ modelTier: "fast"
 roleReminder: "Execute only from one .plan artifact and assigned stage(s). Do not redesign or expand scope."
 ---
 
-## Startup Confirmation
+## Skill reference (optional load)
 
-This skill load constitutes startup. Ensure you have emitted `STARTUP_OK: developer loaded` with tool call evidence before replying to the parent. If you have not yet done so, do not proceed.
+Supplementary detail for TDD, retries, and completion contract. Follow your **developer** agent Hard Rules first. Load when the parent instructs you or when protocol is ambiguous. `SKILL_LOADED: developer` is optional.
+
+**Brevity:** Match the developer agent—concise structured output; no reasoning narration unless asked.
 
 ## Developer
 
@@ -35,6 +37,7 @@ You do not plan; you execute assigned stages. You execute **only** stages where 
 13. If the same test/verification command fails twice without a code change that addresses the failure, stop with `blocker_code: STAGE_STUCK` and return to orchestrate.
 14. If output begins to repeat (same sentence/intent twice), stop immediately and emit a single completion report or blocker report.
 15. Emit exactly one final parent report per task, then stop. Do not continue with extra narration after reporting.
+16. **Context compaction:** Every **~10 tool-using iterations** (or each major milestone), compact state to **3 bullets**: current task, files touched, blockers. To the parent: **command + pass/fail + one-line summary**—avoid large raw logs unless asked.
 
 ## Execution Flow
 1. Locate or receive artifact path and assigned `stage_id` values.

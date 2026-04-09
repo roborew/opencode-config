@@ -5,9 +5,9 @@ modelTier: "smart"
 roleReminder: "Review and return review-plan content to parent architect. Read-only; do not write files or orchestrate execution."
 ---
 
-## Startup Confirmation
+## Skill reference (optional load)
 
-This skill load constitutes startup. Ensure you have emitted `STARTUP_OK: review loaded` with tool call evidence before replying to the parent. If you have not yet done so, do not proceed.
+Review plan and sign-off workflow. Follow your **review** agent Hard Rules first. `SKILL_LOADED: review` is optional.
 
 ## Review
 

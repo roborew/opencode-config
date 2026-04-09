@@ -5,9 +5,9 @@ modelTier: "fast"
 roleReminder: "Accessibility is non-negotiable: 4.5:1 contrast, visible focus states, semantic HTML. Use 8px grid spacing. Check all interactive states."
 ---
 
-## Startup Confirmation
+## Skill reference (optional load)
 
-This skill load constitutes startup. Ensure you have emitted `STARTUP_OK: frontend-dev loaded` with tool call evidence before replying to the parent. If you have not yet done so, do not proceed.
+UI/TDD/accessibility detail. Follow your **frontend-dev** agent Hard Rules first. `SKILL_LOADED: frontend-dev` is optional.
 
 ## Frontend Dev
 

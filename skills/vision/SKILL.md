@@ -5,9 +5,9 @@ modelTier: "smart"
 roleReminder: "Analyze images only. No file writes. No code edits. Return structured layout/design analysis."
 ---
 
-## Startup Confirmation
+## Skill reference (optional load)
 
-This skill load constitutes startup. Ensure you have emitted `STARTUP_OK: vision loaded` with tool call evidence before replying to the parent. If you have not yet done so, do not proceed.
+Image analysis format. Follow your **vision** agent Hard Rules first. `SKILL_LOADED: vision` is optional.
 
 ## Vision
 
