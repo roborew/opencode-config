@@ -13,8 +13,8 @@ OpenCode's built-in `plan` and `build` are configured in `opencode.json`: **`pla
 
 For serious features, refactors, or multi-stage work, use the custom **Architect → Orchestrator → Subagents** pipeline:
 
-- **Primary planning:** `architect` — read-only: exploration, drafting plans with **`## Difficulty`** (`easy` \| `medium` \| `hard`); easy features skip strategists; medium/hard use scoped strategists; also owns review and documentation after implementation
-- **Primary execution:** `orchestrate` — coordinates execution; never writes directly; prompts user back to architect on completion
+- **Primary planning:** `architect` — read-only: exploration, drafting plans with **`## Difficulty`** (`easy` \| `medium` \| `hard`); easy features skip strategists; medium/hard use scoped strategists; also owns review and documentation after implementation. Skills are split for token efficiency: load **`architect-plan`** for new planning work, **`architect-review`** after implementation is done.
+- **Primary execution:** `orchestrate` — coordinates execution; never writes directly; prompts user back to architect on completion. Skills: **`orchestrate-execution`** for steady stage flow; **`orchestrate-recovery`** for failures, loops, and escalation.
 - **Planning specialists (architect subagents):** `debugger`, `refactor`, `review`, `designer` — read-only; return plan drafts
 - **Documentation generator:** `document` — read-only; generates changelog/guides/architecture content; architect invokes, then scribe writes
 - **Artifact writer:** `scribe` — only agent that writes plan artifacts, docs under `docs/`, `README.md`, and `.env.example` when given explicit paths (invoked by architect and orchestrate)
