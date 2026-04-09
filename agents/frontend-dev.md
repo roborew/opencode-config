@@ -1,7 +1,8 @@
 ---
 description: UI specialist
 mode: subagent
-model: openrouter/minimax/minimax-m2.7:nitro
+model: openrouter/minimax/minimax-m2.7
+steps: 45
 tools:
   write: true
   edit: true

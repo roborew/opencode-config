@@ -1,8 +1,8 @@
 ---
 description: Unified executor for .plan artifacts. Execute only stages with Owner: developer.
 mode: subagent
-model: openrouter/minimax/minimax-m2.7:nitro
-steps: 60
+model: openrouter/minimax/minimax-m2.7
+steps: 45
 tools:
   write: true
   edit: true

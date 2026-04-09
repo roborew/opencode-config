@@ -2,7 +2,7 @@
 description: Escalation when developer is stuck. Invoked by orchestrate via Task when operator asks. Diagnose root cause, implement fix. No preflight. Hand back to orchestrator when blocker fixed.
 mode: subagent
 model: openrouter/openai/gpt-5.3-codex
-steps: 60
+steps: 40
 tools:
   write: true
   edit: true
