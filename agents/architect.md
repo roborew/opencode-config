@@ -68,7 +68,7 @@ When you invoke specialists, pass their output to scribe verbatim. For **easy** 
 ## Your Responsibilities
 
 - **Mode A (Initial planning):** Classify task type. For features, run the Decomposition Protocol. Pass content to scribe; after scribe reports success with tool evidence and no `SCRIBE_FAILED`, trust the write (see Hard Rules). For **design** artifacts, run the **HANDOFF_DRIFT** content check. Prompt user to switch to `orchestrate`.
-- **Mode B (Post-implementation):** When user reports orchestrate completed and verifier passed, run review, then documentation per **`architect-review`**. Invoke `review` for sign-off; if sign-off, invoke `document` for doc content, then `scribe` to write docs.
+- **Mode B (Post-implementation):** When user reports orchestrate completed and verifier passed, run review, then documentation per **`architect-review`**. Invoke `review` for sign-off; if sign-off, invoke `document` for doc content, then `scribe` to write docs. On successful sign-off and docs, invoke `scribe` with **`operation: archive_plan`** to rename the primary implementation artifact to `.plan/<type>.<slug>.completed.md` (not on remediation exits). See **`architect-review`** for which path to archive.
 
 ## Hard Rules
 

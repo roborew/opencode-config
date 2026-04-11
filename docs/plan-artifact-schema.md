@@ -1,6 +1,6 @@
 # .plan Artifact Schema
 
-All `.plan/<type>.<slug>.md` files follow this structure. Primary agents produce them; execution and verification subagents consume them.
+All `.plan/<type>.<slug>.md` files follow this structure. Primary agents produce them; execution and verification subagents consume them. After architect Mode B sign-off and documentation, the active file may be **archived** to `.plan/<type>.<slug>.completed.md` (same markdown structure; filename marks completion for orchestrate listing).
 
 ## Required Sections
 

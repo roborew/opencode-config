@@ -18,8 +18,8 @@
 
 | Role                    | Agents                                       | Model Tier | Responsibility                                                                                                                                                       |
 | ----------------------- | -------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Primary (planning)      | `architect`                                  | smart      | Read-only: explore, report, draft. Plan mode: scribe writes artifact → switch to orchestrate. Post-implementation: review → sign-off → document → scribe writes docs |
-| Coordinator             | `orchestrate`                                | smart      | Execute stages, grade children, helper recovery, optional `review` (medium) / `senior-dev`+`helper` (hard) after final verifier, dispatch scribe                       |
+| Primary (planning)      | `architect`                                  | smart      | Read-only: explore, report, draft. Plan mode: scribe writes artifact → switch to orchestrate. Post-implementation: review → sign-off → document → scribe writes docs → scribe archives plan to `.plan/<type>.<slug>.completed.md` |
+| Coordinator             | `orchestrate`                                | smart      | Execute stages, grade children, helper recovery, optional `review` (medium) / `senior-dev`+`helper` (hard) after final verifier, dispatch scribe. Plan picker lists **active** `.plan/*.md` only (excludes `*.completed.md`)                       |
 | Planning specialists    | `debugger`, `refactor`, `review`, `designer` | smart      | Return type-specific plan drafts to architect. `designer` uses Gemini 3 Flash. `review` may also be invoked by orchestrate on **medium** Difficulty after execution.    |
 | Documentation generator | `document`                                   | fast       | Generate changelog/guides/architecture content; architect invokes, scribe writes                                                                                     |
 | Artifact writer         | `scribe`                                     | fast       | Write/update plan artifacts, docs, `README.md`, `.env.example` from architect/orchestrate content                                                                     |
@@ -51,14 +51,14 @@ OpenCode does not define an in-repo model allowlist beyond [`opencode.json`](../
 5. `orchestrate` ensures artifact exists; if missing, dispatches `scribe` to write it.
 6. `orchestrate` starts by asking whether to run startup preflight checks now (`yes/no`).
 7. If yes: `orchestrate` invokes `developer` for preflight (developer loads `preflight` skill), reports results, and pauses for remediation if blocked.
-8. If no (or preflight is ready): `orchestrate` lists existing plans and asks user to select one or switch to `architect` to create a new plan.
+8. If no (or preflight is ready): `orchestrate` lists **active** plans in `.plan/` (files ending in `.completed.md` are archived and omitted) and asks user to select one or switch to `architect` to create a new plan.
 9. `orchestrate` dispatches one stage at a time to `developer`, `frontend-dev`, or `ux-dev` (by stage Owner). Design artifacts use `Owner: ux-dev`; `ux-dev` outputs HTML-only files to `.prototype/<slug>/`.
 10. Execution subagent returns completion report (`stage_id`, files, tests, checks, blockers, risks, next input).
 11. `orchestrate` dispatches next stage only after successful handoff.
 12. For final completion, run `verifier` per stage; run final verifier when all stages complete.
 13. **Difficulty completion gates** (after final verifier passes): **easy** — none. **medium** — orchestrate invokes **`review`** with artifact + completion summary. **hard** — orchestrate invokes **`senior-dev`** (scheduled review), then **`helper`** (strategy conformance). Remediation from these gates may update review artifact via scribe before handoff.
 14. When gates complete: **"Implementation complete. Switch to architect for review and documentation sign-off."** Architect still runs Mode B review + docs (authoritative sign-off).
-15. Architect (post-implementation): invokes `review` for sign-off. If remediation: scribe writes review artifact → user switches to orchestrate → developer applies fixes → verifier. If sign-off: architect invokes `document` → scribe writes docs.
+15. Architect (post-implementation): invokes `review` for sign-off. If remediation: scribe writes review artifact → user switches to orchestrate → developer applies fixes → verifier. If sign-off: architect invokes `document` → scribe writes docs → scribe **archives** the primary implementation artifact to `.plan/<type>.<slug>.completed.md` via `operation: archive_plan` so future orchestrate sessions do not offer it as a runnable plan.
 
 At each stage handoff, orchestrate grades child output:
 

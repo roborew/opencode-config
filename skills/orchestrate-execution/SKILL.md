@@ -51,13 +51,13 @@ Preflight is a session-start option, not a per-stage requirement. Do not auto-ru
 
 After session bootstrap, when no artifact path is provided:
 
-1. **List available plans** in `.plan/` (e.g. glob `.plan/*.md` or list `.plan/`).
+1. **List active plans** in `.plan/`: include only `*.md` files whose basename does **not** end with `.completed.md` (e.g. glob `.plan/*.md` and exclude `*.completed.md`). Archived plans use `.plan/<type>.<slug>.completed.md` after architect Mode B sign-off; they must not appear in this list.
 2. **Present the list** to the user with short descriptions (Goal or title from each file if readable).
 3. **Prompt the user** to either choose an existing plan by number/path or create a new plan in `architect`.
 4. If the user chooses "create new", stop and prompt: "Switch to `architect` to create a plan, then return here with the plan path."
 5. **Do not proceed** with orchestration until a plan path is selected.
 
-If `.plan/` is empty, inform the user: "No plans found in `.plan/`. Switch to `architect` to create a plan, or provide an artifact path."
+If there are no **active** plans (only archived `*.completed.md` or directory empty), inform the user: "No active plans in `.plan/` (archived `*.completed.md` files are omitted). Switch to `architect` to create a plan, or provide an artifact path."
 
 ## Stage Loop
 

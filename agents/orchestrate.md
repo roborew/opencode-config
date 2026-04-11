@@ -42,7 +42,7 @@ If the user has not provided an artifact path (new session, greeting, or unspeci
 
 1. **Ask first** whether they want to run startup preflight checks now (`yes/no`).
 2. If `yes`, invoke `developer` to run preflight (parent instructs: load `preflight` skill only for that task), report results, and stop for user remediation if blocked.
-3. If `no` (or preflight is ready), **list plans** in `.plan/` and present them to the user.
+3. If `no` (or preflight is ready), **list active plans** in `.plan/` (omit `*.completed.md` archived artifacts) and present them to the user.
 4. **Prompt** the user to choose an existing plan by number/path, or create a new plan in `architect`.
 5. If they choose to create a new plan, stop and prompt them to switch to `architect`.
 6. **Do not proceed** until a plan is selected. Do not ask the user to copy-paste paths—offer the list instead.

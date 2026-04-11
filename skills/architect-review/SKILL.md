@@ -1,6 +1,6 @@
 ---
 name: architect-review
-description: "Post-implementation: review sign-off, remediation via scribe, document generation, scribe writes docs."
+description: "Post-implementation: review sign-off, remediation via scribe, document generation, scribe writes docs, scribe archives plan to *.completed.md on sign-off."
 modelTier: "smart"
 roleReminder: "Load when user reports implementation done / ready for review. Do not load for new feature planning—that is architect-plan."
 ---
@@ -48,4 +48,8 @@ You may **only** invoke: `review`, `document`, and `scribe` in this mode (plus a
    - `docs/architecture/<slug>.md`
    - When needed for onboarding or env setup: `README.md` and/or `.env.example` at the project root (or package subdirectory), same `target_path` + verbatim `content` contract as other scribe writes.
    After each scribe call: if success with tool evidence and no `SCRIBE_FAILED`, trust the write; otherwise re-invoke scribe once. If scribe reports `SCRIBE_FAILED`, re-invoke once.
-6. Report completion: review sign-off and docs written.
+6. **Archive implementation plan (sign-off path only):** After all doc scribe writes in step 5 succeed, invoke `scribe` with **`operation: archive_plan`**, explicit **`source_path`** and **`target_path`**. Do **not** run this step if you exited at step 2 (remediation)—only after review sign-off and successful docs.
+   - **Which file to archive:** the primary executed plan artifact for this workstream (the path you passed to `review` / `document`, typically `.plan/feature.<slug>.md`). If orchestration used a different primary artifact (e.g. `.plan/debug.<slug>.md` or `.plan/refactor.<slug>.md`), archive that path. If both `.plan/feature.<slug>.md` and `.plan/review.<slug>.md` exist, archive the **feature** (or original execution) artifact, not the review sidecar, unless the only executed artifact was `review.*`.
+   - **Target path:** same basename with `.completed` inserted before `.md` (e.g. `.plan/feature.auth-flow.md` → `.plan/feature.auth-flow.completed.md`).
+   - If scribe reports `SCRIBE_FAILED` on archive, re-invoke scribe once with the same paths; if still failing, report to the user and do not claim archive completed.
+7. Report completion: review sign-off, docs written, and archived plan path (or state if archive was skipped per remediation exit).
