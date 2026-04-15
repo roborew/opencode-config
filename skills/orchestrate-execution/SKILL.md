@@ -43,7 +43,7 @@ When no artifact path is provided (new session, greeting, unspecified task):
 1. Ask the user whether to run startup preflight now (`yes/no`).
 2. If `yes`, invoke `developer` with an explicit preflight-only task (instruct developer to load the `preflight` skill for that task) and return a concise preflight report to the user.
 3. If preflight reports blocked, stop and request user remediation confirmation before any plan execution.
-4. If `no` (or preflight is ready), continue to plan selection.
+4. If `no` (or preflight is ready), continue to plan selection — **only** using the **Fresh Context / Plan Selection** steps below (do not name or imply plan files until step 1 there has completed).
 
 Preflight is a session-start option, not a per-stage requirement. Do not auto-run preflight on every stage.
 
@@ -51,13 +51,14 @@ Preflight is a session-start option, not a per-stage requirement. Do not auto-ru
 
 After session bootstrap, when no artifact path is provided:
 
-1. **List active plans** in `.plan/`: include only `*.md` files whose basename does **not** end with `.completed.md` (e.g. glob `.plan/*.md` and exclude `*.completed.md`). Archived plans use `.plan/<type>.<slug>.completed.md` after architect Mode B sign-off; they must not appear in this list.
-2. **Present the list** to the user with short descriptions (Goal or title from each file if readable).
-3. **Prompt the user** to either choose an existing plan by number/path or create a new plan in `architect`.
-4. If the user chooses "create new", stop and prompt: "Switch to `architect` to create a plan, then return here with the plan path."
-5. **Do not proceed** with orchestration until a plan path is selected.
+1. **Read `.plan/` from disk first (non-negotiable).** Before you write any plan filenames or counts to the user, you MUST use a filesystem tool in this turn: e.g. glob `.plan/*.md` (and `.plan/**/*.md` if you use nested plans), or list/read the `.plan/` directory. **Never** invent, guess, or recall-from-memory what is in `.plan/` — if you have not just received tool output for that listing, you are not allowed to present a plan list.
+2. **Derive active plans** from that tool output only: include `*.md` files whose basename does **not** end with `.completed.md`. Omit archived `.plan/<type>.<slug>.completed.md` after architect Mode B sign-off.
+3. **Present the list** to the user with short descriptions (Goal or title from each file if readable — use **read_file** on each candidate only as needed; do not substitute made-up titles).
+4. **Prompt the user** to either choose an existing plan by number/path or create a new plan in `architect`.
+5. If the user chooses "create new", stop and prompt: "Switch to `architect` to create a plan, then return here with the plan path."
+6. **Do not proceed** with orchestration until a plan path is selected.
 
-If there are no **active** plans (only archived `*.completed.md` or directory empty), inform the user: "No active plans in `.plan/` (archived `*.completed.md` files are omitted). Switch to `architect` to create a plan, or provide an artifact path."
+If there are no **active** plans (only archived `*.completed.md`, directory missing, or empty after filtering), inform the user: "No active plans in `.plan/` (archived `*.completed.md` files are omitted). Switch to `architect` to create a plan, or provide an artifact path."
 
 ## Stage Loop
 

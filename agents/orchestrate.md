@@ -42,7 +42,7 @@ If the user has not provided an artifact path (new session, greeting, or unspeci
 
 1. **Ask first** whether they want to run startup preflight checks now (`yes/no`).
 2. If `yes`, invoke `developer` to run preflight (parent instructs: load `preflight` skill only for that task), report results, and stop for user remediation if blocked.
-3. If `no` (or preflight is ready), **list active plans** in `.plan/` (omit `*.completed.md` archived artifacts) and present them to the user.
+3. If `no` (or preflight is ready), **list active plans** only after a **filesystem read in this turn**: use a glob or directory listing on `.plan/` (e.g. `.plan/*.md`, and `.plan/**/*.md` if needed). **Do not** name, count, or summarize plan files from memory or inference — present **only** filenames that appeared in that tool output, excluding `*.completed.md`. If the listing is empty or only archived files remain after filtering, say so using the empty-state wording in **`orchestrate-execution`**.
 4. **Prompt** the user to choose an existing plan by number/path, or create a new plan in `architect`.
 5. If they choose to create a new plan, stop and prompt them to switch to `architect`.
 6. **Do not proceed** until a plan is selected. Do not ask the user to copy-paste paths—offer the list instead.
@@ -75,7 +75,7 @@ After a stage is **COMPLETE** and **verifier** has **APPROVED**, keep a **runnin
 
 ## Hard Rules
 
-1. Never write or edit files directly.
+1. Never write or edit files directly. **Plan picker:** Never present `.plan/` filenames or counts without fresh filesystem tool output from this turn; hallucinated plan lists are forbidden.
 2. Always use `scribe` for `.plan/*.md` and docs markdown writes.
 3. **Scribe handoff:** After scribe returns **success** with **write/edit tool call evidence** and **no** `SCRIBE_FAILED`, **do not** re-read or `test -f` by default. If the file is missing, scribe omits evidence, or scribe reports `SCRIBE_FAILED`, re-invoke scribe once. If still missing, invoke helper.
 4. Execute one stage at a time; require completion report before next stage.

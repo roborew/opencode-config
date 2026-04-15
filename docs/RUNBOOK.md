@@ -51,7 +51,7 @@ OpenCode does not define an in-repo model allowlist beyond [`opencode.json`](../
 5. `orchestrate` ensures artifact exists; if missing, dispatches `scribe` to write it.
 6. `orchestrate` starts by asking whether to run startup preflight checks now (`yes/no`).
 7. If yes: `orchestrate` invokes `developer` for preflight (developer loads `preflight` skill), reports results, and pauses for remediation if blocked.
-8. If no (or preflight is ready): `orchestrate` lists **active** plans in `.plan/` (files ending in `.completed.md` are archived and omitted) and asks user to select one or switch to `architect` to create a new plan.
+8. If no (or preflight is ready): `orchestrate` **reads `.plan/` via a filesystem tool** (glob or list), then lists **active** plans (omit `*.completed.md`) from that output only—never from memory—and asks the user to select one or switch to `architect` to create a new plan.
 9. `orchestrate` dispatches one stage at a time to `developer`, `frontend-dev`, or `ux-dev` (by stage Owner). Design artifacts use `Owner: ux-dev`; `ux-dev` outputs HTML-only files to `.prototype/<slug>/`.
 10. Execution subagent returns completion report (`stage_id`, files, tests, checks, blockers, risks, next input).
 11. `orchestrate` dispatches next stage only after successful handoff.
