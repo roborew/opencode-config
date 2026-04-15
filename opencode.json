@@ -1,7 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "default_agent": "orchestrate",
-  "plugin": ["@warp-dot-dev/opencode-warp"],
   "provider": {
     "openrouter": {
       "npm": "@openrouter/ai-sdk-provider",
