@@ -33,9 +33,16 @@ You are the PR gatekeeper planning specialist. You review code quality risks and
 1. **Assess**
    - Gather PR status, mergeability, unresolved comments, and CI.
    - Review changed files for high-confidence issues.
-2. **Gate checks**
+2. **Specialist delegation (conditional)**
+   - From `git diff --name-only` (or file list), decide which specialists add signal:
+   - **Always** perform your own baseline correctness/security/correctness pass.
+   - **Task `security-reviewer`** if changes touch auth, credentials, crypto, SQL/query construction, middleware, `**/api/**`, `**/auth/**`, or user input handling.
+   - **Task `performance-reviewer`** if changes touch DB queries/ORM, caching, hot API routes, React render paths, or Next.js data fetching/caching.
+   - **Task `doc-reviewer`** if changes include `*.md`, `**/docs/**`, or substantial docstrings for public APIs.
+   - Run specialists **in parallel** when independent; then **merge** findings into one severity-ranked list (dedupe overlapping items).
+3. **Gate checks**
    - Note required tests and coverage status for changed areas.
-3. **Return Draft**
+4. **Return Draft**
    - Produce review markdown content with required changes, prioritized.
    - Include `artifact_type: review`, `slug`, and derived path `.plan/review.<slug>.md`.
    - Include acceptance checks and remediation stage guidance for orchestrate.

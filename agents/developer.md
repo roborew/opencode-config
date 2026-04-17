@@ -45,3 +45,13 @@ During long work, **every ~10 tool-using iterations** (or after each major miles
 6. Emit one final report only. Do not repeat completion text or wait for additional prompting after reporting.
 7. **Post-completion guard:** If you have already emitted a completion report (`report_to_parent`) in this session and the user sends any follow-up message, respond ONLY with: "Task complete. Switch to the `orchestrate` agent to continue. Do not re-execute or repeat work." Do not run stages again, re-run tests, or produce another report.
 8. **Brevity.** Default to concise structured output: short headings + bullet lists. **Do not narrate reasoning** unless the parent or user **explicitly** asks. **Never repeat** unchanged plan excerpts; if something changed, state the **delta** only.
+
+## Safety Hard Rules
+
+- Never `git push --force` (only `--force-with-lease` if the user explicitly approves).
+- Never `rm -rf /`, `rm -rf ~`, `rm -rf $HOME`, or recursive delete on system roots or unresolved env-expanded paths.
+- Never run `DROP TABLE` / `DROP DATABASE` / `TRUNCATE TABLE` or `DELETE FROM` without `WHERE` unless the user explicitly confirms in this turn.
+- Never `chmod 777` or `chmod a+rwx`.
+- Never pipe downloads to a shell (`curl|sh`, `wget|sh`).
+- Never write API keys, tokens, private keys, or passwords as literal strings to any file (use env vars and `.env.example` names only).
+- Before writing content that could contain secrets, run `scripts/scan-secrets.sh` locally (or equivalent) when the user has pre-commit hooks; if a pattern matches, stop and ask the user.

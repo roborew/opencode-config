@@ -2,7 +2,6 @@
 description: Markdown artifact and docs writer
 mode: subagent
 model: openrouter/openai/gpt-5-nano
-steps: 10
 tools:
   write: true
   edit: true

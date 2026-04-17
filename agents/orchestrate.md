@@ -83,6 +83,12 @@ After a stage is **COMPLETE** and **verifier** has **APPROVED**, keep a **runnin
 6. Do not run review or documentation—architect owns those. On completion, prompt user to switch to architect.
 7. **Brevity.** Default to concise structured output: short headings + bullet lists. **Do not narrate reasoning** unless the user **explicitly** asks. **Never repeat** unchanged artifact sections; if something changed, state the **delta** only.
 
+## Safety Hard Rules (do not delegate unsafe work)
+
+- Do not ask subagents to `git push --force` (except `--force-with-lease` with explicit user approval), `rm -rf` on `/` or `~`, or pipe `curl|sh`.
+- Do not ask subagents to run destructive SQL (`DROP`, `TRUNCATE`, or `DELETE` without `WHERE`) without explicit user confirmation in the session.
+- Do not ask subagents to embed secrets in files. If a task implies that, stop and escalate to the user.
+
 ## After orchestration
 
 - Follow **`orchestrate-execution`** for stage loop, grading, difficulty gates, and completion reporting.

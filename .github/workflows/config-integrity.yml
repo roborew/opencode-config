@@ -1,0 +1,27 @@
+name: config-integrity
+
+on:
+  pull_request:
+    paths:
+      - "agents/**"
+      - "skills/**"
+      - "opencode.json"
+      - "rules/**"
+      - "scripts/validate-opencode-config.sh"
+      - ".github/workflows/config-integrity.yml"
+  push:
+    branches: [main, master]
+    paths:
+      - "agents/**"
+      - "skills/**"
+      - "opencode.json"
+      - "rules/**"
+      - "scripts/validate-opencode-config.sh"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate OpenCode config
+        run: bash scripts/validate-opencode-config.sh

@@ -1,11 +1,13 @@
 # Stage-Based Orchestration Runbook
 
+**Config precedence:** `opencode.json` is the sole runtime authority for models, `steps` caps, MCP, and global `permission` / `instructions`. Agent markdown frontmatter describes behavior; numeric limits in frontmatter are superseded by `opencode.json` when both exist.
+
 ## Overview
 
 - **Built-in agents:** `plan` uses Qwen3.6 Plus; `build` uses MiniMax M2.7 in `opencode.json` for generic/quick tasks.
 - **Primary planning mode** (`architect`) — read-only: exploration, reporting, drafting plans; also owns review and documentation after implementation. Invokes: `debugger`, `refactor`, `review`, `document`, `designer`, `scribe`. Never invokes `frontend-dev`, `developer`, or `orchestrate`. Prompts user to switch to orchestrate when done; receives user back for review + docs after orchestrate completes. **Skills:** `architect-plan` (new planning, features, specialists, Mode A); `architect-review` (post-implementation Mode B only). The monolithic `architect` skill package is removed.
 - **Primary execution mode** (`orchestrate`) runs delegated stage execution and recovery flow. Reads `## Difficulty` from the artifact (`easy` \| `medium` \| `hard`; default `medium` if missing). After all stages pass the final verifier: **easy** — no extra gates; **medium** — invokes `review` for a post-execution check; **hard** — invokes `senior-dev` (scheduled review, no user confirmation) then `helper` (strategy conformance). On completion, prompts user to switch to architect for review and documentation. **Skills:** `orchestrate-execution` (bootstrap, stage loop, grading, completion gates); `orchestrate-recovery` (helper triggers, loops, env, escalation, manual paste). The monolithic `orchestrate` skill package is removed.
-- **Planning specialists** (`debugger`, `refactor`, `review`, `designer`) — read-only subagents of architect; return plan drafts, never write code. `designer` synthesizes design briefs for Prototype Design.
+- **Planning specialists** (`debugger`, `refactor`, `review`, `designer`) — read-only subagents of architect; return plan drafts, never write code. `designer` synthesizes design briefs for Prototype Design. The **`review`** agent may Task **`security-reviewer`**, **`performance-reviewer`**, and **`doc-reviewer`** when change scope warrants (see `skills/review/SKILL.md`).
 - **Documentation generator** (`document`) — read-only; generates changelog/guides/architecture content; architect invokes, then scribe writes.
 - **Execution subagents** (`developer`, `frontend-dev`, `ux-dev`) — coding agents invoked by orchestrate only; architect never invokes them. `ux-dev` generates HTML-only framework-agnostic prototypes from design briefs into `.prototype/<slug>/`.
 - **Senior-dev** (`senior-dev`) — orchestrator subagent. **Escalation:** operator-triggered when developer is stuck; orchestrator asks user to confirm before invoking. **Scheduled gate:** for `Difficulty: hard`, after all stages pass verifier, orchestrate invokes senior-dev for post-implementation review **without** that confirmation. Diagnosis + fix on escalation; read-only review on scheduled gate unless scope says otherwise.
@@ -24,7 +26,7 @@
 | Documentation generator | `document`                                   | fast       | Generate changelog/guides/architecture content; architect invokes, scribe writes                                                                                     |
 | Artifact writer         | `scribe`                                     | fast       | Write/update plan artifacts, docs, `README.md`, `.env.example` from architect/orchestrate content                                                                     |
 | Recovery                | `helper`                                     | fast       | Replan minimal strategy deltas and trigger artifact amendment                                                                                                        |
-| Execution               | `developer`, `frontend-dev`, `ux-dev`        | smart/fast | Execute assigned `stage_id` tasks. `ux-dev` uses Gemini Pro for HTML-only prototype generation into `.prototype/<slug>/`.                                            |
+| Execution               | `developer`, `frontend-dev`, `ux-dev`        | smart/fast | Execute assigned `stage_id` tasks. `ux-dev` uses `google/gemini-3-flash-preview` (see `opencode.json`) for HTML-only prototype generation into `.prototype/<slug>/`.                                            |
 | Operator escalation     | `senior-dev`                                 | smart      | Escalation: operator + user confirm when stuck. **Hard** completion gate: auto-invoked post-verifier for scheduled review.                                                                                    |
 | Verification            | `verifier`                                   | fast       | Verify acceptance criteria with traceable evidence                                                                                                                   |
 
@@ -91,7 +93,7 @@ Use startup preflight as an optional session gate; do not require artifact write
 
 When a subagent repeats the same completion message or stalls:
 
-1. **OpenCode config**: `steps` caps agentic iterations per session — e.g. scribe `5`, developer/frontend-dev `60`, architect `30`, orchestrate `50`, primaries and subagents are bounded. See `opencode.json` `agent` block.
+1. **OpenCode config**: `steps` caps agentic iterations per session — e.g. scribe `5`, developer/frontend-dev `45`, architect `30`, orchestrate `50`, primaries and subagents are bounded. See `opencode.json` `agent` block.
 2. **Orchestrator loop detection**: If the same or near-identical child report is received 2+ times, treat as `BLOCKED`, invoke `helper`, and amend the same artifact via `scribe` before any retry.
 3. **Scribe exit rule**: Scribe returns exactly once per task. After reporting path + operation + summary, it stops.
 4. **Developer anti-loop rule**: Developer must not repeat the same verbal intent (e.g. "Let me create X"); one statement, then execute. If the same failing command repeats twice without meaningful change, return `blocker_code: STAGE_STUCK` and stop.

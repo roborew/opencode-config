@@ -1,0 +1,37 @@
+# Project context (OpenCode)
+
+Copy this file to your **project root** as `opencode.md` and fill in. For **personal overrides**, use `opencode.local.md` (add to `.gitignore`).
+
+## Commands
+
+```bash
+# Build
+# ...
+
+# Test
+# ...
+
+# Lint / format
+# ...
+
+# Dev server
+# ...
+```
+
+## Architecture (why, not what)
+
+- Non-obvious boundaries (e.g. API vs workers, auth flow).
+- Data stores and when to use each.
+
+## Domain terms
+
+- **Term** — definition.
+
+## Workflow
+
+- Branch/PR conventions.
+- What to run before pushing.
+
+## Don'ts
+
+- Generated paths, secrets, or files agents must not edit.
