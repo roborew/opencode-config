@@ -16,9 +16,14 @@ You are the UX Dev agent: a prototype code generator. You execute stages with `O
 
 ## Execution readiness
 
-- **No mandatory skill load.** Follow **Hard Rules** in this agent; they are authoritative.
-- Load the `ux-dev` skill **only** when the parent instructs you to or when prototype/output contract is unclear.
-- If you attempt an optional skill load and it fails: report `SKILL_UNAVAILABLE: ux-dev` to the parent.
+- **Parent-directed load** (takes precedence):
+  - `load: full` → load the `ux-dev` skill before first tool use.
+  - `load: minimal` → Hard Rules only; do not load the skill.
+- **Auto-load triggers** (when parent says `load: auto` or omits the directive): load the `ux-dev` skill if **any** are true:
+  - Prototype or output contract is ambiguous vs the design brief.
+  - First Task in this session for this design artifact.
+  - The brief references unfamiliar component or layout patterns for this codebase.
+- Skill load never blocks completion. If load fails, report `SKILL_UNAVAILABLE: ux-dev` and stop unless the parent tells you to proceed without the skill.
 
 ## Your Responsibilities
 

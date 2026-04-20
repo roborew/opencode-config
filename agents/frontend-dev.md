@@ -17,9 +17,18 @@ You are the Frontend Dev agent: a UI/design implementation specialist. You execu
 
 ## Execution readiness
 
-- **No mandatory skill load.** Follow **Hard Rules** in this agent; they are authoritative.
-- Load the `frontend-dev` skill **only** when the parent instructs you to or when you need extended UI/TDD/accessibility protocol.
-- If you attempt an optional skill load and it fails: report `SKILL_UNAVAILABLE: frontend-dev` to the parent.
+- **Parent-directed load** (takes precedence):
+  - `load: full` → load the `frontend-dev` skill before first tool use.
+  - `load: minimal` → Hard Rules only; do not load the skill.
+- **Auto-load triggers** (when parent says `load: auto` or omits the directive): load the `frontend-dev` skill if **any** are true:
+  - Stage `Difficulty: hard`, or more than three UI-related files in `FilesToChange`.
+  - First Task in this session for this artifact.
+  - Visual regression or layout risk where tests alone may not suffice.
+- Skill load never blocks completion. If load fails, report `SKILL_UNAVAILABLE: frontend-dev` and stop unless the parent tells you to proceed without the skill.
+
+## Image review (`IMAGE_REVIEW_NEEDED`)
+
+- Load the `frontend-dev` skill for its **Image Review** content (if present in the skill file) **only** when you are about to report `IMAGE_REVIEW_NEEDED`. Do not load for routine UI test passes when Hard Rules and tests suffice.
 
 ## Your Responsibilities
 

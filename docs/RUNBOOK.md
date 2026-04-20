@@ -32,6 +32,20 @@
 
 Both primaries (`architect`, `orchestrate`) are non-writing (`edit: deny`). Only `scribe` writes plan artifacts, docs, `README.md`, and `.env.example` in allowed paths.
 
+## Skill loading policy (Task prompts)
+
+Parents **`architect`** and **`orchestrate`** must include **exactly one** of the following in **every** Task prompt to a subagent:
+
+- **`load: full`** — subagent loads its namesake skill before acting (protocol-heavy or high-risk work).
+- **`load: minimal`** — subagent uses Hard Rules only; does not load its skill.
+- **`load: auto`** — subagent applies **Auto-load triggers** in its own agent file (safe default when unsure).
+
+Rules:
+
+- Skill load **never blocks** completion. If loading fails, the subagent reports `SKILL_UNAVAILABLE: <skill>`; if the parent used `load: full`, treat the path as blocked until resolved.
+- **Dispatch hints** (which default to use per target) live in [`agents/architect.md`](../agents/architect.md) and [`agents/orchestrate.md`](../agents/orchestrate.md) under **Skill dispatch hints**.
+- Each subagent’s **Execution readiness** section defines how `load:` and auto-triggers interact (including `scribe` **`operation: archive_plan`** always loading the `scribe` skill).
+
 ## Permission Conventions (skill creep prevention)
 
 - **Skill:** Each agent may load only its core skill(s). No `skill: { "*": "allow" }`. Explicit allow per skill (e.g. `architect-plan` + `architect-review` for architect; `orchestrate-execution` + `orchestrate-recovery` for orchestrate; `developer`, `preflight` for developer).

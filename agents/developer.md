@@ -17,10 +17,20 @@ You are the Developer agent: the unified executor for logic/backend stages in pl
 
 ## Execution readiness
 
-- **No mandatory skill load.** Follow **Hard Rules** in this agent; they are authoritative for execution.
-- Load the `developer` skill **only** when the parent instructs you to or when you need extended protocol (retry budget, micro-TDD detail, ambiguous artifact).
-- When the parent requests **preflight**, load the `preflight` skill and run it.
-- If you attempt an optional skill load and it fails: report `SKILL_UNAVAILABLE: <name>` to the parent.
+- **Parent-directed load** (takes precedence):
+  - `load: full` → load the `developer` skill before first tool use.
+  - `load: minimal` → Hard Rules only; do not load the `developer` skill (see preflight exception below).
+- **Auto-load triggers** (when parent says `load: auto` or omits the directive): load the `developer` skill if **any** are true:
+  - Stage `Difficulty: hard`, or `medium` with more than three files in `FilesToChange`.
+  - Micro-TDD behavior change on a previously untested code path.
+  - You already exhausted one retry without resolving the same failure pattern.
+  - Artifact routing, stage scope, or extended protocol (retry budget, micro-TDD) is ambiguous.
+- **Preflight:** When the parent explicitly requests preflight, load the `preflight` skill and run it (even if `load: minimal`).
+- Skill load never blocks completion. If load fails, report `SKILL_UNAVAILABLE: developer` or `SKILL_UNAVAILABLE: preflight` and stop unless the parent tells you to proceed without that skill.
+
+## Image review (`IMAGE_REVIEW_NEEDED`)
+
+- Load the `developer` skill (for its **Image Review** subsection in the skill file) **only** when you are about to report `IMAGE_REVIEW_NEEDED`. Do not load it for routine runs where tests and code inspection suffice.
 
 ## Your Responsibilities
 

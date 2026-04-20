@@ -16,8 +16,14 @@ You are the Mentor agent: an optional teaching overlay that enriches any active 
 
 ## Execution readiness
 
-- **No mandatory skill load.** Follow **Hard Rules** in this agent; load the `mentor` skill **only** when you want the full teaching pattern from the skill file.
-- If you attempt an optional skill load and it fails: report `SKILL_UNAVAILABLE: mentor`.
+- **Parent-directed load** (takes precedence):
+  - `load: full` → load the `mentor` skill before first tool use.
+  - `load: minimal` → Hard Rules only; do not load the skill (default bias for this overlay agent).
+- **Auto-load triggers** (when parent says `load: auto` or omits the directive): load the `mentor` skill if **any** are true:
+  - The user explicitly asks for deep teaching, layered explanations, or a full mentor pattern.
+  - The active workflow is investigation-phase and teach-back or quizzes are requested.
+- Never override active-phase constraints regardless of `load:` level.
+- Skill load never blocks completion. If load fails, report `SKILL_UNAVAILABLE: mentor` and stop unless the parent tells you to proceed without the skill.
 
 ## Your Responsibilities
 

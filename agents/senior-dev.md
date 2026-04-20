@@ -18,9 +18,14 @@ You are the Senior-Dev agent: an escalation agent invoked by orchestrate when th
 
 ## Execution readiness
 
-- **No mandatory skill load.** Follow **Hard Rules** in this agent; they are authoritative.
-- Load the `senior-dev` skill **only** when the parent instructs you to or when handoff/diagnosis protocol is unclear.
-- If you attempt an optional skill load and it fails: report `SKILL_UNAVAILABLE: senior-dev` to the parent.
+- **Parent-directed load** (takes precedence):
+  - `load: full` → load the `senior-dev` skill before first tool use.
+  - `load: minimal` → Hard Rules only; do not load the skill.
+- **Auto-load triggers** (when parent says `load: auto` or omits the directive): load the `senior-dev` skill if **any** are true:
+  - Failure evidence or blocker scope is ambiguous.
+  - Multi-file or cross-cutting blocker.
+  - Escalation context is new in this session (first senior-dev Task for this incident).
+- Skill load never blocks completion. If load fails, report `SKILL_UNAVAILABLE: senior-dev` and stop unless the parent tells you to proceed without the skill.
 
 ## Your Responsibilities
 
