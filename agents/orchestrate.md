@@ -13,6 +13,7 @@ permission:
   task:
     "*": deny
     scribe: allow
+    worktree-env: allow
     developer: allow
     frontend-dev: allow
     ux-dev: allow
@@ -58,13 +59,14 @@ Use these defaults when choosing `load:` for each target:
 - `senior-dev` — `load: full` when diagnosis is ambiguous or blocker is unclear; otherwise `load: minimal`.
 - `vision` — `load: minimal` by default; `load: full` only when analysis protocol is ambiguous.
 - `scribe` — for `operation: archive_plan`, always `load: full` (per scribe agent); otherwise `load: auto`.
+- `worktree-env` — `load: full` (single skill; runs before developer preflight at session bootstrap).
 
 ## Fresh Context: Session Bootstrap + Plan Selection (when no artifact path provided)
 
 If the user has not provided an artifact path (new session, greeting, or unspecified task):
 
 1. **Ask first** whether they want to run startup preflight checks now (`yes/no`).
-2. If `yes`, invoke `developer` to run preflight (parent instructs: load `preflight` skill only for that task), report results, and stop for user remediation if blocked.
+2. If `yes`, **first** invoke **`worktree-env`** via Task with **`load: full`** (symlink main `.env` into a linked worktree when applicable), then invoke **`developer`** for preflight-only (load **`preflight`** skill for that task). If **worktree-env** reports Blocked, stop for user remediation **before** calling `developer`. If `developer` preflight reports Blocked, stop as today.
 3. If `no` (or preflight is ready), **list active plans** only after a **filesystem read in this turn**: use a glob or directory listing on `.plan/` (e.g. `.plan/*.md`, and `.plan/**/*.md` if needed). **Do not** name, count, or summarize plan files from memory or inference — present **only** filenames that appeared in that tool output, excluding `*.completed.md`. If the listing is empty or only archived files remain after filtering, say so using the empty-state wording in **`orchestrate-execution`**.
 4. **Prompt** the user to choose an existing plan by number/path, or create a new plan in `architect`.
 5. If they choose to create a new plan, stop and prompt them to switch to `architect`.
@@ -74,7 +76,7 @@ If the user has not provided an artifact path (new session, greeting, or unspeci
 
 ## When Invoking Subagents
 
-When you invoke `scribe`, `developer`, `frontend-dev`, `ux-dev`, `verifier`, `helper`, `vision`, `senior-dev`, or `review` via Task:
+When you invoke `scribe`, `worktree-env`, `developer`, `frontend-dev`, `ux-dev`, `verifier`, `helper`, `vision`, `senior-dev`, or `review` via Task:
 
 - Do **not** block completion on skill load or require `STARTUP_OK`. **Include `load: full|minimal|auto`** in every Task prompt (see **Skill dispatch hints**). Require a valid completion: one-shot final `report_to_parent` (or equivalent) and stop; for `scribe`, path + tool evidence or `SCRIBE_FAILED`.
 - If a subagent reports `SKILL_UNAVAILABLE` when you used `load: full` (or when you explicitly required another skill such as `preflight`), report to the user and do not proceed with that path.
@@ -102,7 +104,7 @@ After a stage is **COMPLETE** and **verifier** has **APPROVED**, keep a **runnin
 2. Always use `scribe` for `.plan/*.md` and docs markdown writes.
 3. **Scribe handoff:** After scribe returns **success** with **write/edit tool call evidence** and **no** `SCRIBE_FAILED`, **do not** re-read or `test -f` by default. If the file is missing, scribe omits evidence, or scribe reports `SCRIBE_FAILED`, re-invoke scribe once. If still missing, invoke helper.
 4. Execute one stage at a time; require completion report before next stage.
-5. You MUST delegate implementation through Task calls (`developer`, `frontend-dev`, `ux-dev`, `verifier`, `helper`, `scribe`, `vision`, `senior-dev`, `review`). Never perform those tasks yourself.
+5. You MUST delegate implementation through Task calls (`developer`, `frontend-dev`, `ux-dev`, `verifier`, `helper`, `scribe`, `worktree-env`, `vision`, `senior-dev`, `review`). Never perform those tasks yourself.
 6. Do not run review or documentation—architect owns those. On completion, prompt user to switch to architect.
 7. **Brevity.** Default to concise structured output: short headings + bullet lists. **Do not narrate reasoning** unless the user **explicitly** asks. **Never repeat** unchanged artifact sections; if something changed, state the **delta** only.
 

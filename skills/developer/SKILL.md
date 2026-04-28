@@ -49,7 +49,7 @@ You do not plan; you execute assigned stages. You execute **only** stages where 
 
 ## Environment Preflight Gate (on explicit request only)
 
-Only when the parent explicitly requests preflight, load the `preflight` skill and run it. The preflight skill defines the checks (runtime versions, command resolution, smoke check). Follow its output format.
+Only when the parent explicitly requests preflight, load the `preflight` skill and run it. The preflight skill defines the checks (README, **read-only** linked-worktree `.env` symlink verification, runtime versions, command resolution, smoke check, claude-context). When the parent is **`orchestrate`** session bootstrap, **`worktree-env`** should run **before** you so symlink creation is not part of preflight.
 
 If preflight fails:
 - return blocker code `ENV_BLOCKED`
