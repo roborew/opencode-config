@@ -88,10 +88,13 @@ Act as an expert frontend developer and UX/UI designer. Your task is to generate
 ## MCP Usage Policy
 
 Use MCP when it materially reduces uncertainty:
+- Before any `claude-context` discovery, call `get_indexing_status` for the workspace path. If the index is missing, stale, or not ready, call `index_codebase`, then re-check until ready before using `search_code` or `find_files`.
 - `context7` for design system docs, component library patterns (e.g., Tailwind, Radix), and accessibility guidelines.
 - `dash-api` for component/library API lookup when specifying interactive behavior or styling constraints.
 - `docs-mcp-server` for internal design references, existing prototypes, and implementation notes.
-- `claude-context` for discovering existing design tokens, component patterns, or layout conventions in the codebase when relevant.
+- `claude-context` for discovering existing design tokens, component patterns, or layout conventions in the codebase when relevant. Do not use bash, glob, or `rg` first when `claude-context` is healthy.
+
+If `claude-context` is unavailable, errors, or indexing still fails after retry, you may fall back to shell discovery and should note `MCP_FALLBACK: claude-context unavailable or indexing failed — <error>` in the returned markdown.
 
 Capture which MCP source informed which decision.
 

@@ -61,20 +61,21 @@ OpenCode does not define an in-repo model allowlist beyond [`opencode.json`](../
 ## Canonical Flow
 
 1. `architect` asks for plan type (Feature/Debug/Refactor/Review/Document/Prototype Design) when request is greeting/unspecified.
-2. **Features:** architect classifies **`## Difficulty`** (`easy` \| `medium` \| `hard`), investigates with `claude-context`, then **easy** or **medium** (single-domain, sufficient investigation) → synthesizes the plan without strategists; **medium** (multi-domain / high uncertainty / cross-cutting) or **hard** → decomposes and spawns scoped **`strategist`** subagents. **Strategist** uses `claude-context` first for code search; bash only if MCP fails (`MCP_FALLBACK` in report). Stage sizing: aim **3–7 stages**; split stages that would exceed **~15 developer tool rounds** or **>3 substantive files** each. Other types: architect invokes matching specialist (`debugger`/`refactor`/`review`/`designer`) as needed. For Prototype Design: design intake → `designer` → scribe writes `.plan/design.<slug>.md`.
+2. **Features:** architect classifies **`## Difficulty`** (`easy` \| `medium` \| `hard`), runs a Claude Context readiness check (`get_indexing_status` → `index_codebase` if needed), then investigates with `claude-context`. **Easy** or **medium** (single-domain, sufficient investigation) → architect synthesizes the plan without strategists; **medium** (multi-domain / high uncertainty / cross-cutting) or **hard** → architect decomposes and spawns scoped **`strategist`** subagents. **Strategist** and other planning specialists also run the same Claude Context readiness gate before discovery; bash/glob fallback is allowed only when MCP is unavailable or indexing still fails after retry (`MCP_FALLBACK` in output). Stage sizing: aim **3–7 stages**; split stages that would exceed **~15 developer tool rounds** or **>3 substantive files** each. Other types: architect invokes matching specialist (`debugger`/`refactor`/`review`/`designer`) as needed. For Prototype Design: design intake → `designer` → scribe writes `.plan/design.<slug>.md`.
 3. `architect` invokes `scribe` to write the artifact to `.plan/<type>.<slug>.md` (mandatory step).
 4. User switches to `orchestrate`.
 5. `orchestrate` ensures artifact exists; if missing, dispatches `scribe` to write it.
-6. `orchestrate` starts by asking whether to run startup preflight checks now (`yes/no`).
+6. `orchestrate` starts by asking whether to run full startup preflight checks now (`yes/no`).
 7. If yes: `orchestrate` invokes **`worktree-env`** first (linked worktree `.env` symlink when applicable), then **`developer`** for preflight (`developer` loads `preflight` skill); reports combined results and pauses for remediation if either step is blocked.
-8. If no (or preflight is ready): `orchestrate` **reads `.plan/` via a filesystem tool** (glob or list), then lists **active** plans (omit `*.completed.md`) from that output only—never from memory—and asks the user to select one or switch to `architect` to create a new plan.
-9. `orchestrate` dispatches one stage at a time to `developer`, `frontend-dev`, or `ux-dev` (by stage Owner). Design artifacts use `Owner: ux-dev`; `ux-dev` outputs HTML-only files to `.prototype/<slug>/`.
-10. Execution subagent returns completion report (`stage_id`, files, tests, checks, blockers, risks, next input).
-11. `orchestrate` dispatches next stage only after successful handoff.
-12. For final completion, run `verifier` per stage; run final verifier when all stages complete.
-13. **Difficulty completion gates** (after final verifier passes): **easy** — none. **medium** — orchestrate invokes **`review`** with artifact + completion summary. **hard** — orchestrate invokes **`senior-dev`** (scheduled review), then **`helper`** (strategy conformance). Remediation from these gates may update review artifact via scribe before handoff.
-14. When gates complete: **"Implementation complete. Switch to architect for review and documentation sign-off."** Architect still runs Mode B review + docs (authoritative sign-off).
-15. Architect (post-implementation): invokes `review` for sign-off. If remediation: scribe writes review artifact → user switches to orchestrate → developer applies fixes → verifier. If sign-off: architect invokes `document` → scribe writes docs → scribe **archives** the primary implementation artifact to `.plan/<type>.<slug>.completed.md` via `operation: archive_plan` so future orchestrate sessions do not offer it as a runnable plan.
+8. Regardless of the full-preflight choice, `orchestrate` runs a lightweight Claude Context readiness check (`get_indexing_status` → `index_codebase` if needed) before fresh-context plan listing or discovery-heavy delegation.
+9. If no (or preflight/readiness is complete): `orchestrate` **reads `.plan/` via a filesystem tool** (glob or list), then lists **active** plans (omit `*.completed.md`) from that output only—never from memory—and asks the user to select one or switch to `architect` to create a new plan.
+10. `orchestrate` dispatches one stage at a time to `developer`, `frontend-dev`, or `ux-dev` (by stage Owner). Design artifacts use `Owner: ux-dev`; `ux-dev` outputs HTML-only files to `.prototype/<slug>/`.
+11. Execution subagent returns completion report (`stage_id`, files, tests, checks, blockers, risks, next input).
+12. `orchestrate` dispatches next stage only after successful handoff.
+13. For final completion, run `verifier` per stage; run final verifier when all stages complete.
+14. **Difficulty completion gates** (after final verifier passes): **easy** — none. **medium** — orchestrate invokes **`review`** with artifact + completion summary. **hard** — orchestrate invokes **`senior-dev`** (scheduled review), then **`helper`** (strategy conformance). Remediation from these gates may update review artifact via scribe before handoff.
+15. When gates complete: **"Implementation complete. Switch to architect for review and documentation sign-off."** Architect still runs Mode B review + docs (authoritative sign-off).
+16. Architect (post-implementation): invokes `review` for sign-off. If remediation: scribe writes review artifact → user switches to orchestrate → developer applies fixes → verifier. If sign-off: architect invokes `document` → scribe writes docs → scribe **archives** the primary implementation artifact to `.plan/<type>.<slug>.completed.md` via `operation: archive_plan` so future orchestrate sessions do not offer it as a runnable plan.
 
 At each stage handoff, orchestrate grades child output:
 
@@ -99,7 +100,7 @@ Recovery loop:
 
 Do not advance stages until helper amendment is applied.
 Do not allow repeated test-command retries under unresolved environment mismatch.
-Use startup preflight as an optional session gate; do not require artifact writes for preflight output.
+Use startup preflight as an optional full environment gate; do not require artifact writes for preflight output. Claude Context readiness now also runs as a lightweight fresh-context gate even when full preflight is skipped.
 
 **Senior-dev escalation (operator-triggered, user confirmation required):** When developer reports `STAGE_STUCK` and the operator asks to escalate, orchestrate stops, asks the user to confirm, then invokes `senior-dev`. **Exception:** for **`Difficulty: hard`**, after all stages pass the final verifier, orchestrate invokes `senior-dev` for **scheduled post-implementation review** without that confirmation (not the same as mid-stage escalation).
 
@@ -136,7 +137,7 @@ Provider-level `timeout` (e.g. 300000ms) and per-model **`temperature` / `top_p`
 
 Primaries and execution agents should use MCP only when it reduces uncertainty:
 
-- **`claude-context`**: Semantic code search in workspace. Use during planning (architect, **strategist** — strategist must try MCP **before** bash; bash only on MCP failure with `MCP_FALLBACK` in report), debugger, refactor, review. Preflight ensures indexing where applicable.
+- **`claude-context`**: Semantic code search in workspace. Use during planning (architect, **strategist**, debugger, refactor, review, document, designer). Discovery-heavy agents must run a readiness gate first (`get_indexing_status`; if needed `index_codebase`) and may fall back to bash/glob only when MCP is unavailable or indexing still fails after retry, with `MCP_FALLBACK` recorded in output. `orchestrate` also runs a lightweight readiness check on fresh startup even when full preflight is skipped.
 - **`context7`**: Up-to-date docs for 9000+ external libraries. Use when framework/library API behavior is uncertain. Limit to 3 calls per question.
 - **`docs-mcp-server`**: Internal docs, prototypes, linked repos, architecture notes.
 - **`dash-api`**: API/library contract lookup when behavior is unclear.

@@ -44,10 +44,13 @@ Return a structured response with one entry per doc:
 ## MCP Usage Policy
 
 Use MCP when it materially reduces uncertainty:
-- `claude-context` for discovering artifact files and related code when artifact path is unclear or scope is large.
+- Before any `claude-context` discovery, call `get_indexing_status` for the workspace path. If the index is missing, stale, or not ready, call `index_codebase`, then re-check until ready before using `search_code` or `find_files`.
+- `claude-context` for discovering artifact files and related code when artifact path is unclear or scope is large. Do not use bash, glob, or `rg` first when `claude-context` is healthy.
 - `context7` for external library docs when documenting framework usage, API patterns, or implementation details.
 - `docs-mcp-server` for internal design references, prototype notes, and linked implementation docs.
 - `dash-api` for API contract lookup when documenting usage or integration patterns.
+
+If `claude-context` is unavailable, errors, or indexing still fails after retry, you may fall back to shell discovery and should note `MCP_FALLBACK: claude-context unavailable or indexing failed — <error>` in the returned markdown.
 
 Capture which MCP source informed which decision.
 

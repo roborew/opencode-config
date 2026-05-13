@@ -61,16 +61,27 @@ Use these defaults when choosing `load:` for each target:
 - `scribe` — for `operation: archive_plan`, always `load: full` (per scribe agent); otherwise `load: auto`.
 - `worktree-env` — `load: full` (single skill; runs before developer preflight at session bootstrap).
 
+## Claude Context Readiness Gate
+
+On fresh context, and before delegating discovery-heavy planning or review work, run a lightweight Claude Context readiness check:
+
+- Call `claude-context` `get_indexing_status` for the workspace path.
+- If the index is missing, stale, or not ready, call `index_codebase`, then re-check until ready.
+- This readiness check is mandatory even when the user declines full startup preflight.
+- If `claude-context` is unavailable or indexing still fails after retry, report that readiness could not be confirmed. Continue only for non-discovery steps; discovery-heavy subagents must still enforce their own readiness gates before falling back to bash, glob, or `rg`.
+
 ## Fresh Context: Session Bootstrap + Plan Selection (when no artifact path provided)
 
 If the user has not provided an artifact path (new session, greeting, or unspecified task):
 
-1. **Ask first** whether they want to run startup preflight checks now (`yes/no`).
+1. **Ask first** whether they want to run full startup preflight checks now (`yes/no`).
 2. If `yes`, **first** invoke **`worktree-env`** via Task with **`load: full`** (symlink main `.env` into a linked worktree when applicable), then invoke **`developer`** for preflight-only (load **`preflight`** skill for that task). If **worktree-env** reports Blocked, stop for user remediation **before** calling `developer`. If `developer` preflight reports Blocked, stop as today.
-3. If `no` (or preflight is ready), **list active plans** only after a **filesystem read in this turn**: use a glob or directory listing on `.plan/` (e.g. `.plan/*.md`, and `.plan/**/*.md` if needed). **Do not** name, count, or summarize plan files from memory or inference — present **only** filenames that appeared in that tool output, excluding `*.completed.md`. If the listing is empty or only archived files remain after filtering, say so using the empty-state wording in **`orchestrate-execution`**.
-4. **Prompt** the user to choose an existing plan by number/path, or create a new plan in `architect`.
-5. If they choose to create a new plan, stop and prompt them to switch to `architect`.
-6. **Do not proceed** until a plan is selected. Do not ask the user to copy-paste paths—offer the list instead.
+3. **Regardless of `yes`/`no`, run the Claude Context readiness gate above** before listing plans or dispatching discovery-heavy work.
+4. If `claude-context` is unavailable or indexing still fails after retry, report that readiness could not be confirmed and continue only when the next step does not depend on discovery.
+5. If `no` (or preflight is ready and the Claude Context readiness gate has completed), **list active plans** only after a **filesystem read in this turn**: use a glob or directory listing on `.plan/` (e.g. `.plan/*.md`, and `.plan/**/*.md` if needed). **Do not** name, count, or summarize plan files from memory or inference — present **only** filenames that appeared in that tool output, excluding `*.completed.md`. If the listing is empty or only archived files remain after filtering, say so using the empty-state wording in **`orchestrate-execution`**.
+6. **Prompt** the user to choose an existing plan by number/path, or create a new plan in `architect`.
+7. If they choose to create a new plan, stop and prompt them to switch to `architect`.
+8. **Do not proceed** until a plan is selected. Do not ask the user to copy-paste paths—offer the list instead.
 
 (Detail: **`orchestrate-execution`** skill.)
 
@@ -106,7 +117,8 @@ After a stage is **COMPLETE** and **verifier** has **APPROVED**, keep a **runnin
 4. Execute one stage at a time; require completion report before next stage.
 5. You MUST delegate implementation through Task calls (`developer`, `frontend-dev`, `ux-dev`, `verifier`, `helper`, `scribe`, `worktree-env`, `vision`, `senior-dev`, `review`). Never perform those tasks yourself.
 6. Do not run review or documentation—architect owns those. On completion, prompt user to switch to architect.
-7. **Brevity.** Default to concise structured output: short headings + bullet lists. **Do not narrate reasoning** unless the user **explicitly** asks. **Never repeat** unchanged artifact sections; if something changed, state the **delta** only.
+7. Before fresh-context plan selection or any discovery-heavy delegation, enforce the Claude Context readiness gate above. This check is mandatory even when full startup preflight is skipped.
+8. **Brevity.** Default to concise structured output: short headings + bullet lists. **Do not narrate reasoning** unless the user **explicitly** asks. **Never repeat** unchanged artifact sections; if something changed, state the **delta** only.
 
 ## Safety Hard Rules (do not delegate unsafe work)
 

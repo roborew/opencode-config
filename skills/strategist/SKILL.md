@@ -89,9 +89,10 @@ Ordered high-level steps with clear ownership (which sub-agent and files/areas).
 ## MCP Usage Policy
 
 **Code search priority (mandatory):**
-1. Always use `claude-context` MCP (`search_code`, `find_files`) for code/file discovery. Do **not** use bash (`grep`, `rg`, `find`, glob) when `claude-context` is available and working.
-2. If `claude-context` returns an error or is unreachable, you may fall back to bash for code search. When you fall back, add `MCP_FALLBACK: claude-context unavailable — <error>` to **Gaps**.
-3. Never use bash as the first choice for code search.
+1. Before any `claude-context` discovery, call `get_indexing_status` for the workspace path. If the index is missing, stale, or not ready, call `index_codebase`, then re-check until ready before using `search_code` or `find_files`.
+2. Always use `claude-context` MCP (`search_code`, `find_files`) for code/file discovery when it is available and ready. Do **not** use bash (`grep`, `rg`, `find`, glob) first when `claude-context` is healthy.
+3. If `claude-context` returns an error, is unreachable, or indexing still fails after retry, you may fall back to bash for code search. When you fall back, add `MCP_FALLBACK: claude-context unavailable or indexing failed — <error>` to **Gaps**.
+4. Never use bash as the first choice for code search when `claude-context` is configured and healthy.
 
 **Other MCP (gaps only):**
 - Use MCP only to fill gaps not covered by the architect's provided context.

@@ -35,6 +35,15 @@ Orchestrate reads `Difficulty` for post-implementation gates (see **`orchestrate
   6. Prototype Design
 - If the user says orchestrate completed / implementation done / ready for review: do **not** use this skill for that path—load **`architect-review`** instead.
 
+## Claude Context Readiness Gate (mandatory)
+
+Before any `claude-context` discovery for feature investigation, strategist gap-fill, or artifact evidence gathering:
+
+- Call `get_indexing_status` for the workspace path.
+- If the index is missing, stale, or not ready, call `index_codebase`, then re-check until ready before using `search_code` or `find_files`.
+- Only if `claude-context` is unavailable, errors, or indexing fails after retry may you fall back to bash, glob, or `rg`. If you do, record `MCP_FALLBACK: claude-context unavailable or indexing failed — <error>` in the returned plan `Context` or `Gaps`.
+- Do not begin Step 1 investigation with bash, glob, or `rg` when `claude-context` is configured and healthy.
+
 ## Responsibility Boundaries (mandatory)
 
 | Role | Responsibility | Writes? |
@@ -60,6 +69,7 @@ You may **only** invoke: `strategist`, `debugger`, `refactor`, `review`, `docume
 9. Before invoking a specialist, ask any blocking clarifying questions if goals, constraints, or context are ambiguous.
 10. Detect or confirm framework/language context before final recommendation.
 11. If user references prototypes/docs/APIs, query MCP sources (`docs-mcp-server`, `dash-api`) and cite findings in Context. Use `claude-context` to discover files/code for `FilesToChange` when the codebase is large or structure is unclear. Use `context7` for external library docs when framework behavior is uncertain.
+12. **Claude Context readiness first.** Before any planning discovery, enforce the Claude Context readiness gate above. Do not fall back to bash, glob, or `rg` unless `claude-context` is unavailable or indexing failed after retry.
 
 **Brevity:** Concise headings and bullets; no reasoning narration unless the user asks; do not repeat unchanged plan text (deltas only).
 
@@ -79,7 +89,7 @@ After initial understanding, set **Difficulty** for the feature (write it into t
 
 ### Step 1: Investigate with claude-context
 
-Use `claude-context` (`search_code`, `find_files`) to investigate the codebase and gather concrete evidence:
+After satisfying the Claude Context readiness gate above, use `claude-context` (`search_code`, `find_files`) to investigate the codebase and gather concrete evidence:
 - Identify relevant files, modules, and code patterns for the requested feature.
 - Map existing architecture boundaries (components, services, data models, routes).
 - Note dependencies between areas of the codebase.

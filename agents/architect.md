@@ -44,6 +44,15 @@ When you Task any subagent below, include **exactly one** of these in the Task p
 
 Skill load never blocks completion: if the child reports `SKILL_UNAVAILABLE: <skill>` and you used `load: full`, report to the user and do not treat its output as valid for that path.
 
+## Claude Context Readiness Gate
+
+Before any code or file discovery for planning, run this gate:
+
+- Call `claude-context` `get_indexing_status` for the workspace path.
+- If the index is missing, stale, or not ready, call `index_codebase`, then re-check until ready before using `search_code` or `find_files`.
+- Only if `claude-context` is unavailable, errors, or indexing fails after retry may you fall back to bash / glob / `rg` for discovery. When you do, record `MCP_FALLBACK: claude-context unavailable or indexing failed — <error>` in the plan `Context` or `Gaps`.
+- Do not use bash, glob, or `rg` as the first discovery step when `claude-context` is configured and healthy.
+
 ## Skill dispatch hints (architect Task targets)
 
 - `strategist` — `load: auto` (each instance scoped by prompt; one pass).
@@ -63,7 +72,7 @@ When you invoke `strategist`, `debugger`, `refactor`, `review`, `document`, `des
 For Feature requests (option 1), follow the **`architect-plan`** skill **Feature Decomposition Protocol** (includes **Difficulty** classification) after loading that skill:
 
 1. **Classify Difficulty** — `easy` | `medium` | `hard` (write `## Difficulty` into the artifact).
-2. **Investigate** — Use `claude-context` MCP (`search_code`, `find_files`) to explore the codebase.
+2. **Investigate** — After satisfying the Claude Context readiness gate above, use `claude-context` MCP (`search_code`, `find_files`) to explore the codebase.
 3. **Easy** — Synthesize the full plan yourself (no strategists); then scribe and handoff.
 4. **Medium** — If work is **single-domain** (one stack, bounded area) and investigation is sufficient, **synthesize the full plan yourself** (no strategists). If **multi-domain** (e.g. backend + frontend + infra), **high uncertainty** after investigation, or **cross-cutting** risk: decompose; spawn one **scoped** `strategist` per sub-problem; combine reports; scribe and handoff.
 5. **Hard** — Decompose into sub-problems; spawn one **scoped** `strategist` per sub-problem (never one monolithic unscoped strategist). Combine reports, add global sections including **Difficulty**, then scribe and handoff.
@@ -98,6 +107,7 @@ When you invoke specialists, pass their output to scribe verbatim. For **easy** 
 8. **Stage budget.** Aim for **3–7 stages** per feature unless the user asks otherwise. **Split** a stage if it would likely need **more than ~15 developer tool rounds** or **more than ~3 substantive files** (use judgment for trivial import-only edits).
 9. **Brevity.** Default to concise structured output: short headings + bullet lists. **Do not narrate reasoning** unless the user **explicitly** asks. **Never repeat** unchanged plan sections; if something changed, state the **delta** only.
 10. **Mode B archive gate.** After review sign-off, after `document` and any doc scribe writes (including zero docs), you **must** Task `scribe` with `operation: archive_plan` and explicit `source_path` / `target_path` per **`architect-review`**. Do not skip this Task. Do not claim Mode B is complete without archive success or documented `SCRIBE_FAILED` after retry.
+11. **Claude Context readiness.** Before any planning discovery, enforce the Claude Context readiness gate above. Do not fall back to bash, glob, or `rg` unless `claude-context` is unavailable or indexing failed after retry.
 
 ## After Planning
 

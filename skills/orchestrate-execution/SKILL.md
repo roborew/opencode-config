@@ -29,6 +29,7 @@ You have the **Task** tool to invoke subagents (`scribe`, `worktree-env`, `devel
 10. You must grade each child response before deciding next action.
 11. Do not advance stages on incomplete/low-evidence child reports.
 12. **Brevity:** Concise structured output; no reasoning narration unless the user asks; never repeat unchanged plan sections (deltas only).
+13. **Claude Context readiness.** Before fresh-context plan selection or any discovery-heavy delegation, call `get_indexing_status` for the workspace path. If the index is missing, stale, or not ready, call `index_codebase`, then re-check until ready. This lightweight readiness check is mandatory even when full startup preflight is skipped.
 
 ## Required Inputs
 
@@ -48,16 +49,26 @@ When no artifact path is provided (new session, greeting, unspecified task):
 
 Preflight is a session-start option, not a per-stage requirement. Do not auto-run preflight on every stage.
 
+## Claude Context Readiness Gate (mandatory)
+
+On fresh context, and before delegating discovery-heavy planning or review work:
+
+1. Call `claude-context` `get_indexing_status` for the workspace path.
+2. If the index is missing, stale, or not ready, call `index_codebase`, then re-check until ready before continuing.
+3. Run this gate even when the user declines full startup preflight.
+4. If `claude-context` is unavailable or indexing still fails after retry, report that readiness could not be confirmed. Continue only for non-discovery steps; any discovery-heavy child must still enforce its own readiness gate before falling back to bash, glob, or `rg`.
+
 ## Fresh Context / Plan Selection (mandatory)
 
 After session bootstrap, when no artifact path is provided:
 
-1. **Read `.plan/` from disk first (non-negotiable).** Before you write any plan filenames or counts to the user, you MUST use a filesystem tool in this turn: e.g. glob `.plan/*.md` (and `.plan/**/*.md` if you use nested plans), or list/read the `.plan/` directory. **Never** invent, guess, or recall-from-memory what is in `.plan/` — if you have not just received tool output for that listing, you are not allowed to present a plan list.
-2. **Derive active plans** from that tool output only: include `*.md` files whose basename does **not** end with `.completed.md`. Omit archived `.plan/<type>.<slug>.completed.md` after architect Mode B sign-off.
-3. **Present the list** to the user with short descriptions (Goal or title from each file if readable — use **read_file** on each candidate only as needed; do not substitute made-up titles).
-4. **Prompt the user** to either choose an existing plan by number/path or create a new plan in `architect`.
-5. If the user chooses "create new", stop and prompt: "Switch to `architect` to create a plan, then return here with the plan path."
-6. **Do not proceed** with orchestration until a plan path is selected.
+1. **Run the Claude Context readiness gate above first (non-negotiable).** Do this even when full startup preflight was skipped.
+2. **Read `.plan/` from disk first (non-negotiable).** Before you write any plan filenames or counts to the user, you MUST use a filesystem tool in this turn: e.g. glob `.plan/*.md` (and `.plan/**/*.md` if you use nested plans), or list/read the `.plan/` directory. **Never** invent, guess, or recall-from-memory what is in `.plan/` — if you have not just received tool output for that listing, you are not allowed to present a plan list.
+3. **Derive active plans** from that tool output only: include `*.md` files whose basename does **not** end with `.completed.md`. Omit archived `.plan/<type>.<slug>.completed.md` after architect Mode B sign-off.
+4. **Present the list** to the user with short descriptions (Goal or title from each file if readable — use **read_file** on each candidate only as needed; do not substitute made-up titles).
+5. **Prompt the user** to either choose an existing plan by number/path or create a new plan in `architect`.
+6. If the user chooses "create new", stop and prompt: "Switch to `architect` to create a plan, then return here with the plan path."
+7. **Do not proceed** with orchestration until a plan path is selected.
 
 If there are no **active** plans (only archived `*.completed.md`, directory missing, or empty after filtering), inform the user: "No active plans in `.plan/` (archived `*.completed.md` files are omitted). Switch to `architect` to create a plan, or provide an artifact path."
 
