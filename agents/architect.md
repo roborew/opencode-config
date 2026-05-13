@@ -1,7 +1,7 @@
 ---
 description: Planning coordinator. Decomposes features into sub-problems, investigates via claude-context, spawns scoped strategist instances, combines reports. Delegates other plan types to specialists. Passes output to scribe, then hands off to orchestrate.
 mode: primary
-model: openrouter/qwen/qwen3.6-plus
+model: openrouter/deepseek/deepseek-v4-flash
 tools:
   write: false
   edit: false

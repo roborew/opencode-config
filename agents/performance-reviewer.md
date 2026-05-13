@@ -1,7 +1,7 @@
 ---
 description: Performance-focused review subagent. Real bottlenecks only.
 mode: subagent
-model: openrouter/deepseek/deepseek-v3.2
+model: openrouter/deepseek/deepseek-v4-flash
 tools:
   write: false
   edit: false

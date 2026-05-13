@@ -1,7 +1,7 @@
 ---
 description: Execution orchestrator for artifact-driven stage flow
 mode: primary
-model: openrouter/qwen/qwen3.6-plus
+model: openrouter/deepseek/deepseek-v4-flash
 tools:
   write: false
   edit: false
@@ -94,7 +94,7 @@ After a stage is **COMPLETE** and **verifier** has **APPROVED**, keep a **runnin
 - Run `verifier` at stage gates and before final completion.
 - Read `## Difficulty` from the plan artifact (`easy` \| `medium` \| `hard`); if missing, treat as `medium`. After **all** stages pass the **final** verifier, run **difficulty completion gates** (see **`orchestrate-execution`**): **medium** → invoke `review`; **hard** → invoke `senior-dev` (scheduled review gate), then `helper` (strategy conformance). **easy** → skip these gates.
 - Trigger `helper` when blocks, loops, or verification failures occur (see **`orchestrate-recovery`** for trigger detail).
-- When developer reports `STAGE_STUCK` and the operator asks to escalate: **stop**, ask the user to confirm use of senior-dev (Codex), and only invoke `senior-dev` via Task after explicit user confirmation. **Exception:** for `Difficulty: hard`, after all stages pass verifier, you may invoke `senior-dev` for **scheduled post-implementation review** without that confirmation (this is not escalation). When senior-dev reports `HANDOFF_TO_DEVELOPER`, resume with developer for remaining stage work.
+- When developer reports `STAGE_STUCK` and the operator asks to escalate: **stop**, ask the user to confirm use of senior-dev, and only invoke `senior-dev` via Task after explicit user confirmation. **Exception:** for `Difficulty: hard`, after all stages pass verifier, you may invoke `senior-dev` for **scheduled post-implementation review** without that confirmation (this is not escalation). When senior-dev reports `HANDOFF_TO_DEVELOPER`, resume with developer for remaining stage work.
 - When developer/frontend-dev/ux-dev/verifier reports `IMAGE_REVIEW_NEEDED` with path and context, invoke `vision` with those inputs, then pass the analysis back to the requesting agent.
 - On completion, prompt user: "Switch to `architect` for review and documentation sign-off."
 

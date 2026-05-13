@@ -29,7 +29,7 @@ Do not advance stages until helper updates are applied via `scribe`.
 **During stage execution**, when developer reports `STAGE_STUCK` or repeated failures and the **operator asks to escalate**:
 
 1. **Stop the current process.** Do not invoke senior-dev yet.
-2. **Ask the user to confirm:** "Senior-dev (Codex) is available for escalation. Do you want to use senior-dev to diagnose and fix this blocker? Reply yes to confirm."
+2. **Ask the user to confirm:** "Senior-dev is available for escalation. Do you want to use senior-dev to diagnose and fix this blocker? Reply yes to confirm."
 3. **Wait for explicit user confirmation.** Do not proceed until the user confirms (e.g. "yes", "confirm", "go ahead").
 4. After confirmation, invoke `senior-dev` via Task with artifact path, stage_id, and failure evidence (blocker report).
 5. Senior-dev diagnoses, implements fix, and reports with `handoff_to_developer: true` when blocker is fixed.

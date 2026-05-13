@@ -35,30 +35,10 @@
             "top_p": 0.95
           }
         },
-        "openai/gpt-5.3-codex": {
-          "name": "GPT-5.3-Codex",
-          "options": {
-            "temperature": 0.3
-          }
-        },
         "openai/gpt-5-nano": {
           "name": "GPT-5 Nano",
           "options": {
             "temperature": 0.2
-          }
-        },
-        "qwen/qwen3.6-plus": {
-          "name": "Qwen3.6 Plus",
-          "options": {
-            "temperature": 0.4,
-            "top_p": 0.95
-          }
-        },
-        "qwen/qwen3.6-plus:nitro": {
-          "name": "Qwen3.6 Plus (nitro)",
-          "options": {
-            "temperature": 0.4,
-            "top_p": 0.95
           }
         },
         "qwen/qwen3-next-80b-a3b-instruct": {
@@ -80,12 +60,19 @@
             "temperature": 0.5
           }
         },
-        "deepseek/deepseek-v3.2": {
-          "name": "DeepSeek V3.2",
+        "deepseek/deepseek-v4-flash": {
+          "name": "DeepSeek V4 Flash",
           "options": {
             "temperature": 0.3,
             "top_p": 0.9,
             "frequency_penalty": 0.3
+          }
+        },
+        "deepseek/deepseek-v4-pro": {
+          "name": "DeepSeek V4 Pro",
+          "options": {
+            "temperature": 0.2,
+            "top_p": 0.9
           }
         }
       }
@@ -134,23 +121,23 @@
   },
   "agent": {
     "architect": {
-      "model": "openrouter/qwen/qwen3.6-plus",
+      "model": "openrouter/deepseek/deepseek-v4-flash",
       "steps": 30
     },
     "orchestrate": {
-      "model": "openrouter/qwen/qwen3.6-plus",
+      "model": "openrouter/deepseek/deepseek-v4-flash",
       "steps": 50
     },
     "plan": {
-      "model": "openrouter/qwen/qwen3.6-plus"
+      "model": "openrouter/deepseek/deepseek-v4-pro"
     },
     "strategist": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v3.2",
+      "model": "openrouter/deepseek/deepseek-v4-flash",
       "steps": 15
     },
     "build": {
-      "model": "openrouter/deepseek/deepseek-v3.2",
+      "model": "openrouter/deepseek/deepseek-v4-flash",
       "steps": 30
     },
     "developer": {
@@ -160,7 +147,7 @@
     },
     "senior-dev": {
       "mode": "subagent",
-      "model": "openrouter/openai/gpt-5.3-codex",
+      "model": "openrouter/deepseek/deepseek-v4-pro",
       "steps": 40
     },
     "vision": {
@@ -180,12 +167,12 @@
     },
     "helper": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v3.2",
+      "model": "openrouter/deepseek/deepseek-v4-flash",
       "steps": 15
     },
     "debugger": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v3.2",
+      "model": "openrouter/deepseek/deepseek-v4-flash",
       "steps": 15
     },
     "scribe": {
@@ -200,22 +187,22 @@
     },
     "verifier": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v3.2",
+      "model": "openrouter/deepseek/deepseek-v4-flash",
       "steps": 10
     },
     "review": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v3.2",
+      "model": "openrouter/deepseek/deepseek-v4-flash",
       "steps": 15
     },
     "security-reviewer": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v3.2",
+      "model": "openrouter/deepseek/deepseek-v4-flash",
       "steps": 15
     },
     "performance-reviewer": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v3.2",
+      "model": "openrouter/deepseek/deepseek-v4-flash",
       "steps": 15
     },
     "doc-reviewer": {
@@ -230,12 +217,12 @@
     },
     "mentor": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v3.2",
+      "model": "openrouter/deepseek/deepseek-v4-flash",
       "steps": 10
     },
     "refactor": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v3.2",
+      "model": "openrouter/deepseek/deepseek-v4-flash",
       "steps": 15
     },
     "frontend-dev": {

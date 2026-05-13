@@ -14,7 +14,7 @@ Stage-based **Architect → Orchestrate → subagents** pipeline with model rout
 
 ## Built-in agents
 
-`plan` (Qwen3.6 Plus) and `build` (DeepSeek in config) — see `opencode.json`.
+`plan` (DeepSeek V4 Pro) and `build` (DeepSeek V4 Flash) — see `opencode.json`.
 
 ## Custom pipeline (summary)
 
