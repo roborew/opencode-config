@@ -2,12 +2,14 @@
 name: architect-plan
 description: "Planning mode: feature decomposition, specialists (debug/refactor/review/document/design), Mode A scribe handoff, artifact schema."
 modelTier: "smart"
-roleReminder: "Read-only planning. Load for Feature and non-review plan types. Mode B (post-ship review) uses architect-review."
+roleReminder: "Read-only planning. Architect completes grill-me before loading this skill for a new episode. Mode B uses architect-review."
 ---
 
 > **Hard Rules live in the architect agent markdown; this skill adds protocol detail only for planning (Mode A).** Non-negotiables—scope, files, delegation, brevity, scribe handoff—come from the agent, not from this file.
 
 ## Mode A — Initial planning
+
+**Prerequisite (architect agent):** For a new planning episode, the **`grill-me`** phase must be **complete** before you load **`architect-plan`** or execute anything below—see architect **Skill routing** (pre-planning interview after plan type + first substantive requirements). If you are reading this skill, the grill phase should already be done.
 
 Classify task type. For **features**, classify **Difficulty** (`easy` | `medium` | `hard`), investigate via `claude-context`, then: **easy** — synthesize without strategists; **medium** — synthesize without strategists when single-domain and investigation suffices, else decompose and spawn scoped `strategist`(s); **hard** — decompose, spawn one `strategist` per sub-problem, combine reports. Always include `Difficulty` in the artifact. Pass the plan to scribe (trust successful scribe writes per agent Hard Rules), prompt user to switch to `orchestrate`. For other plan types, invoke the corresponding specialist directly.
 
