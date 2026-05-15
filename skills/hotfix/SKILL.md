@@ -14,3 +14,7 @@ description: "Minimal emergency fix from main, hotfix branch, [HOTFIX] PR"
 ## Stop conditions
 
 - If change touches **>3 files** or alters public APIs, warn: likely not a hotfix — use normal feature flow.
+
+## Git safety (same as ship)
+
+Never: force push (unless user + `OPENCODE_ALLOW_FORCE_PUSH=1` for `--force-with-lease` only), `git reset --hard`, `git clean -f` / `-fd`, `git branch -D`, `git checkout .`, `git restore .`, destructive `rm -rf` on `/` or `~`. Validate with `scripts/preflight-git.sh '<command>'` when unsure. See `scripts/block-dangerous-git.sh` for hook-shaped checks.

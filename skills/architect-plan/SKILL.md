@@ -91,7 +91,7 @@ After initial understanding, set **Difficulty** for the feature (write it into t
 
 ### Step 1: Investigate with claude-context
 
-After satisfying the Claude Context readiness gate above, use `claude-context` (`search_code`, `find_files`) to investigate the codebase and gather concrete evidence:
+After satisfying the Claude Context readiness gate above, read **`CONTEXT.md`** or the context file from **`CONTEXT-MAP.md`** when present (domain glossary from **`grill-me`**). Then use `claude-context` (`search_code`, `find_files`) to investigate the codebase and gather concrete evidence:
 - Identify relevant files, modules, and code patterns for the requested feature.
 - Map existing architecture boundaries (components, services, data models, routes).
 - Note dependencies between areas of the codebase.
