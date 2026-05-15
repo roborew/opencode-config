@@ -16,5 +16,8 @@ Use when the user wants to land changes safely.
 
 ## Hard rules
 
-- No force push. No secrets in commit message.
+- No force push, `git reset --hard`, `git clean -f` / `-fd`, `git branch -D`, `git checkout .`, `git restore .`, or `rm -rf /` / `rm -rf ~`. No `DELETE` SQL without `WHERE`. No `DROP`/`TRUNCATE TABLE` without explicit user confirmation in chat.
+- `git push --force-with-lease` only if user typed explicit approval **and** `OPENCODE_ALLOW_FORCE_PUSH=1` is set in the environment.
+- Before running a risky git command, optionally validate with `scripts/preflight-git.sh '<command>'` from repo root (this config: `~/.config/opencode/scripts/`). Hook: `scripts/block-dangerous-git.sh` reads JSON stdin `{"tool_input":{"command":"..."}}` if your host supports PreToolUse-style interception (OpenCode: see README — not wired in `opencode.json` here).
+- No secrets in commit message.
 - Stop if tests fail or user cancels any step.
