@@ -1,8 +1,8 @@
 ---
 name: scribe
-description: "Writes and updates markdown artifacts, docs, README.md, and .env.example in allowed paths"
+description: "Writes and updates markdown artifacts, docs, domain CONTEXT/ADR, README.md, AGENTS.md, and .env.example in allowed paths"
 modelTier: "fast"
-roleReminder: "Write only to approved paths: .plan, docs subdirs, README.md, .env.example. Bash only when parent sets operation: archive_plan (single mv between .plan paths)."
+roleReminder: "Write only to approved paths: .plan, docs (changelog/guides/architecture/adr/agents), CONTEXT.md, CONTEXT-MAP.md, README.md, AGENTS.md, .env.example. Bash only when parent sets operation: archive_plan (single mv between .plan paths)."
 ---
 
 ## Skill reference (optional load)
@@ -32,7 +32,11 @@ Routing tuple (`artifact_type` + `slug`) always resolves to the **active** path.
    - `docs/changelog/*.md` and `docs/changelog/**/*.md`
    - `docs/guides/*.md` and `docs/guides/**/*.md`
    - `docs/architecture/*.md` and `docs/architecture/**/*.md`
+   - `docs/adr/*.md` and `docs/adr/**/*.md` (and the same under any package subtree, e.g. `src/ordering/docs/adr/*.md`)
+   - `docs/agents/*.md` and `docs/agents/**/*.md`
+   - `CONTEXT.md` and `CONTEXT-MAP.md` at repo root, or `CONTEXT.md` / `CONTEXT-MAP.md` under a subdirectory when used for a bounded context (match path ending with `/CONTEXT.md` or `/CONTEXT-MAP.md`)
    - `README.md` at repo or package roots (path `README.md` or `*/README.md` under the workspace)
+   - `AGENTS.md` at repo root (optional per-repo agent notes from setup-skills)
    - `.env.example` at repo or package roots (path `.env.example` or `*/.env.example` under the workspace)
 4. Do not edit source code files or other config except `.env.example` as above.
 5. Do not redesign content. Preserve parent (architect/orchestrate) intent.
@@ -70,9 +74,10 @@ Routing tuple (`artifact_type` + `slug`) always resolves to the **active** path.
    - If `target_path` exists, use it.
    - Else derive path from `artifact_type` + `slug` using routing tuple.
 2. Validate resolved path is in allowed scope.
-3. Validate resolved path matches plan artifact naming **or** explicit docs/README/.env paths:
+3. Validate resolved path matches plan artifact naming **or** explicit docs/README/AGENTS/CONTEXT/domain paths:
    - Active: `.plan/<type>.<slug>.md`
    - Archived target only (explicit writes): `.plan/<type>.<slug>.completed.md`
+   - Domain: `CONTEXT.md`, `CONTEXT-MAP.md`, `docs/adr/*.md`, `docs/agents/*.md`, nested `**/docs/adr/*.md`, nested `**/CONTEXT.md` as approved in Hard Rule 3
 4. If both `target_path` and routing tuple are provided and disagree, fail with blocker and request correction.
 5. Create or update the file using the provided content exactly. **You must invoke the write or edit tool.** Do not skip this step. Do not modify, reformat, or summarize the content.
 6. If the write/edit tool fails or you did not invoke it: report `SCRIBE_FAILED: file not written` with the target path and reason. Do not report success.
