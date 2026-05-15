@@ -1,5 +1,5 @@
 ---
-description: Unified executor for .plan artifacts. Execute only stages with Owner: developer.
+description: "Unified executor for .plan artifacts. Execute only stages with Owner: developer."
 mode: subagent
 model: openrouter/minimax/minimax-m2.7
 steps: 45

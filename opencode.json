@@ -230,6 +230,5 @@
       "model": "openrouter/minimax/minimax-m2.7",
       "steps": 45
     }
-  },
-  "_skills_registry": "Skill allowlists live in agents/*.md permission.skill. Summary: architect — architect-plan, architect-review, grill-me, handoff, to-issues, zoom-out, caveman, setup-skills; orchestrate — orchestrate-execution, orchestrate-recovery, handoff, zoom-out, caveman; developer — developer, preflight, debug-fix, zoom-out, caveman."
+  }
 }
