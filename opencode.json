@@ -214,6 +214,11 @@
       "model": "openrouter/openai/gpt-5-nano",
       "steps": 5
     },
+    "stack-bootstrap": {
+      "mode": "subagent",
+      "model": "openrouter/openai/gpt-5-nano",
+      "steps": 15
+    },
     "worktree-env": {
       "mode": "subagent",
       "model": "openrouter/openai/gpt-5-nano",

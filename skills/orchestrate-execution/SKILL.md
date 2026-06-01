@@ -70,7 +70,54 @@ After session bootstrap, when no artifact path is provided:
 6. If the user chooses "create new", stop and prompt: "Switch to `architect` to create a plan, then return here with the plan path."
 7. **Do not proceed** with orchestration until a plan path is selected.
 
-If there are no **active** plans (only archived `*.completed.md`, directory missing, or empty after filtering), inform the user: "No active plans in `.plan/` (archived `*.completed.md` files are omitted). Switch to `architect` to create a plan, or provide an artifact path."
+If there are no **active** plans (only archived `*.completed.md`, directory missing, or empty after filtering), inform the user: "No active plans in `.plan/` (archived `*.completed.md` files are omitted). Switch to `architect` to create a plan, provide a GitHub `feature:<slug>`, or choose GitHub backlog mode (B)."
+
+## GitHub feature backlog loop (no `.plan` artifact)
+
+Use this path after spec `fanout` and impl **issue-expand** (`feature:<slug>`, `state:ready-for-agent`, `opencode-task-yaml` with `stages[]`). **You have no `bash` tool** — delegate every `gh` invocation and helper script to **`developer`** via Task (`load: minimal` for pure shell, `load: full` for implementation).
+
+Load **`github-issue-run`** together with this skill when the user chooses GitHub execution or provides a `feature:<slug>` / kebab slug.
+
+### Config path for helper scripts
+
+`"${OPENCODE_CONFIG:-$HOME/.config/opencode}/skills/github-issue-run/lib/<script>.sh"`
+
+### Loop
+
+1. Obtain kebab-case **feature slug** from the user if missing.
+2. Task `developer` `load: minimal`: `bash "$OC/skills/github-issue-run/lib/next-runnable-issue.sh" "<slug>"` — capture stdout JSON.
+3. Task `developer` `load: minimal`: `issue-state-transition.sh "<repo>" "<number>" state:in-progress`
+4. **Stages vs flat issue:** Parse `opencode_meta` from the discovery JSON.
+   - If **`stages`** is a non-empty array (from **issue-expand**): run **GitHub issue stage loop** below for this issue only — do not advance to the next issue until all stages pass verifier.
+   - Else **flat mode:** single implement pass using root `acceptance` and `test_commands` (fanout default).
+5. **Implement (flat mode):** Task `developer` or `frontend-dev` per `opencode_meta.owner` with **`load: full`**. **GitHub issue contract:**
+   - `execution_mode: github_issue`
+   - `issue_number`, `repo`, `title`
+   - `opencode_meta` verbatim
+6. **Verify (flat or per-stage):** Task `verifier` with `load: full` and the same contract plus completion report.
+7. **Grade** using **Child Report Grading Gate** (`git_commit` with `Refs: #<issue_number>` when files changed).
+8. On PASS (flat or all stages done): transition `state:ready-for-review`; optional `gh issue comment` with summary + commit hash.
+9. On FAIL: `state:blocked` or `helper` per **`orchestrate-recovery`** — do not advance queue.
+10. **Repeat** from step 2 for the same slug until discovery fails.
+
+### GitHub issue stage loop (`opencode_meta.stages`)
+
+When `stages[]` is present, for **each** stage in order:
+
+1. Task owner from `stage.owner` (`developer` | `frontend-dev`) with `load: full` and contract:
+   - `execution_mode: github_issue_stage`
+   - `issue_number`, `repo`, `stage_id`, `stage` object (objective, files, acceptance, test_commands, commit_message)
+   - `issue_ref: #<n>` for commits
+2. Task `verifier` with same stage contract + completion report.
+3. Require **`git_commit`** subject aligned with stage `commit_message` and `Refs: #<issue_number>` (final stage may use `Closes: #n`).
+4. On stage FAIL: retry or `helper`; do not advance stage index.
+5. After last stage PASS: proceed to step 8 (ready-for-review) for this issue.
+
+### Exit when queue empty
+
+Prompt: **Switch to `architect` for feature sign-off** (Mode F).
+
+**Prerequisite:** Issues must pass **issue-expand** gates (`orchestrate-readiness-check`) — substantive **Implementation planning** and non-empty `stages[]` in **`opencode-task-yaml`**.
 
 ## Stage Loop
 
