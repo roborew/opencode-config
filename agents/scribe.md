@@ -16,7 +16,6 @@ permission:
     "~/.aws/**": deny
     "*": ask
   skill: { "scribe": "allow" }
-  edit: deny
   bash:
     "*": allow
     "rm -rf /*": deny

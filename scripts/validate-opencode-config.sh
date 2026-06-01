@@ -39,7 +39,8 @@ done < <(grep -h 'skill:' agents/*.md 2>/dev/null || true)
 echo "Checking scribe write-only (edit: false)..."
 scribe_fm=$(awk '/^---$/{n++; if(n==2) exit} n==1' agents/scribe.md 2>/dev/null || true)
 if echo "$scribe_fm" | grep -qE '^[[:space:]]*edit:[[:space:]]*false'; then
-  if echo "$scribe_fm" | grep -qE '^[[:space:]]*edit:'; then
+  edit_lines=$(echo "$scribe_fm" | grep -cE '^[[:space:]]*edit:')
+  if [ "$edit_lines" -gt 1 ]; then
     echo "  ERROR: scribe has edit: false but still defines permission.edit"
     ERR=1
   fi
