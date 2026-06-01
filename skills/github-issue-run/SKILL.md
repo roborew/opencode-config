@@ -19,7 +19,9 @@ Companion to **`orchestrate-execution`** when working from a **GitHub `feature:<
 
 ```text
 OC="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
-"$OC/skills/github-issue-run/lib/<script>.sh"
+"$OC/skills/github-issue-run/lib/next-runnable-issue.sh"
+"$OC/skills/github-issue-run/lib/issue-state-transition.sh"
+"$OC/skills/github-issue-run/lib/feature-finish-pr.sh"
 ```
 
 ## Discovery
@@ -64,7 +66,29 @@ bash "$OC/skills/github-issue-run/lib/issue-state-transition.sh" "<repo>" "<numb
 
 ## Queue exhausted
 
-Prompt: **Switch to `architect` for feature sign-off** (Mode F vs PRD).
+When **next-runnable-issue.sh** exits 1 (no runnable issues left):
+
+1. Task **developer** `load: minimal`:
+
+```bash
+bash "$OC/skills/github-issue-run/lib/feature-finish-pr.sh" "<slug>"
+```
+
+Stdout is JSON: `{ branch, base, pr_url, pr_number, action, repo, message }`.
+
+| `action` | Meaning |
+|----------|---------|
+| `pr-created` | Branch pushed; new ready-for-review PR opened |
+| `pr-exists` | Branch pushed; reused existing open PR |
+| `skipped-opt-out` | `ORCHESTRATE_AUTO_PR=0` or user asked not to open a PR |
+| `skipped-protected-branch` | Current branch is `develop`/`main`/`master` — push/PR skipped; report `message` and manual next steps |
+
+2. Report `pr_url` (or skip reason) to the user.
+3. Prompt: **Switch to `architect` for feature sign-off** (Mode F vs PRD).
+
+**Opt-out:** Set `ORCHESTRATE_AUTO_PR=0` in the environment, or tell orchestrate not to open a PR for this run.
+
+**Base branch:** Defaults to `develop`, falling back to the repo default branch if `develop` is absent on `origin`. Override with `PR_BASE` env or pass as second script argument.
 
 ## Compatibility
 

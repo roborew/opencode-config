@@ -10,7 +10,7 @@ Spec-driven path from PRD to orchestrate-ready GitHub issues. **Agents run `bin/
 | 2 | spec | **architect** (fanout-issues): creates child issues per repo |
 | 3 | impl | User: **architect option 1** + slug → **issue-expand** runs bundle, plans each issue, gates |
 | 4 | impl | User approves issue edits in chat → **architect** runs checks → prompts **orchestrate** |
-| 5 | impl | **orchestrate** → PR → **architect** sign-off → **feature-complete** in spec |
+| 5 | impl | **orchestrate** auto-pushes branch + opens ready-for-review PR to `develop` at queue exhaustion → **architect** sign-off → **feature-complete** in spec |
 
 ## Two execution modes
 

@@ -115,7 +115,13 @@ When `stages[]` is present, for **each** stage in order:
 
 ### Exit when queue empty
 
-Prompt: **Switch to `architect` for feature sign-off** (Mode F).
+When discovery fails (queue exhausted):
+
+1. Task **`developer`** `load: minimal`: `bash "$OC/skills/github-issue-run/lib/feature-finish-pr.sh" "<slug>"` — parse JSON (`branch`, `base`, `pr_url`, `action`, `message`).
+2. Report `pr_url` or skip reason (`skipped-opt-out`, `skipped-protected-branch`) to the user.
+3. Prompt: **Switch to `architect` for feature sign-off** (Mode F).
+
+**Opt-out:** `ORCHESTRATE_AUTO_PR=0` or user instruction not to open a PR. **Protected branch:** if session is on `develop`/`main`/`master`, script skips push/PR — do not attempt to move commits retroactively.
 
 **Prerequisite:** Issues must pass **issue-expand** gates (`orchestrate-readiness-check`) — substantive **Implementation planning** and non-empty `stages[]` in **`opencode-task-yaml`**.
 
