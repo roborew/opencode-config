@@ -3,13 +3,47 @@
   "default_agent": "orchestrate",
   "instructions": ["rules/testing.md", "rules/**/*.md"],
   "permission": {
+    "external_directory": {
+      "*": "allow",
+      "~/.ssh/**": "deny",
+      "~/.gnupg/**": "deny",
+      "~/.aws/**": "deny"
+    },
+    "bash": {
+      "*": "allow",
+      "rm -rf /*": "deny",
+      "rm -rf ~/*": "deny",
+      "rm -rf ~": "deny",
+      "git push * --force*": "deny",
+      "git push * -f*": "deny",
+      "git reset --hard*": "deny",
+      "git clean -fd*": "deny",
+      "git clean -f *": "deny",
+      "git branch -D *": "deny",
+      "git checkout .": "deny",
+      "git restore .": "deny"
+    },
     "edit": {
-      "opencode.json": "deny",
+      "*": "allow",
+      "opencode.json": "ask",
       "package-lock.json": "deny",
+      "pnpm-lock.yaml": "deny",
+      "yarn.lock": "deny",
+      "Gemfile.lock": "deny",
+      "poetry.lock": "deny",
+      "Cargo.lock": "deny",
       "*.pem": "deny",
+      "*/*.pem": "deny",
+      "**/*.pem": "deny",
       "*.key": "deny",
+      "*/*.key": "deny",
+      "**/*.key": "deny",
       ".env": "deny",
-      ".env.*": "deny"
+      ".env.*": "deny",
+      "*/.env": "deny",
+      "*/.env.*": "deny",
+      "**/.env": "deny",
+      "**/.env.*": "deny"
     }
   },
   "provider": {
@@ -21,15 +55,8 @@
         "chunkTimeout": 60000
       },
       "models": {
-        "minimax/minimax-m2.7": {
-          "name": "MiniMax M2.7",
-          "options": {
-            "temperature": 0.3,
-            "top_p": 0.95
-          }
-        },
-        "minimax/minimax-m2.7:nitro": {
-          "name": "MiniMax M2.7 (nitro)",
+        "minimax/minimax-m3": {
+          "name": "MiniMax M3",
           "options": {
             "temperature": 0.3,
             "top_p": 0.95
@@ -41,8 +68,8 @@
             "temperature": 0.2
           }
         },
-        "qwen/qwen3-next-80b-a3b-instruct": {
-          "name": "Qwen3 Next 80B A3B Instruct",
+        "qwen/qwen3.7-max": {
+          "name": "Qwen3.7 Max",
           "options": {
             "temperature": 0.1,
             "top_p": 0.9
@@ -121,28 +148,29 @@
   },
   "agent": {
     "architect": {
-      "model": "openrouter/deepseek/deepseek-v4-flash",
+      "model": "openrouter/qwen/qwen3.7-max",
       "steps": 30
     },
     "orchestrate": {
-      "model": "openrouter/deepseek/deepseek-v4-flash",
+      "model": "openrouter/minimax/minimax-m3",
       "steps": 50
     },
     "plan": {
-      "model": "openrouter/deepseek/deepseek-v4-pro"
+      "model": "openrouter/qwen/qwen3.7-max",
+      "steps": 20
     },
     "strategist": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v4-flash",
+      "model": "openrouter/qwen/qwen3.7-max",
       "steps": 15
     },
     "build": {
-      "model": "openrouter/deepseek/deepseek-v4-flash",
+      "model": "openrouter/minimax/minimax-m3",
       "steps": 30
     },
     "developer": {
       "mode": "subagent",
-      "model": "openrouter/minimax/minimax-m2.7",
+      "model": "openrouter/minimax/minimax-m3",
       "steps": 45
     },
     "senior-dev": {
@@ -179,6 +207,11 @@
       "mode": "subagent",
       "model": "openrouter/openai/gpt-5-nano",
       "steps": 5
+    },
+    "stack-bootstrap": {
+      "mode": "subagent",
+      "model": "openrouter/openai/gpt-5-nano",
+      "steps": 15
     },
     "worktree-env": {
       "mode": "subagent",
@@ -227,7 +260,7 @@
     },
     "frontend-dev": {
       "mode": "subagent",
-      "model": "openrouter/minimax/minimax-m2.7",
+      "model": "openrouter/minimax/minimax-m3",
       "steps": 45
     }
   }

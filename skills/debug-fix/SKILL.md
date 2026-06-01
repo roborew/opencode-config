@@ -125,3 +125,13 @@ Required before declaring done:
 - [ ] The hypothesis that turned out correct is stated in the commit / PR message — so the next debugger learns
 
 **Then ask: what would have prevented this bug?** If the answer involves architectural change (no good test seam, tangled callers, hidden coupling), recommend a follow-up to the parent / `refactor` path with specifics. Make the recommendation **after** the fix is in, not before — you have more information now than when you started.
+
+## GitHub issue path (architect front door)
+
+When the parent is **architect** on a debug/targeted-change path, **do not** write `.plan/debug.*`. Instead:
+
+1. Complete diagnosis through Phase 6 (root cause + proposed fix + regression test plan).
+2. Return structured slice content to architect for **`to-issues`** — one or more GitHub issues with acceptance criteria and test commands.
+3. Prompt user to **switch to orchestrate** after issues are published and labelled `state:ready-for-agent`.
+
+Execution happens from the GitHub queue, not a local plan file.

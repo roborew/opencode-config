@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Wrapper: run spec repo bin/feature-upgrade from project parent (finds *-spec).
+#
+# Usage:
+#   feature-upgrade <slug>                 # from project parent (finds *-spec)
+#   feature-upgrade <slug> --spec <path>   # explicit spec repo path
+#
+set -euo pipefail
+SLUG="${1:?slug required}"
+shift || true
+SPEC_PATH=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --spec) SPEC_PATH="${2:?}"; shift 2 ;;
+    *) echo "unknown arg: $1" >&2; exit 2 ;;
+  esac
+done
+
+OC="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
+
+if [[ -z "$SPEC_PATH" ]]; then
+  PARENT="$(pwd)"
+  for d in "$PARENT"/*-spec "$PARENT"/*-Spec; do
+    [[ -d "$d/docs/prd" ]] || continue
+    SPEC_PATH="$d"
+    break
+  done
+fi
+
+[[ -n "$SPEC_PATH" ]] || {
+  echo "ERROR: could not find spec repo. Run from project parent or pass --spec <path>" >&2
+  exit 2
+}
+
+if [[ -x "${OC}/bin/stack/sync_spec_tooling.sh" ]]; then
+  echo "==> Syncing spec tooling from OpenCode templates..."
+  "${OC}/bin/stack/sync_spec_tooling.sh" "$SPEC_PATH" || true
+fi
+
+exec "${SPEC_PATH}/bin/feature-upgrade" "$SLUG"

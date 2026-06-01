@@ -1,7 +1,7 @@
 ---
 description: UI specialist
 mode: subagent
-model: openrouter/minimax/minimax-m2.7
+model: openrouter/minimax/minimax-m3
 steps: 45
 tools:
   write: true
@@ -9,7 +9,23 @@ tools:
   bash: true
   skill: true
 permission:
+  external_directory:
+    "~/.config/opencode/**": allow
+    "/Users/robo/.config/opencode/**": allow
+    "~/.ssh/**": deny
+    "~/.gnupg/**": deny
+    "~/.aws/**": deny
+    "*": ask
   skill: { "frontend-dev": "allow" }
+  edit:
+    "~/.config/opencode/**": deny
+    "/Users/robo/.config/opencode/**": deny
+    "*": allow
+  bash:
+    "*": allow
+    "rm -rf /*": deny
+    "rm -rf ~/*": deny
+    "rm -rf $HOME/*": deny
 ---
 # Frontend Dev Agent
 

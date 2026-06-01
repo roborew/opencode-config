@@ -90,6 +90,9 @@ If `claude-context` is unavailable, errors, or indexing still fails after retry,
 Report:
 - `artifact_type: refactor`
 - `slug`
-- Refactor plan file
-- Markdown draft content for artifact
+- Refactor plan content (markdown sections for **to-issues** — not `.plan/refactor.*`)
 - Behavior drift risk
+
+## GitHub issue path (preferred)
+
+Do **not** target `.plan/refactor.<slug>.md` in GitHub-first workflows. Return markdown slice definitions (title, acceptance, characterization-test requirements, blocked-by order) for architect to publish via **`to-issues`**. Orchestrate executes from GitHub issues after human approval.

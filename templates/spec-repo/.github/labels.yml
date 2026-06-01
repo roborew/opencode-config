@@ -1,0 +1,53 @@
+# State (issue lifecycle)
+- name: state:needs-triage
+  color: ededed
+  description: New issue, not yet categorized
+- name: state:needs-info
+  color: d4c5f9
+  description: Waiting on reporter or human answer
+- name: state:ready-for-agent
+  color: 0e8a16
+  description: Triaged; agent may pick up (AFK-capable)
+- name: state:ready-for-human
+  color: f9d0c4
+  description: Needs human judgement or implementation
+- name: state:wontfix
+  color: 5319e7
+  description: Closed as not doing
+- name: state:in-progress
+  color: fbca04
+  description: Orchestrate is executing this GitHub ticket (or active local work)
+- name: state:ready-for-review
+  color: fef2c0
+  description: Verifier passed; awaiting architect or human sign-off
+- name: state:blocked
+  color: b60205
+  description: Waiting on external dependency or decision
+- name: state:done
+  color: 5319e7
+  description: Merged or otherwise completed
+
+# Category (work type)
+- name: category:feature
+  color: 1d76db
+- name: category:bug
+  color: d73a4a
+- name: category:chore
+  color: cfd3d7
+- name: category:spike
+  color: c5def5
+- name: category:docs
+  color: 0075ca
+
+# Mode (who drives execution)
+- name: mode:hitl
+  color: e99695
+  description: Human-in-the-loop — needs your judgement at planning or verify gate
+- name: mode:afk
+  color: c2e0c6
+  description: Safe for autonomous execution end-to-end
+
+# Special
+- name: prd
+  color: 8a2be2
+  description: Parent PRD issue; links to PRD doc in this repo

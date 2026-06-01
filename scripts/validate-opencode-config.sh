@@ -36,6 +36,22 @@ while IFS= read -r line; do
   fi
 done < <(grep -h 'skill:' agents/*.md 2>/dev/null || true)
 
+echo "Checking scribe write-only (edit: false)..."
+scribe_fm=$(awk '/^---$/{n++; if(n==2) exit} n==1' agents/scribe.md 2>/dev/null || true)
+if echo "$scribe_fm" | grep -qE '^[[:space:]]*edit:[[:space:]]*false'; then
+  edit_lines=$(echo "$scribe_fm" | grep -cE '^[[:space:]]*edit:')
+  if [ "$edit_lines" -gt 1 ]; then
+    echo "  ERROR: scribe has edit: false but still defines permission.edit"
+    ERR=1
+  fi
+fi
+
+echo "Checking migrate_repos_registry unit tests..."
+if ! python3 -m unittest bin/lib/test_migrate_repos_registry.py -q; then
+  echo "  FAILED: migrate_repos_registry tests"
+  ERR=1
+fi
+
 if [[ $ERR -ne 0 ]]; then
   echo "validate-opencode-config: FAILED"
   exit 1

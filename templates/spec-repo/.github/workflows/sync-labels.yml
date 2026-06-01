@@ -1,0 +1,36 @@
+name: sync-labels
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/labels.yml'
+      - 'docs/agents/repos.md'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.45.1/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+      - name: Sync labels to spec + target repos
+        env:
+          GH_TOKEN: ${{ secrets.LABEL_SYNC_PAT }}
+        run: |
+          set -euo pipefail
+          SPEC_REPO="${{ github.repository }}"
+          repos=$(yq -r '.repos[].name' docs/agents/repos.md)
+          for repo in ${SPEC_REPO} ${repos}; do
+            echo "Syncing ${repo}..."
+            yq -o=json '.[]' .github/labels.yml | jq -c '.' | while read -r row; do
+              name=$(echo "$row" | jq -r .name)
+              color=$(echo "$row" | jq -r .color)
+              desc=$(echo "$row" | jq -r '.description // ""')
+              gh label create "$name" --repo "$repo" --color "$color" --description "$desc" --force
+            done
+          done

@@ -5,12 +5,13 @@ description: Break a plan, spec, or PRD into independently-grabbable GitHub issu
 
 # To Issues
 
-Break a plan into independently-grabbable issues using **vertical slices** (tracer bullets).
+Break work into independently-grabbable **GitHub issues** using **vertical slices** (tracer bullets). Primary path for **targeted changes**, debug fixes, and refactor slices — replaces local `.plan` artifacts in GitHub-first workflows.
 
 ## Preconditions
 
-- Prefer an existing `.plan/<type>.<slug>.md` as source of truth.
-- If this repo has `docs/agents/issue-tracker.md` and `docs/agents/triage-labels.md` (from **`setup-skills`**), read them and follow the issue tracker + label mapping. If missing, default to **GitHub** on the current `origin` remote using `gh issue create` and label names from the triage section below.
+- Read `docs/agents/issue-tracker.md` and `docs/agents/triage-labels.md` when present (from **`setup-skills`** or **`setup-project`**).
+- For spec-driven features, use spec fanout + **issue-expand** instead — this skill is for **targeted** or ad-hoc work in an implementation repo.
+- Optional: conversation context or a research note — not a required `.plan` file.
 
 ## Process
 
@@ -64,9 +65,11 @@ gh issue create --title "..." --body-file - <<'EOF'
 EOF
 ```
 
-Apply the triage label for AFK-ready work (default: `ready-for-agent`) if that label exists on the repo; otherwise omit labels and note that in the handoff.
+Apply the triage label for AFK-ready work (default: `state:ready-for-agent`) and `category:feature` or `category:chore` as appropriate. Include **`opencode-task-yaml`** fence in the body when orchestrate will execute the issue (minimal meta: `task_id`, `owner`, `acceptance`, `test_commands`; add `stages[]` when multi-step TDD is required).
 
-**Do not** close or rewrite the parent plan file; issues are additive.
+**Do not** write local `.plan` files — issues are the source of truth.
+
+After publish, tell the user: **Switch to `orchestrate`** with the feature label or issue numbers.
 
 ### Default triage labels (when `docs/agents/triage-labels.md` absent)
 

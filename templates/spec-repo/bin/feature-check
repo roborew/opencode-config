@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# Validate PRD + child GitHub issues for a feature slug (all repos in PRD tickets).
+# Usage (spec repo root): bin/feature-check <slug> [--level fanout|expand|orchestrate]
+set -euo pipefail
+SLUG="${1:?slug required}"
+shift || true
+LEVEL="expand"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --level) LEVEL="${2:?}"; shift 2 ;;
+    *) echo "unknown arg: $1" >&2; exit 2 ;;
+  esac
+done
+
+BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$BIN_DIR/.." && pwd)"
+PRD_PATH="${ROOT}/docs/prd/${SLUG}.md"
+VALIDATE_PRD="${BIN_DIR}/lib/validate_prd_frontmatter.py"
+VALIDATE_BODY="${BIN_DIR}/lib/validate_issue_body.py"
+VALIDATE_TICKETS="${BIN_DIR}/lib/validate_tickets.py"
+PRD_IO="${BIN_DIR}/lib/prd_io.py"
+REGISTRY="${ROOT}/docs/agents/repos.md"
+
+[[ -f "$PRD_PATH" ]] || { echo "ERROR: missing $PRD_PATH" >&2; exit 2; }
+[[ -f "$VALIDATE_BODY" ]] || { echo "ERROR: missing validate_issue_body.py" >&2; exit 8; }
+[[ -f "$PRD_IO" ]] || { echo "ERROR: missing prd_io.py" >&2; exit 8; }
+
+python3 "$VALIDATE_PRD" "$PRD_PATH" || exit 6
+[[ -f "$REGISTRY" ]] || { echo "ERROR: missing $REGISTRY" >&2; exit 3; }
+
+TMP=$(mktemp)
+python3 "$PRD_IO" tickets_json "$PRD_PATH" >"$TMP"
+TICKET_COUNT=$(jq 'length' "$TMP")
+[[ "$TICKET_COUNT" -gt 0 ]] || { echo "ERROR: PRD has no tickets[] — use tickets frontmatter or legacy slices" >&2; exit 4; }
+
+echo "==> feature-check: ${SLUG} (level=${LEVEL}, tickets=${TICKET_COUNT})"
+python3 "$VALIDATE_TICKETS" "$REGISTRY" <"$TMP" || exit 6
+
+FAIL=0
+MISSING_ISSUES=0
+
+find_issue() {
+  local repo="$1" title="$2" task_id="$3"
+  gh issue list --repo "$repo" --state all --label "feature:${SLUG}" --limit 200 \
+    --json number,title,body 2>/dev/null \
+    | jq -r --arg title "$title" --arg task_id "$task_id" '
+        .[]
+        | select(
+            .title == $title
+            or (
+              $task_id != ""
+              and (
+                ((.body // "") | test("task_id:\\s*\"" + $task_id + "\""))
+                or ((.body // "") | test("task_id:\\s*" + $task_id + "\\b"))
+              )
+            )
+          )
+        | .number' | sed -n '1p'
+}
+
+while IFS= read -r row; do
+  TID=$(echo "$row" | jq -r '.id')
+  REPO=$(echo "$row" | jq -r '.repo')
+  TITLE=$(echo "$row" | jq -r '.title')
+  NUM=$(find_issue "$REPO" "$TITLE" "$TID")
+  if [[ -z "$NUM" ]]; then
+    echo "FAIL: no GitHub issue for ticket ${TID} on ${REPO}"
+    MISSING_ISSUES=$((MISSING_ISSUES + 1))
+    FAIL=1
+    continue
+  fi
+  BODY_FILE=$(mktemp)
+  gh issue view "$NUM" --repo "$REPO" --json body -q .body >"$BODY_FILE"
+  if python3 "$VALIDATE_BODY" --level "$LEVEL" --task-id "$TID" --file "$BODY_FILE"; then
+    echo "OK: ${REPO}#${NUM} (${TID})"
+  else
+    echo "FAIL: ${REPO}#${NUM} (${TID})"
+    FAIL=1
+  fi
+  rm -f "$BODY_FILE"
+done < <(jq -c '.[]' "$TMP")
+
+rm -f "$TMP"
+
+if [[ "$MISSING_ISSUES" -gt 0 ]]; then
+  echo "HINT: run bin/fanout ${SLUG} from spec repo to create missing issues" >&2
+fi
+
+if [[ "$FAIL" -eq 0 ]]; then
+  echo "PASS: all tickets meet level=${LEVEL}"
+  exit 0
+fi
+echo "FAIL: see docs/FEATURE-PIPELINE.md" >&2
+exit 1

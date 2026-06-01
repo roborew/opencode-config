@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+echo "DEPRECATED: use bin/setup-project (from your PROJECT parent folder)" >&2
+exec "$(dirname "$0")/setup-project" "$@"

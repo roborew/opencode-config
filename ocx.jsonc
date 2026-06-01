@@ -1,4 +1,39 @@
 {
 	"$schema": "https://ocx.kdco.dev/schemas/ocx.json",
-	"registries": {}
+	"registries": {
+		"skills": {
+			"to-prd": {
+				"description": "PRD authoring + GitHub issue publish",
+				"defaultModel": "openrouter/deepseek/deepseek-v4-flash"
+			},
+			"triage": {
+				"description": "Issue state machine + gh batch helpers",
+				"defaultModel": "openrouter/deepseek/deepseek-v4-flash"
+			},
+			"research": {
+				"description": "Cached .research/<slug>.md pre-planning",
+				"defaultModel": "openrouter/deepseek/deepseek-v4-flash"
+			},
+			"improve-codebase-architecture": {
+				"description": "Deepening findings doc via LANGUAGE.md",
+				"defaultModel": "openrouter/deepseek/deepseek-v4-pro"
+			},
+			"fanout-issues": {
+				"description": "Spec-repo cross-repo child issue fanout",
+				"defaultModel": "openrouter/deepseek/deepseek-v4-flash"
+			},
+			"setup-project": {
+				"description": "Spec-repo stack bootstrap interview + registry",
+				"defaultModel": "openrouter/deepseek/deepseek-v4-flash"
+			},
+			"issue-expand": {
+				"description": "Impl-repo codebase-backed issue planning + gates",
+				"defaultModel": "openrouter/deepseek/deepseek-v4-flash"
+			},
+			"feature-complete": {
+				"description": "Spec-repo cross-repo feature close-out",
+				"defaultModel": "openrouter/deepseek/deepseek-v4-flash"
+			}
+		}
+	}
 }
