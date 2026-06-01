@@ -1,0 +1,17 @@
+name: Research spike
+description: Time-boxed exploration before a PRD
+title: "[research] <topic>"
+labels: ["category:spike", "state:needs-triage"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+    validations:
+      required: true
+  - type: textarea
+    id: deadline
+    attributes:
+      label: Time box / stale-by
+    validations:
+      required: true

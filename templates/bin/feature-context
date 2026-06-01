@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# Hydrate tmp/feature-context.md from GitHub issue + parent PRD (spec repo from docs/agents/issue-tracker.md).
+set -euo pipefail
+ISSUE="${1:?issue number required}"
+OUT="tmp/feature-context.md"
+mkdir -p tmp
+
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+ISSUE_JSON=$(gh issue view "$ISSUE" --repo "$REPO" --json title,body,labels,url,number)
+
+SPEC_REPO=""
+if [[ -f docs/agents/issue-tracker.md ]]; then
+  SPEC_REPO=$(grep -E '^[[:space:]]*(SPEC_REPO|spec_repo|Spec repo|spec repository):' docs/agents/issue-tracker.md | head -1 | sed -E 's/^[^:]*:[[:space:]]*//' | tr -d '\r' || true)
+fi
+if [[ -z "$SPEC_REPO" ]]; then
+  echo "WARN: docs/agents/issue-tracker.md missing or no SPEC_REPO line — parent PRD fetch may fail. Run bin/link-spec-repo <owner/name>-spec" >&2
+fi
+
+SLUG=$(echo "$ISSUE_JSON" | jq -r '.labels[].name' | grep '^feature:' | head -1 | cut -d: -f2- || true)
+if [[ -z "$SLUG" ]]; then
+  echo "WARN: no feature:<slug> label on issue #$ISSUE" >&2
+  SLUG="unknown"
+fi
+
+PARENT_URL=""
+if [[ -n "$(echo "$ISSUE_JSON" | jq -r '.body')" ]]; then
+  PARENT_URL=$(echo "$ISSUE_JSON" | jq -r '.body' | grep -oE 'https://github.com/[^/]+/[^/]+/issues/[0-9]+' | head -1 || true)
+fi
+
+{
+  echo "# Feature context: ${SLUG} (${REPO}#${ISSUE})"
+  echo
+  echo "## This issue"
+  echo "$ISSUE_JSON" | jq -r '"Title: \(.title)\nURL: \(.url)\n\n\(.body)"'
+  echo
+  if [[ -n "$PARENT_URL" && -n "$SPEC_REPO" ]]; then
+    echo "## Parent PRD issue"
+    PARENT_JSON=$(gh issue view "$PARENT_URL" --json title,body,url 2>/dev/null || true)
+    if [[ -n "$PARENT_JSON" ]] && echo "$PARENT_JSON" | jq -e 'type == "object"' >/dev/null 2>&1; then
+      echo "$PARENT_JSON" | jq -r '"Title: \(.title)\nURL: \(.url)\n\n\(.body)"'
+    else
+      echo "_Could not load parent issue._"
+    fi
+    echo
+    PRD_PATH="docs/prd/${SLUG}.md"
+    echo "## PRD file (${SPEC_REPO} ${PRD_PATH})"
+    if out=$(gh api "repos/${SPEC_REPO}/contents/${PRD_PATH}" --jq .content 2>/dev/null); then
+      echo "$out" | base64 -d
+    else
+      echo "_Could not fetch PRD from ${SPEC_REPO} (missing file or auth)._"
+    fi
+    echo
+  elif [[ -z "$PARENT_URL" ]]; then
+    echo "## Parent PRD"
+    echo "_No parent issue URL found in issue body._"
+    echo
+  fi
+  echo "## Local CONTEXT.md"
+  if [[ -f CONTEXT.md ]]; then
+    cat CONTEXT.md
+  else
+    echo "_No CONTEXT.md at repo root._"
+  fi
+} > "$OUT"
+
+echo "Wrote $OUT"

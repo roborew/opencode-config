@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Verify implementation-repo issues are ready for orchestrate (GitHub backlog mode).
+set -euo pipefail
+SLUG="${1:?feature slug required}"
+OC="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+FAIL=0
+
+echo "=== Orchestrate readiness: ${SLUG} (${REPO}) ==="
+
+ISSUES=$(gh issue list --repo "$REPO" --label "feature:${SLUG}" --state open --json number --jq '.[].number')
+COUNT=$(echo "$ISSUES" | wc -l | tr -d ' ')
+echo "Open issues: ${COUNT}"
+[[ "$COUNT" -gt 0 ]] || { echo "FAIL: no open issues"; exit 1; }
+
+VALIDATE="${OC}/templates/spec-repo/bin/lib/validate_issue_body.py"
+for n in $ISSUES; do
+  BODY_FILE=$(mktemp)
+  gh issue view "$n" --repo "$REPO" --json body -q .body >"$BODY_FILE"
+  TID=$(sed -n '/```opencode-task-json/,/```/p' "$BODY_FILE" | sed '1d;$d' | jq -r '.task_id // empty' 2>/dev/null || true)
+  echo -n "#$n: "
+  ARGS=(--level orchestrate --file "$BODY_FILE")
+  [[ -n "$TID" ]] && ARGS+=(--task-id "$TID")
+  if python3 "$VALIDATE" "${ARGS[@]}" 2>/dev/null; then
+    stages=$(sed -n '/```opencode-task-json/,/```/p' "$BODY_FILE" | sed '1d;$d' | jq '.stages | length' 2>/dev/null || echo "?")
+    echo "OK task_id=${TID} stages=${stages}"
+  else
+    python3 "$VALIDATE" "${ARGS[@]}" 2>&1 | sed 's/^/  /'
+    echo "FAIL"
+    FAIL=1
+  fi
+  rm -f "$BODY_FILE"
+done
+
+echo ""
+if [[ -x "${OC}/skills/github-issue-run/lib/next-runnable-issue.sh" ]] || [[ -f "${OC}/skills/github-issue-run/lib/next-runnable-issue.sh" ]]; then
+  if out=$(bash "${OC}/skills/github-issue-run/lib/next-runnable-issue.sh" "$SLUG" 2>/dev/null); then
+    echo "next-runnable: #$(echo "$out" | jq -r .number)"
+  else
+    echo "next-runnable: none (blocked or done)"
+  fi
+fi
+
+if [[ "$FAIL" -eq 0 ]]; then
+  echo "PASS: ready for orchestrate option B"
+  exit 0
+fi
+echo "FAIL: run issue-expand in this repo first"
+exit 1

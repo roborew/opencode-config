@@ -1,0 +1,44 @@
+name: PRD Parent Issue
+description: Tracks a PRD and fans out to target repos
+title: "[PRD] <slug>: <one-line summary>"
+labels: ["prd", "state:needs-triage"]
+body:
+  - type: input
+    id: slug
+    attributes:
+      label: Slug
+      description: kebab-case identifier matching docs/prd/<slug>.md
+      placeholder: e.g. billing-portal-v2
+    validations:
+      required: true
+  - type: input
+    id: prd_path
+    attributes:
+      label: PRD path
+      placeholder: docs/prd/<slug>.md
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One paragraph. The PRD itself lives in the linked file.
+    validations:
+      required: true
+  - type: textarea
+    id: target_repos
+    attributes:
+      label: Target repos
+      description: One per line. Must match docs/agents/repos.md.
+      placeholder: |
+        org/frontend
+        org/api
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Bullet list. These propagate to child issues.
+    validations:
+      required: true

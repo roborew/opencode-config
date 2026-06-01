@@ -1,0 +1,5 @@
+# Normalize line endings (CRLF breaks bin/* shebangs on macOS/Linux).
+* text=auto eol=lf
+
+*.sh text eol=lf
+bin/** text eol=lf
