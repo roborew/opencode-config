@@ -8,8 +8,20 @@ tools:
   bash: true
   skill: true
 permission:
+  external_directory:
+    "~/.config/opencode/**": allow
+    "/Users/robo/.config/opencode/**": allow
+    "~/.ssh/**": deny
+    "~/.gnupg/**": deny
+    "~/.aws/**": deny
+    "*": ask
   edit: deny
   skill: { "helper": "allow" }
+  bash:
+    "*": allow
+    "rm -rf /*": deny
+    "rm -rf ~/*": deny
+    "rm -rf $HOME/*": deny
   task: { "*": deny }
 ---
 # Helper Agent

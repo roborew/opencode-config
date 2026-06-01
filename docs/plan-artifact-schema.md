@@ -1,8 +1,63 @@
-# .plan Artifact Schema
+# Plan artifact schema
 
-All `.plan/<type>.<slug>.md` files follow this structure. Primary agents produce them; execution and verification subagents consume them. After architect Mode B sign-off and documentation, the active file may be **archived** to `.plan/<type>.<slug>.completed.md` (same markdown structure; filename marks completion for orchestrate listing).
+Execution plans live in one of two places depending on workflow mode. **Spec-driven features** use **GitHub issue bodies** as the source of truth after fanout. **Legacy local plans** use **`.plan/<type>.<slug>.md`** files.
 
-## Required Sections
+See [FEATURE-PIPELINE.md](FEATURE-PIPELINE.md) for the operator flow and [RUNBOOK.md](RUNBOOK.md) for agent behaviour.
+
+---
+
+## GitHub issue task block (`opencode-task-yaml`)
+
+Spec **fanout** embeds a minimal fenced `opencode-task-yaml` block (routing only). **`issue-expand`** in the implementation repo adds `stages[]` and fills **Implementation planning** markdown (Context, Current state, Stage plan, Tests). This is the **execution source of truth** for spec-driven features (no parallel `.plan/issue.*` files).
+
+Legacy `opencode-task-json` fences are still parsed during migration.
+
+### Root fields (fanout — spec phase)
+
+| Field | Required | Purpose |
+|-------|----------|---------|
+| `task_id` | yes | Stable id from PRD ticket |
+| `owner` | yes | `developer` or `frontend-dev` |
+| `depends_on` | no | Ticket ids (fanout → **Blocked by**) |
+| `capability` | no | Registry capability |
+| `stages` | no | Must be empty at fanout; added by **issue-expand** |
+
+Product `acceptance` lives in **Requirements** markdown, not in the yaml block.
+
+### Root fields (orchestrate — after issue-expand)
+
+| Field | Required | Purpose |
+|-------|----------|---------|
+| `stages` | yes | Non-empty; see below |
+| `commit_message` | per stage | In each stage entry (flat mode may use root — legacy json) |
+
+### `stages[]` (issue-expand)
+
+When non-empty, **orchestrate** runs one stage per loop (`execution_mode: github_issue_stage`) before marking the issue ready-for-review.
+
+| Field | Required | Purpose |
+|-------|----------|---------|
+| `stage_id` | yes | e.g. `1-red`, `2-green` |
+| `owner` | yes | `developer` or `frontend-dev` |
+| `objective` | yes | One stage goal |
+| `files` | no | Paths to touch (from codebase discovery) |
+| `acceptance` | yes | Stage acceptance strings |
+| `test_commands` | yes | Commands for verifier |
+| `commit_message` | yes | Subject for this stage's commit (`Refs: #n`) |
+
+Human-readable detail lives under **## Implementation planning** (same content as a `.plan` artifact, adapted for GitHub).
+
+### Canonical issue body sections
+
+Parent PRD · User stories · Requirements · **Implementation planning** · **opencode-task-yaml** · Description · Blocked by
+
+---
+
+## Legacy `.plan` artifacts (local file mode)
+
+All `.plan/<type>.<slug>.md` files follow this structure when using **architect option 2** (legacy local plan). Primary agents produce them; execution and verification subagents consume them. After architect Mode B sign-off and documentation, the active file may be **archived** to `.plan/<type>.<slug>.completed.md` (same markdown structure; filename marks completion for orchestrate listing).
+
+### Required sections
 
 | Section | Purpose |
 |---------|---------|
@@ -15,14 +70,14 @@ All `.plan/<type>.<slug>.md` files follow this structure. Primary agents produce
 | **StageAcceptanceChecks** | Verification gates for each stage — **every stage MUST include at least one executable test or verification command** |
 | **AcceptanceChecks** | End-to-end completion checks |
 | **CompletionReport** | Required executor handoff fields back to primary |
-| **ReviewDecisionGate** | Prompt behavior after feature completion: start review now or defer |
+| **ReviewDecisionGate** | Prompt behaviour after feature completion: start review now or defer |
 | **VerifierInputs** | Required references for verifier: original feature plan, optional review artifact, completion reports, evidence |
 | **ReviewIterationPolicy** | On verifier fail, update existing review artifact; add IterationNotes and remediation tasks |
 | **DocumentationOutputs** | Final required docs under `docs/changelog`, `docs/guides`, and `docs/architecture` |
 | **Risks** | Known risks, rollback notes |
 | **OutOfScope** | Explicitly excluded work |
 
-## CompletionReport Contract
+### CompletionReport contract
 
 Each execution stage must return:
 
@@ -36,93 +91,24 @@ Each execution stage must return:
 - `next_stage_input`
 
 If environment is blocked:
+
 - `blocker_code: ENV_BLOCKED`
 - `preflight_checks`
 - `recommended_env_fix`
 
-## Artifact Types
+### Artifact types
 
-- `feature.<slug>.md` - Feature implementation (from `plan`)
-- `debug.<slug>.md` - Bug fix (from `debugger`)
-- `refactor.<slug>.md` - Refactor migration (from `refactor`)
-- `review.<slug>.md` - Review changes (from `review`)
-- `design.<slug>.md` - Prototype design brief (from `designer`); orchestrate dispatches `ux-dev` to generate code in `.prototype/<slug>/`
+- `feature.<slug>.md` — Feature implementation (from `plan`)
+- `debug.<slug>.md` — Bug fix (from `debugger`)
+- `refactor.<slug>.md` — Refactor migration (from `refactor`)
+- `review.<slug>.md` — Review changes (from `review`)
+- `design.<slug>.md` — Prototype design brief (from `designer`); orchestrate dispatches `ux-dev` to generate code in `.prototype/<slug>/`
 
-## Test-Driven Development (TDD) — Mandatory
+### Test-driven development (TDD) — mandatory
 
 **Every stage must be testable.** Plans that omit tests are invalid.
 
-1. **StageAcceptanceChecks:** Each stage MUST have at least one executable test or verification command (e.g. `pnpm test path/to/file.test.ts`, `npm run lint`, `playwright test component.spec.ts`). No stage may have empty or placeholder-only checks.
+1. **StageAcceptanceChecks:** Each stage MUST have at least one executable test or verification command.
 2. **Task ordering:** For behavior changes, Tasks MUST order test-first: add/update test → run and confirm failure (red) → implement → run and confirm pass (green).
-3. **FilesToChange:** Include test file paths for each stage that adds or changes behavior. Map test files to `stage_id` alongside production files.
+3. **FilesToChange:** Include test file paths for each stage that adds or changes behavior.
 4. **AcceptanceChecks:** End-to-end checks MUST include running the full test suite (or targeted tests) for changed code paths.
-
-## Example Skeleton
-
-```markdown
-# <Type>: <Name>
-
-## Context
-...
-
-## Goal
-...
-
-## Difficulty
-One of: `easy`, `medium`, `hard` (architect sets at planning time).
-
-## StagePlan
-Each stage MUST have Owner. Orchestrate dispatches by Owner: `frontend-dev` for UI/design, `developer` for logic/backend, `ux-dev` for prototype generation from design artifacts.
-
-1. `stage_id: stage-ui`
-   - Owner: `frontend-dev`
-   - Objective: ...
-2. `stage_id: stage-core`
-   - Owner: `developer`
-   - Objective: ...
-
-## Tasks
-(TDD: test-first for behavior changes. Order: add test → red → implement → green.)
-1. [stage-ui] Add component test for new UI behavior; run and confirm fail. Implement component. Run and confirm pass.
-2. [stage-core] Add unit test for new logic; run and confirm fail. Implement logic. Run and confirm pass.
-
-## FilesToChange
-- [stage-ui] path/to/ui-file.tsx: explanation; path/to/ui.test.tsx: component test
-- [stage-core] path/to/core-file.ts: explanation; path/to/core.test.ts: unit test
-
-## StageAcceptanceChecks
-(Every stage MUST have at least one executable test. No stage without tests.)
-- [stage-ui] Run `pnpm test path/to/ui.test.tsx` (or equivalent component test)
-- [stage-core] Run `pnpm test path/to/core.test.ts` (or equivalent unit test)
-
-## AcceptanceChecks
-- Run targeted tests
-- Run lint/type checks for touched code
-
-## CompletionReport
-- Required: stage_id, files_changed, tests_run, blockers, residual_risks
-
-## ReviewDecisionGate
-- Orchestrator: on completion, prompt "Switch to architect for review and documentation sign-off."
-- Architect: after review sign-off, invoke document and scribe for docs.
-
-## VerifierInputs
-- Original feature plan: `.plan/feature.<slug>.md`
-- Review artifact (if present): `.plan/review.<slug>.md`
-- Stage completion reports and test evidence
-
-## ReviewIterationPolicy
-- Update existing `.plan/review.<slug>.md` in place
-- Mark completed tasks, add remediation tasks, append dated IterationNotes
-
-## DocumentationOutputs
-- `docs/changelog/<date>-<slug>.md`
-- `docs/guides/<slug>.md`
-- `docs/architecture/<slug>.md`
-
-## Risks
-- ...
-
-## OutOfScope
-- ...
-```

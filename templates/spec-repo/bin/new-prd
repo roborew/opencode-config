@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Scaffold PRD file from template (spec repo).
+set -euo pipefail
+SLUG="${1:?slug required}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+mkdir -p "$ROOT/docs/prd"
+cp "$ROOT/docs/prd/_template.md" "$ROOT/docs/prd/${SLUG}.md"
+mkdir -p "$ROOT/docs/prototypes/${SLUG}"
+if [[ -f "$ROOT/docs/prototypes/_template/README.md" ]]; then
+  cp "$ROOT/docs/prototypes/_template/README.md" "$ROOT/docs/prototypes/${SLUG}/README.md"
+fi
+echo "Created $ROOT/docs/prd/${SLUG}.md"
+echo "Edit PRD frontmatter + body, create parent issue (gh issue create), set parent_issue in the file."

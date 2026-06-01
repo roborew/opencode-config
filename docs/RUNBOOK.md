@@ -2,9 +2,37 @@
 
 **Config precedence:** `opencode.json` is the sole runtime authority for models, `steps` caps, MCP, and global `permission` / `instructions`. Agent markdown frontmatter describes behavior; numeric limits in frontmatter are superseded by `opencode.json` when both exist.
 
+## Two-mode workflow
+
+| Mode | Planning | Execution source of truth |
+|------|----------|----------------------------|
+| **Spec / GitHub** (default) | Spec: PRD + fanout; impl: **issue-expand** (architect option 1) | GitHub child issues (`feature:<slug>`, `opencode-task-yaml` + `stages[]`) |
+| **Legacy local** | Architect option 2 → scribe writes `.plan/feature.<slug>.md` | Active `.plan/*.md` (excludes `*.completed.md`) |
+
+See [FEATURE-PIPELINE.md](FEATURE-PIPELINE.md) for the numbered pipeline. **Fanout alone does not populate `stages[]`** — run issue-expand in each implementation repo before orchestrate on the spec path.
+
+## GitHub-always principle (spec path)
+
+After `bin/fanout`, **GitHub issues are the execution source of truth**. Do not create parallel `.plan/issue.*` files for spec-driven features. Orchestrate reads **issue bodies** (`opencode_meta`, `stages[]`, Implementation planning markdown), not the full PRD, unless a subagent explicitly needs PRD context. Ephemeral caches (`tmp/feature-context.md`) are not authoritative.
+
+## Stack bootstrap (`setup-project`)
+
+| Who | Command / action |
+|-----|------------------|
+| **Human (once per stack)** | `cd ~/code/APP && setup-project` from project parent (`GH_ORG` or `--org` required) |
+| **OpenCode (spec repo)** | architect → **setup-project** skill: interview, `docs/agents/repos.md`, Task **stack-bootstrap** per impl repo |
+
+Shell bootstrap syncs `bin/*` and templates; registry **INCOMPLETE** until the OpenCode interview fills TBD fields is normal (`exit 3` / `NEXT:`). Re-run `setup-project` after adding sibling impl repos. Details: [README.md](../README.md) Setup, [skills/setup-project/SKILL.md](../skills/setup-project/SKILL.md).
+
+## Push cadence (issue-backed execution)
+
+- **Commit** after each passing stage using the stage `commit_message` from `opencode-task-yaml` (append `Refs: #<issue_number>`).
+- **Push** the feature branch after each issue’s stages complete (or when the user asks for remote/CI visibility mid-feature). Do not force-push protected branches; use `ship` / user confirmation for PR creation.
+- **Do not** treat “code already exists in the tree” as “ticket done” — map acceptance to tests and yaml `stages[]`.
+
 ## Overview
 
-- **Built-in agents:** `plan` uses DeepSeek V4 Pro; `build` uses DeepSeek V4 Flash in `opencode.json` for generic/quick tasks.
+- **Built-in agents:** `plan` uses Qwen3.7 Max; `build` uses MiniMax M3 in `opencode.json` for generic/quick tasks.
 - **Primary planning mode** (`architect`) — read-only: exploration, reporting, drafting plans; also owns review and documentation after implementation. Invokes: `debugger`, `refactor`, `review`, `document`, `designer`, `scribe`. Never invokes `frontend-dev`, `developer`, or `orchestrate`. Prompts user to switch to orchestrate when done; receives user back for review + docs after orchestrate completes. **Skills:** `architect-plan` (new planning, features, specialists, Mode A); `architect-review` (post-implementation Mode B only). The monolithic `architect` skill package is removed.
 - **Primary execution mode** (`orchestrate`) runs delegated stage execution and recovery flow. Reads `## Difficulty` from the artifact (`easy` \| `medium` \| `hard`; default `medium` if missing). After all stages pass the final verifier: **easy** — no extra gates; **medium** — invokes `review` for a post-execution check; **hard** — invokes `senior-dev` (scheduled review, no user confirmation) then `helper` (strategy conformance). On completion, prompts user to switch to architect for review and documentation. **Skills:** `orchestrate-execution` (bootstrap: optional `worktree-env` then `developer` preflight, plan selection, stage loop, grading, completion gates); `orchestrate-recovery` (helper triggers, loops, env, escalation, manual paste). The monolithic `orchestrate` skill package is removed.
 - **Planning specialists** (`debugger`, `refactor`, `review`, `designer`) — read-only subagents of architect; return plan drafts, never write code. `designer` synthesizes design briefs for Prototype Design. The **`review`** agent may Task **`security-reviewer`**, **`performance-reviewer`**, and **`doc-reviewer`** when change scope warrants (see `skills/review/SKILL.md`).
@@ -117,6 +145,21 @@ When a subagent repeats the same completion message or stalls:
 
 Provider-level `timeout` (e.g. 300000ms) and per-model **`temperature` / `top_p` / `frequency_penalty`** are set under `provider.openrouter.models.<id>.options` in `opencode.json` to reduce variance and wasted tokens (e.g. lower temp for execution, gentle `frequency_penalty` for DeepSeek).
 
+## Model routing (OpenRouter)
+
+| Layer | Agents | Model |
+| --- | --- | --- |
+| Planning / architecture | `architect`, `plan`, `strategist` | Qwen3.7 Max |
+| Orchestration | `orchestrate` | MiniMax M3 |
+| Primary implementation | `developer`, `frontend-dev`, `build` | MiniMax M3 |
+| Design / prototypes | `designer`, `ux-dev` | Gemini 3 Flash |
+| Senior / second opinion | `senior-dev` | DeepSeek V4 Pro |
+| Fast utility | `debugger`, `helper`, `refactor`, `verifier`, `review`, reviewers, `mentor` | DeepSeek V4 Flash |
+| Vision | `vision` | Qwen3 VL |
+| Writing / docs | `scribe`, `document`, `doc-reviewer`, `stack-bootstrap`, `worktree-env` | GPT-5 Nano |
+
+Runtime authority: `opencode.json`. Agent frontmatter `model:` should match for changed agents.
+
 `default_agent` is set to `orchestrate` so execution sessions start with the coordinator as the active primary context.
 
 ## Review and Verifier Interaction
@@ -182,6 +225,25 @@ Operation: create|update
 Content: full body from parent (markdown or .env.example template lines)
 Constraints: approved paths only; markdown or .env.example only
 ```
+
+## Troubleshooting: CRLF / `env: bash\r`
+
+On macOS/Linux, **CRLF** line endings in `bin/*` shell scripts break the shebang (`env: bash\r: No such file or directory`). OpenCode templates are LF; spec-repo copies are normalized on every **`sync_spec_tooling.sh`** run (`strip_crlf` after install).
+
+**Agents:** Do not fix CRLF file-by-file with sed/Python. Run one of:
+
+```bash
+# From spec repo (when ./bin/* fails)
+bash bin/feature-upgrade <slug>
+"$HOME/.config/opencode/bin/stack/sync_spec_tooling.sh" "$(pwd)"
+
+# From project parent (wrapper syncs tooling before exec)
+feature-upgrade <slug>
+```
+
+**Prevention:** Spec repos receive [`.gitattributes`](../templates/spec-repo/.gitattributes) on sync so Git keeps `bin/**` as LF. Re-run **`setup-project`** or **`sync_spec_tooling.sh`** after pulling OpenCode config updates that touch `templates/spec-repo/bin/`.
+
+Config-repo CI runs `scripts/check-crlf.sh` on `bin/`, `scripts/`, `templates/`, and `.gitattributes`.
 
 ## Smoke Checklist
 

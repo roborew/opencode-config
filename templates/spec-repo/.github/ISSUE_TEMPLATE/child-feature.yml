@@ -1,0 +1,41 @@
+name: Child Feature
+description: A slice of a parent PRD, scoped to this repo
+title: "[<feature-slug>] <slice summary>"
+labels: ["category:feature", "state:needs-triage"]
+body:
+  - type: input
+    id: parent
+    attributes:
+      label: Parent issue
+      description: Link to owner/spec-repo#NNN
+      placeholder: owner/spec-repo#42
+    validations:
+      required: true
+  - type: input
+    id: feature_label
+    attributes:
+      label: Feature label
+      placeholder: feature:billing-portal-v2
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope in this repo
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria (slice)
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options:
+        - mode:afk
+        - mode:hitl
+    validations:
+      required: true

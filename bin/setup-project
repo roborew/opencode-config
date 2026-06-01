@@ -1,0 +1,260 @@
+#!/usr/bin/env bash
+# Bootstrap or upgrade a PROJECT stack: spec repo + linked implementation repos.
+# Run from the project parent folder (container with PROJECT-spec and PROJECT-* siblings).
+#
+# Usage (script lives in the OpenCode config repo, NOT in your APP/ project folder):
+#   cd ~/code/APP
+#   ~/.config/opencode/bin/setup-project
+# Or add once to PATH: export PATH="$HOME/.config/opencode/bin:$PATH"
+#   GH_ORG=owner setup-project [options] [project-parent-dir]
+#
+# Options:
+#   --check-only   Validate registry, PRDs, and impl wiring (no writes)
+#   --spec-only    Create/sync spec only; skip linking implementation repos
+#   --keep-branch  Do not checkout develop/main in the spec repo (stay on current branch)
+#   --all          Discover all git siblings (not only APP-* prefixed impl repos)
+#   --app <slug>   App slug (default: basename of parent directory)
+#   --org <org>    GitHub org (default: GH_ORG env)
+#   -h, --help
+set -euo pipefail
+
+OC="$(cd "$(dirname "$0")/.." && pwd)"
+STACK="${OC}/bin/stack"
+CHECK_ONLY=false
+SPEC_ONLY=false
+KEEP_BRANCH=false
+DISCOVER_ALL=false
+APP=""
+ORG="${GH_ORG:-}"
+PARENT=""
+
+usage() {
+  cat <<EOF
+Bootstrap or upgrade a PROJECT stack (spec + implementation repos).
+
+Install location: ${OC}/bin/setup-project
+(This is not ./bin/setup-project inside your APP folder.)
+
+Run from the project parent directory (sibling folders: APP-spec, APP-web, ...):
+  cd ~/code/APP
+  export GH_ORG=your-org
+  ${OC}/bin/setup-project
+
+Optional — add OpenCode CLI tools to PATH (shell rc):
+  export PATH="${OC}/bin:\$PATH"
+  setup-project
+
+Options:
+  --check-only     Validate registry, PRDs, impl wiring (no writes)
+  --spec-only      Create/sync spec only
+  --keep-branch    Keep current git branch in spec repo (skip develop/main checkout)
+  --all            Discover all git siblings (default: only APP-* impl repos)
+  --app <slug>     App slug (default: parent folder basename)
+  --org <org>      GitHub org (default: GH_ORG env)
+EOF
+  exit "${1:-0}"
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage 0 ;;
+    --check-only) CHECK_ONLY=true; shift ;;
+    --spec-only) SPEC_ONLY=true; shift ;;
+    --keep-branch) KEEP_BRANCH=true; shift ;;
+    --all) DISCOVER_ALL=true; shift ;;
+    --app)
+      APP="${2:?}"
+      shift 2
+      ;;
+    --org)
+      ORG="${2:?}"
+      shift 2
+      ;;
+    -*)
+      echo "unknown option: $1" >&2
+      usage 1
+      ;;
+    *)
+      PARENT="$1"
+      shift
+      ;;
+  esac
+done
+
+if [[ -z "$ORG" ]]; then
+  echo "ERROR: set GH_ORG or pass --org <org>" >&2
+  exit 1
+fi
+
+if [[ -z "$PARENT" ]]; then
+  PARENT="$(pwd)"
+fi
+PARENT="$(cd "$PARENT" && pwd)"
+
+# shellcheck source=stack/common.sh
+source "${STACK}/common.sh"
+
+if [[ -z "$APP" ]]; then
+  APP="$(stack_default_app_slug "$PARENT")"
+fi
+
+SPEC_DIR="$(stack_resolve_spec_dir "$PARENT" "$APP")"
+
+# If spec exists on disk, trust folder + remote (blocshed-spec may map to roborew/BlocShed-spec).
+if [[ -d "${SPEC_DIR}/.git" ]]; then
+  APP="$(stack_app_slug_from_spec_dir "$SPEC_DIR")"
+  if SPEC_REPO="$(stack_gh_repo_from_dir "$SPEC_DIR")"; then
+    :
+  else
+    SPEC_REPO="${ORG}/${APP}-spec"
+  fi
+else
+  SPEC_REPO="${ORG}/${APP}-spec"
+fi
+SPEC_NAME="${SPEC_REPO#*/}"
+
+TARGETS=()
+while IFS= read -r t; do
+  [[ -z "$t" ]] && continue
+  TARGETS+=("$t")
+done < <(stack_discover_targets "$PARENT" "$SPEC_NAME" "$APP" "$DISCOVER_ALL")
+
+if [[ "$CHECK_ONLY" == "true" ]]; then
+  echo "==> check-only: ${PARENT}"
+  CHECK_CODE=0
+  if [[ -d "$SPEC_DIR" ]] && stack_is_spec_repo "$SPEC_DIR"; then
+    "${STACK}/sync_spec_tooling.sh" --check-only "$SPEC_DIR" || CHECK_CODE=$?
+  else
+    echo "INCOMPLETE: missing or invalid spec repo at ${SPEC_DIR}"
+    CHECK_CODE=3
+  fi
+  if [[ "$SPEC_ONLY" != "true" ]]; then
+    "${STACK}/check_impl_wiring.sh" "$PARENT" "$ORG" "$APP" "$DISCOVER_ALL" || {
+      c=$?
+      [[ "$CHECK_CODE" -eq 0 ]] && CHECK_CODE=$c
+    }
+  fi
+  if [[ "$CHECK_CODE" -eq 0 ]]; then
+    echo "==> All checks passed."
+  fi
+  exit "$CHECK_CODE"
+fi
+
+echo "==> Project parent: ${PARENT}"
+echo "==> App slug: ${APP} (from parent folder / spec dir; override with --app)"
+echo "==> Spec repo: ${SPEC_REPO}"
+if [[ "$(basename "$PARENT" | tr '[:upper:]' '[:lower:]')" != "$APP" ]]; then
+  echo "    Note: parent folder name differs from app slug; using on-disk spec: $(basename "$SPEC_DIR")" >&2
+fi
+
+# Re-runs: never force spec branch checkout (tooling sync may leave local changes).
+if [[ -d "${SPEC_DIR}/.git" ]]; then
+  KEEP_BRANCH=true
+fi
+CREATE_ARGS=()
+[[ "$KEEP_BRANCH" == "true" ]] && CREATE_ARGS+=(--keep-branch)
+SYNC_SPEC_ARGS=("$PARENT" "$APP" "$ORG")
+[[ ${#TARGETS[@]} -gt 0 ]] && SYNC_SPEC_ARGS+=("${TARGETS[@]}")
+SPEC_PATH_RAW=""
+if [[ ${#CREATE_ARGS[@]} -gt 0 ]]; then
+  SPEC_PATH_RAW="$("${STACK}/create_or_sync_spec.sh" "${CREATE_ARGS[@]}" "${SYNC_SPEC_ARGS[@]}")"
+else
+  SPEC_PATH_RAW="$("${STACK}/create_or_sync_spec.sh" "${SYNC_SPEC_ARGS[@]}")"
+fi
+SPEC_PATH=""
+while IFS= read -r line; do
+  line="${line#"${line%%[![:space:]]*}"}"
+  line="${line%"${line##*[![:space:]]}"}"
+  [[ -z "$line" ]] && continue
+  if [[ -d "$line" ]]; then
+    SPEC_PATH="$line"
+  fi
+done <<< "$SPEC_PATH_RAW"
+
+if [[ -z "$SPEC_PATH" || ! -d "$SPEC_PATH" ]]; then
+  if [[ -d "$SPEC_DIR" ]] && stack_is_spec_repo "$SPEC_DIR"; then
+    SPEC_PATH="$SPEC_DIR"
+    if [[ "$SPEC_PATH_RAW" == *github.com* ]]; then
+      echo "WARN: GitHub CLI wrote a repo URL to stdout; continuing with ${SPEC_PATH}" >&2
+      echo "       If linking or tooling sync did not run, re-run from ${PARENT}:" >&2
+      echo "         setup-project" >&2
+    fi
+  else
+    echo "ERROR: could not resolve local spec repo path." >&2
+    if [[ "$SPEC_PATH_RAW" == *github.com* ]]; then
+      echo "       A spec repo may have been created on GitHub. Check ${PARENT}/$(basename "$SPEC_DIR")" >&2
+      echo "       then re-run: cd ${PARENT} && setup-project" >&2
+    fi
+    echo "       Captured output:" >&2
+    printf '         %s\n' "$SPEC_PATH_RAW" >&2
+    exit 1
+  fi
+fi
+echo "==> Spec at: ${SPEC_PATH} (branch: $(git -C "$SPEC_PATH" branch --show-current 2>/dev/null || echo unknown))"
+
+SYNC_CODE=0
+"${STACK}/sync_spec_tooling.sh" "$SPEC_PATH" || SYNC_CODE=$?
+
+LINKED=0
+if [[ "$SPEC_ONLY" != "true" && ${#TARGETS[@]} -gt 0 ]]; then
+  echo ""
+  echo "==> Linking implementation repos..."
+  export OPENCODE_SETUP_QUIET=1
+  LINK="${STACK}/link_impl_repo.sh"
+  for target in "${TARGETS[@]}"; do
+    local_dir="$(stack_local_dir_for_target "$target")"
+    impl_path="${PARENT}/${local_dir}"
+    if stack_dir_is_spec_repo "$PARENT" "$local_dir" "${APP}-spec"; then
+      echo "SKIP: ${local_dir} is the spec repo, not an implementation repo" >&2
+      continue
+    fi
+    if [[ -d "${impl_path}/.git" ]]; then
+      "$LINK" "${impl_path}" "$SPEC_REPO"
+      "${STACK}/sync_impl_tooling.sh" "${impl_path}" || true
+      LINKED=$((LINKED + 1))
+    else
+      echo "WARN: ${local_dir} not found under ${PARENT}" >&2
+    fi
+  done
+  unset OPENCODE_SETUP_QUIET
+fi
+
+# Commit tooling/registry updates so the next re-run is not blocked.
+if git -C "$SPEC_PATH" rev-parse --git-dir &>/dev/null; then
+  git -C "$SPEC_PATH" add -A
+  if ! git -C "$SPEC_PATH" diff --cached --quiet; then
+    if git -C "$SPEC_PATH" commit -m "chore: sync OpenCode spec tooling from setup-project" >/dev/null 2>&1; then
+      echo "==> Committed spec tooling updates ($(git -C "$SPEC_PATH" branch --show-current))" >&2
+      git -C "$SPEC_PATH" push origin HEAD >/dev/null 2>&1 || \
+        echo "NOTE: Push spec repo when ready: cd ${SPEC_PATH} && git push" >&2
+    else
+      echo "NOTE: Spec repo has local OpenCode sync files (commit when ready)" >&2
+    fi
+  fi
+fi
+
+if [[ ${#TARGETS[@]} -gt 0 ]]; then
+  echo ""
+  echo "==> Stack repos:"
+  echo "    spec: ${SPEC_REPO}"
+  for target in "${TARGETS[@]}"; do
+    local_dir="$(stack_local_dir_for_target "$target")"
+    if [[ -d "${PARENT}/${local_dir}/.git" ]]; then
+      echo "    impl: ${target}  (${local_dir}/)"
+    else
+      echo "    impl: ${target}  (missing clone: ${local_dir}/)" >&2
+    fi
+  done
+fi
+
+echo ""
+echo "=== LABEL_SYNC_PAT (optional) ==="
+echo "  gh secret set LABEL_SYNC_PAT --repo ${SPEC_REPO}"
+echo ""
+
+"${STACK}/print_next_steps.sh" "$SPEC_PATH" "$SYNC_CODE" "$LINKED"
+# Exit 3 = registry metadata still TBD in OpenCode; shell work succeeded.
+if [[ "$SYNC_CODE" -eq 3 ]]; then
+  exit 0
+fi
+exit "$SYNC_CODE"

@@ -11,6 +11,10 @@ description: "Minimal emergency fix from main, hotfix branch, [HOTFIX] PR"
 4. Run **only** tests relevant to the touched paths.
 5. Open PR with `[HOTFIX]` prefix; describe rollback.
 
+## GitHub issue path (when architect delegates)
+
+For non-emergency hotfix planning in OpenCode, architect may first publish a single **`to-issues`** slice labelled `mode:hitl` before you implement. Follow that issue contract when orchestrate delegates execution.
+
 ## Stop conditions
 
 - If change touches **>3 files** or alters public APIs, warn: likely not a hotfix — use normal feature flow.

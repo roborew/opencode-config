@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+# Re-apply fanout issue body structure from PRD tickets to existing GitHub child issues.
+# Run from the spec repo root. Idempotent; preserves issue-expand content when present.
+set -euo pipefail
+SLUG="${1:?slug required}"
+BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$BIN_DIR/.." && pwd)"
+# shellcheck source=lib/build_issue_body.sh
+source "${BIN_DIR}/lib/build_issue_body.sh"
+# shellcheck source=lib/task_map.sh
+source "${BIN_DIR}/lib/task_map.sh"
+EXTRACT="${BIN_DIR}/lib/extract_issue_sections.py"
+PRD_PATH="${ROOT}/docs/prd/${SLUG}.md"
+VALIDATE_PRD="${BIN_DIR}/lib/validate_prd_frontmatter.py"
+TOPOSORT="${BIN_DIR}/lib/toposort_tickets.py"
+
+PRD_IO="${BIN_DIR}/lib/prd_io.py"
+[[ -f "$PRD_IO" ]] || { echo "missing $PRD_IO" >&2; exit 8; }
+
+[[ -f "$PRD_PATH" ]] || { echo "missing $PRD_PATH" >&2; exit 2; }
+[[ -f "$VALIDATE_PRD" ]] && python3 "$VALIDATE_PRD" "$PRD_PATH"
+PARENT_URL=$(python3 "$PRD_IO" get "$PRD_PATH" parent_issue)
+[[ -n "$PARENT_URL" ]] || { echo "parent_issue empty in frontmatter" >&2; exit 3; }
+
+TICKET_COUNT=$(python3 "$PRD_IO" tickets_count "$PRD_PATH")
+[[ "${TICKET_COUNT}" -gt 0 ]] || {
+  echo "sync-fanout-bodies requires PRD tickets: frontmatter (not legacy slices only)" >&2
+  exit 4
+}
+
+TMP=$(mktemp)
+python3 "$PRD_IO" tickets_json "$PRD_PATH" >"$TMP"
+task_map_init
+trap 'task_map_cleanup; rm -f "$TMP"' EXIT
+
+find_issue_number() {
+  local repo="$1" title="$2" task_id="$3"
+  gh issue list --repo "$repo" --state all --label "feature:${SLUG}" --limit 200 \
+    --json number,title,body 2>/dev/null \
+    | jq -r --arg title "$title" --arg task_id "$task_id" '
+        .[]
+        | select(.title == $title or ((.body // "") | contains("\"task_id\":\"" + $task_id + "\"")))
+        | .number' | sed -n '1p'
+}
+
+while IFS= read -r TID; do
+  [[ -z "$TID" ]] && continue
+  REPO=$(jq -r --arg id "$TID" '.[] | select(.id==$id) | .repo' "$TMP")
+  TITLE=$(jq -r --arg id "$TID" '.[] | select(.id==$id) | .title' "$TMP")
+  OWNER=$(jq -r --arg id "$TID" '.[] | select(.id==$id) | .owner' "$TMP")
+  MODE=$(jq -r --arg id "$TID" '.[] | select(.id==$id) | (.mode // "afk")' "$TMP")
+  CM=$(jq -r --arg id "$TID" '.[] | select(.id==$id) | .commit_message' "$TMP")
+  CAPABILITY=$(jq -r --arg id "$TID" '.[] | select(.id==$id) | (.capability // .role // "")' "$TMP")
+  ACC=$(jq -c --arg id "$TID" '.[] | select(.id==$id) | (.acceptance // [])' "$TMP")
+  TC=$(jq -c --arg id "$TID" '.[] | select(.id==$id) | (.test_commands // [])' "$TMP")
+  EXTRA=$(jq -r --arg id "$TID" '.[] | select(.id==$id) | (.body // "")' "$TMP")
+  COVERS=$(jq -r --arg id "$TID" '.[] | select(.id==$id) | (.covers_user_stories // []) | join(", ")' "$TMP")
+  DEPS=$(jq -c --arg id "$TID" '.[] | select(.id==$id) | (.depends_on // [])' "$TMP")
+
+  NUM=$(find_issue_number "$REPO" "$TITLE" "$TID") || true
+  [[ -n "$NUM" ]] || { echo "SKIP no issue for $TID on $REPO" >&2; continue; }
+  task_map_set "$TID" "$NUM"
+
+  BLOCKED_LINE="**Blocked by:** (none)"
+  DEP_ISSUES=()
+  while IFS= read -r dep_id; do
+    [[ -z "$dep_id" ]] && continue
+    dn=$(task_map_get "$dep_id")
+    [[ -n "$dn" ]] && DEP_ISSUES+=("#$dn")
+  done < <(echo "$DEPS" | jq -r '.[]?')
+  if [[ ${#DEP_ISSUES[@]} -gt 0 ]]; then
+    BLOCKED_LINE="**Blocked by:** $(IFS=', '; echo "${DEP_ISSUES[*]}")"
+  fi
+
+  META_JSON=$(jq -nc \
+    --arg tid "$TID" --arg owner "$OWNER" --arg capability "$CAPABILITY" --arg cm "$CM" \
+    --argjson acc "$ACC" --argjson tc "$TC" --argjson deps "$DEPS" \
+    '{task_id:$tid,depends_on:$deps,owner:$owner,capability:$capability,commit_message:$cm,acceptance:$acc,test_commands:$tc}')
+
+  OLD_BODY=$(gh issue view "$NUM" --repo "$REPO" --json body -q .body)
+  EXTRACTED=$(echo "$OLD_BODY" | python3 "$EXTRACT")
+  if echo "$EXTRACTED" | jq -e '.preserve_stages' >/dev/null; then
+    STAGES=$(echo "$EXTRACTED" | jq -c '.meta.stages // empty')
+    if [[ -n "$STAGES" && "$STAGES" != "null" ]]; then
+      META_JSON=$(echo "$META_JSON" | jq --argjson stages "$STAGES" '. + {stages: $stages}')
+    fi
+  fi
+
+  US_SECTION=""
+  IP_SECTION=""
+  if echo "$EXTRACTED" | jq -e '.preserve_user_stories' >/dev/null; then
+    US_SECTION=$(echo "$EXTRACTED" | jq -r '.user_stories_covered')
+  elif [[ -n "$COVERS" ]]; then
+    US_SECTION="- PRD \`covers_user_stories\`: ${COVERS}"
+  fi
+  if echo "$EXTRACTED" | jq -e '.preserve_implementation_plan' >/dev/null; then
+    IP_SECTION=$(echo "$EXTRACTED" | jq -r '.implementation_plan')
+  fi
+
+  BODY_FILE=$(mktemp)
+  build_issue_body "$PARENT_URL" "$SLUG" "$META_JSON" "$BLOCKED_LINE" "$EXTRA" "$US_SECTION" "$IP_SECTION" >"$BODY_FILE"
+  gh issue edit "$NUM" --repo "$REPO" --body-file "$BODY_FILE"
+  rm -f "$BODY_FILE"
+  echo "Synced #$NUM on $REPO ($TID)"
+done < <(python3 "$TOPOSORT" <"$TMP")
+
+task_map_cleanup
+rm -f "$TMP"
+trap - EXIT
+echo "Done. Run issue-expand in each implementation repo for stages and full plans."

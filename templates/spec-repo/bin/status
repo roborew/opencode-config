@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# List issues for a feature label (run inside spec repo).
+set -euo pipefail
+SLUG="${1:?slug required}"
+cd "$(dirname "$0")/.."
+SPEC=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+OWNER=$(echo "$SPEC" | cut -d/ -f1)
+echo "SPEC_REPO=${SPEC}"
+echo "Searching label feature:${SLUG}:"
+gh search issues "label:feature:${SLUG}" --owner "$OWNER" --limit 50 --json repository,number,state,title,url 2>/dev/null | \
+  jq -r '.[] | "\(.repository.nameWithOwner)#\(.number) [\(.state)] \(.title) — \(.url)"' || true

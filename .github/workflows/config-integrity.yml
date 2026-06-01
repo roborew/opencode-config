@@ -7,7 +7,12 @@ on:
       - "skills/**"
       - "opencode.json"
       - "rules/**"
+      - "bin/**"
+      - "templates/**"
+      - "scripts/**"
+      - ".gitattributes"
       - "scripts/validate-opencode-config.sh"
+      - "scripts/check-crlf.sh"
       - ".github/workflows/config-integrity.yml"
   push:
     branches: [main, master]
@@ -16,12 +21,19 @@ on:
       - "skills/**"
       - "opencode.json"
       - "rules/**"
+      - "bin/**"
+      - "templates/**"
+      - "scripts/**"
+      - ".gitattributes"
       - "scripts/validate-opencode-config.sh"
+      - "scripts/check-crlf.sh"
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check CRLF in tooling paths
+        run: bash scripts/check-crlf.sh
       - name: Validate OpenCode config
         run: bash scripts/validate-opencode-config.sh
