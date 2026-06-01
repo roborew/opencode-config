@@ -3,13 +3,47 @@
   "default_agent": "orchestrate",
   "instructions": ["rules/testing.md", "rules/**/*.md"],
   "permission": {
+    "external_directory": {
+      "*": "allow",
+      "~/.ssh/**": "deny",
+      "~/.gnupg/**": "deny",
+      "~/.aws/**": "deny"
+    },
+    "bash": {
+      "*": "allow",
+      "rm -rf /*": "deny",
+      "rm -rf ~/*": "deny",
+      "rm -rf ~": "deny",
+      "git push * --force*": "deny",
+      "git push * -f*": "deny",
+      "git reset --hard*": "deny",
+      "git clean -fd*": "deny",
+      "git clean -f *": "deny",
+      "git branch -D *": "deny",
+      "git checkout .": "deny",
+      "git restore .": "deny"
+    },
     "edit": {
-      "opencode.json": "deny",
+      "*": "allow",
+      "opencode.json": "ask",
       "package-lock.json": "deny",
+      "pnpm-lock.yaml": "deny",
+      "yarn.lock": "deny",
+      "Gemfile.lock": "deny",
+      "poetry.lock": "deny",
+      "Cargo.lock": "deny",
       "*.pem": "deny",
+      "*/*.pem": "deny",
+      "**/*.pem": "deny",
       "*.key": "deny",
+      "*/*.key": "deny",
+      "**/*.key": "deny",
       ".env": "deny",
-      ".env.*": "deny"
+      ".env.*": "deny",
+      "*/.env": "deny",
+      "*/.env.*": "deny",
+      "**/.env": "deny",
+      "**/.env.*": "deny"
     }
   },
   "provider": {
@@ -229,6 +263,11 @@
       "mode": "subagent",
       "model": "openrouter/minimax/minimax-m2.7",
       "steps": 45
+    },
+    "stack-bootstrap": {
+      "mode": "subagent",
+      "model": "openrouter/openai/gpt-5-nano",
+      "steps": 15
     }
   }
 }
