@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# DEPRECATED: use setup-project from the PROJECT parent folder, or:
+#   setup-project --check-only /path/to/PROJECT
+echo "DEPRECATED: use bin/setup-project" >&2
+OC="$(cd "$(dirname "$0")/.." && pwd)"
+if [[ "${1:-}" == "--check-only" ]]; then
+  shift
+  SPEC="${1:-$(pwd)}"
+  exec "${OC}/bin/stack/sync_spec_tooling.sh" --check-only "$SPEC"
+fi
+SPEC="${1:-$(pwd)}"
+PARENT="$(dirname "$(cd "$SPEC" && pwd)")"
+exec "${OC}/bin/setup-project" "$PARENT"

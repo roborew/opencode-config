@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# DEPRECATED: run setup-project from the PROJECT parent folder instead.
+echo "DEPRECATED: use bin/setup-project from the PROJECT parent directory" >&2
+OC="$(cd "$(dirname "$0")/.." && pwd)"
+SPEC_REPO="${1:?owner/name spec repo required}"
+if [[ -f docs/agents/issue-tracker.md ]] && [[ -d .git ]]; then
+  exec "${OC}/bin/stack/link_impl_repo.sh" "$(pwd)" "$SPEC_REPO"
+fi
+echo "Run from PROJECT parent: ${OC}/bin/setup-project" >&2
+exit 1
