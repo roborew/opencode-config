@@ -1,7 +1,7 @@
 ---
 description: "Unified executor for GitHub issues and legacy .plan stages with Owner: developer."
 mode: subagent
-model: openrouter/minimax/minimax-m2.7
+model: openrouter/minimax/minimax-m3
 steps: 45
 tools:
   write: true

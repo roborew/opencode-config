@@ -35,20 +35,40 @@ def split_registry(path: Path) -> tuple[str, list[dict]]:
     text = path.read_text(encoding="utf-8")
     marker = "\nrepos:"
     idx = text.rfind(marker)
-    if idx == -1:
-        return text, []
-    header = text[: idx + 1]
-    body = text[idx + 1 :].lstrip()
-    if yaml is None:
-        return header, _parse_repos_minimal(body)
-    data = yaml.safe_load(body) or {}
-    if isinstance(data, dict):
-        repos = data.get("repos") or []
-        if isinstance(repos, list):
-            return header, [r for r in repos if isinstance(r, dict)]
-    if isinstance(data, list):
-        return header, [r for r in data if isinstance(r, dict)]
-    return header, []
+    if idx != -1:
+        header = text[: idx + 1]
+        body = text[idx + 1 :].lstrip()
+        return _parse_registry_body(header, body)
+
+    # Bare YAML list after --- (no repos: wrapper) — common in filled registries.
+    sep = "\n---\n"
+    sep_idx = text.rfind(sep)
+    if sep_idx != -1:
+        header = text[: sep_idx + len(sep)]
+        body = text[sep_idx + len(sep) :].lstrip()
+        if body.lstrip().startswith("- "):
+            return _parse_registry_body(header, body)
+
+    return text, []
+
+
+def _parse_registry_body(header: str, body: str) -> tuple[str, list[dict]]:
+    if yaml is not None:
+        try:
+            data = yaml.safe_load(body) or {}
+            if isinstance(data, dict):
+                repos = data.get("repos") or []
+                if isinstance(repos, list):
+                    parsed = [r for r in repos if isinstance(r, dict)]
+                    if parsed:
+                        return header, parsed
+            if isinstance(data, list):
+                parsed = [r for r in data if isinstance(r, dict)]
+                if parsed:
+                    return header, parsed
+        except Exception:
+            pass
+    return header, _parse_repos_minimal(body)
 
 
 def _parse_repos_minimal(body: str) -> list[dict]:

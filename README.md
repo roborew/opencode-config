@@ -57,7 +57,7 @@ Implementation repos must exist as sibling clones before spec bootstrap can wire
 
 ## Built-in agents
 
-`plan` (DeepSeek V4 Pro) and `build` (DeepSeek V4 Flash) — see `opencode.json`.
+`plan` (Qwen3.7 Max) and `build` (MiniMax M3) — see `opencode.json`.
 
 ## Custom pipeline (summary)
 

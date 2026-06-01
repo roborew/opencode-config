@@ -32,7 +32,7 @@ Shell bootstrap syncs `bin/*` and templates; registry **INCOMPLETE** until the O
 
 ## Overview
 
-- **Built-in agents:** `plan` uses DeepSeek V4 Pro; `build` uses DeepSeek V4 Flash in `opencode.json` for generic/quick tasks.
+- **Built-in agents:** `plan` uses Qwen3.7 Max; `build` uses MiniMax M3 in `opencode.json` for generic/quick tasks.
 - **Primary planning mode** (`architect`) — read-only: exploration, reporting, drafting plans; also owns review and documentation after implementation. Invokes: `debugger`, `refactor`, `review`, `document`, `designer`, `scribe`. Never invokes `frontend-dev`, `developer`, or `orchestrate`. Prompts user to switch to orchestrate when done; receives user back for review + docs after orchestrate completes. **Skills:** `architect-plan` (new planning, features, specialists, Mode A); `architect-review` (post-implementation Mode B only). The monolithic `architect` skill package is removed.
 - **Primary execution mode** (`orchestrate`) runs delegated stage execution and recovery flow. Reads `## Difficulty` from the artifact (`easy` \| `medium` \| `hard`; default `medium` if missing). After all stages pass the final verifier: **easy** — no extra gates; **medium** — invokes `review` for a post-execution check; **hard** — invokes `senior-dev` (scheduled review, no user confirmation) then `helper` (strategy conformance). On completion, prompts user to switch to architect for review and documentation. **Skills:** `orchestrate-execution` (bootstrap: optional `worktree-env` then `developer` preflight, plan selection, stage loop, grading, completion gates); `orchestrate-recovery` (helper triggers, loops, env, escalation, manual paste). The monolithic `orchestrate` skill package is removed.
 - **Planning specialists** (`debugger`, `refactor`, `review`, `designer`) — read-only subagents of architect; return plan drafts, never write code. `designer` synthesizes design briefs for Prototype Design. The **`review`** agent may Task **`security-reviewer`**, **`performance-reviewer`**, and **`doc-reviewer`** when change scope warrants (see `skills/review/SKILL.md`).
@@ -144,6 +144,21 @@ When a subagent repeats the same completion message or stalls:
 6. **Manual handoff (Task did not return):** If a subagent completed and produced a report but the Task did not return control to the orchestrator, switch to the `orchestrate` agent and paste the completion report. The orchestrator will grade it and proceed to the next stage. Do not message the subagent again—it has already completed.
 
 Provider-level `timeout` (e.g. 300000ms) and per-model **`temperature` / `top_p` / `frequency_penalty`** are set under `provider.openrouter.models.<id>.options` in `opencode.json` to reduce variance and wasted tokens (e.g. lower temp for execution, gentle `frequency_penalty` for DeepSeek).
+
+## Model routing (OpenRouter)
+
+| Layer | Agents | Model |
+| --- | --- | --- |
+| Planning / architecture | `architect`, `plan`, `strategist` | Qwen3.7 Max |
+| Orchestration | `orchestrate` | MiniMax M3 |
+| Primary implementation | `developer`, `frontend-dev`, `build` | MiniMax M3 |
+| Design / prototypes | `designer`, `ux-dev` | Gemini 3 Flash |
+| Senior / second opinion | `senior-dev` | DeepSeek V4 Pro |
+| Fast utility | `debugger`, `helper`, `refactor`, `verifier`, `review`, reviewers, `mentor` | DeepSeek V4 Flash |
+| Vision | `vision` | Qwen3 VL |
+| Writing / docs | `scribe`, `document`, `doc-reviewer`, `stack-bootstrap`, `worktree-env` | GPT-5 Nano |
+
+Runtime authority: `opencode.json`. Agent frontmatter `model:` should match for changed agents.
 
 `default_agent` is set to `orchestrate` so execution sessions start with the coordinator as the active primary context.
 

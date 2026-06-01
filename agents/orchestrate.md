@@ -1,7 +1,7 @@
 ---
 description: Execution orchestrator for GitHub issue queues and legacy artifact-driven stage flow
 mode: primary
-model: openrouter/deepseek/deepseek-v4-flash
+model: openrouter/minimax/minimax-m3
 tools:
   write: false
   edit: false
