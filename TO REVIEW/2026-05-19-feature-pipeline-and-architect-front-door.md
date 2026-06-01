@@ -1,8 +1,12 @@
 # 2026-05-19 — Feature Pipeline, Spec Tooling, and Architect Front Door
 
-**Session scope:** Refine the spec-driven feature workflow (PRD → fanout → issue-expand → orchestrate), fix spec-repo tooling for real PRD markdown and macOS Bash 3.2, audit and sync `blocshed-spec` / `blocshed-web`, clarify operator paths vs `setup-project`, and rework the architect greeting menu so spec workflow and legacy planning are top-level choices.
+**Filename date (`2026-05-19`):** Cursor chat **creation date** (transcript file birth time), not the date this review doc was last edited.
 
-**Status:** Implemented and finalized in this chat (session completion **2026-05-19**). Re-sync stacks with `setup-project` or `sync_spec_tooling.sh` / `sync_impl_tooling.sh` after pulling `~/.config/opencode`.
+**Chat transcript:** [Feature pipeline & blocshed workflow](6c0d95db-56b8-40cb-9b3a-54a31b198f7c)
+
+**Session scope:** Refine the spec-driven feature workflow (PRD → fanout → issue-expand → orchestrate); fix spec-repo tooling for real PRD markdown and macOS Bash 3.2; audit and sync `blocshed-spec` / `blocshed-web`; clarify operator paths vs `setup-project`; rework architect greeting menu so **spec workflow** and **legacy planning** are top-level options (not an A/B submenu).
+
+**Status:** Implemented and finalized across this chat thread. **Verify on disk** before relying on paths — a later checkout may omit `bin/`, `templates/`, or individual skills; recover from git history on this repo or from the snippets below.
 
 **Primary slug exercised:** `downgrade-archival-recovery` (`blocshed-spec` → `blocshed-web` issues **#77–#83**).
 
@@ -39,194 +43,611 @@ close: architect Mode F → feature-complete (spec)
 
 ---
 
-## Documentation and skills cleaned
+## 1. New file — `templates/spec-repo/bin/lib/prd_io.py`
 
-### Removed or merged
+**Problem:** `yq -o=json '.tickets' docs/prd/<slug>.md` fails when the PRD has markdown body after frontmatter (`yaml: line 138: did not find expected <document start>`). Broke `feature-check`, `sync-fanout-bodies`, `feature-upgrade`, and `sync_spec_tooling.sh` validation loops.
 
-- **`skills/feature-upgrade/SKILL.md`** — deleted; redo/resync folded into **`skills/issue-expand/SKILL.md`** and `bin/feature-upgrade`
-- Defensive callouts (“do not write one-off Python/shell with hardcoded issue numbers”) removed from skills and pipeline docs
+**Fix:** Parse only YAML between the first pair of `---` delimiters (same approach as `validate_prd_frontmatter.py`).
 
-### Updated
+```python
+#!/usr/bin/env python3
+"""Read PRD markdown frontmatter (YAML between --- delimiters)."""
+from __future__ import annotations
 
-| File | Change |
-| --- | --- |
-| `docs/FEATURE-PIPELINE.md` | Tables-only flow and commands; PRD-edit path |
-| `docs/RUNBOOK.md` | Shorter implementation-features pointer |
-| `skills/issue-expand/SKILL.md` | PRD-change path via `feature-upgrade`; option 1 routing |
-| `skills/setup-project/SKILL.md` | Migration table references `feature-upgrade` + `issue-expand` |
-| `skills/fanout-issues/SKILL.md` | Rules section repaired; post-PRD `feature-upgrade` |
-| `templates/spec-repo/README.md` | Pipeline summary |
-| `bin/stack/print_next_steps.sh` | Pipeline one-liner |
-| `README.md` | Daily use: architect **option 1** = issue-expand, **option 2** = legacy |
+import json
+import sys
+from pathlib import Path
 
----
+try:
+    import yaml  # type: ignore
+except ImportError:
+    yaml = None
 
-## OpenCode template / bin fixes
 
-### 1. PRD frontmatter — `templates/spec-repo/bin/lib/prd_io.py`
+def extract_frontmatter(text: str) -> str:
+    if not text.startswith("---"):
+        raise ValueError("PRD must start with --- frontmatter delimiter")
+    end = text.index("---", 3)
+    return text[3:end]
 
-**Problem:** `yq '.tickets'` on full PRD files (frontmatter + markdown body) failed at line ~138; `bin/feature-check`, `sync-fanout-bodies`, and `feature-upgrade` broke.
 
-**Fix:** New helper reads YAML between `---` delimiters only. Commands: `tickets_json`, `tickets_count`, `get <field>`, `slices_json`.
+def load_prd(path: Path) -> dict:
+    if yaml is None:
+        raise RuntimeError("PyYAML required")
+    text = path.read_text(encoding="utf-8")
+    block = extract_frontmatter(text)
+    data = yaml.safe_load(block) or {}
+    if not isinstance(data, dict):
+        raise ValueError("PRD frontmatter must be a YAML mapping")
+    return data
 
-**Wired in:** `bin/fanout`, `bin/sync-fanout-bodies`, `bin/feature-check`, `bin/feature-upgrade`, `bin/stack/sync_spec_tooling.sh` (check + sync loops).
 
-### 2. Registry parsing — `validate_tickets.py` + `migrate_repos_registry.py`
+def main() -> None:
+    if len(sys.argv) < 3:
+        print(
+            "usage: prd_io.py <command> <prd.md>\n"
+            "  commands: tickets_json, tickets_count, get <field>, slices_json",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
-**Problem:** `docs/agents/repos.md` used a bare YAML list after `---` without a top-level `repos:` key; `validate_tickets` saw an empty registry. `migrate_repos_registry.py` returned empty list for the same shape.
+    cmd = sys.argv[1]
+    path = Path(sys.argv[2])
+    if not path.is_file():
+        print(f"missing: {path}", file=sys.stderr)
+        sys.exit(2)
 
-**Fix:**
+    try:
+        data = load_prd(path)
+    except (ValueError, RuntimeError) as e:
+        print(str(e), file=sys.stderr)
+        sys.exit(3)
 
-- `validate_tickets.load_registry()` — parse `repos:` block, `---` + list tail, or line fallback; fix `_parse_repos_minimal` to use `body` not undefined `text`
-- `agent_owner` validation accepts list (e.g. `[frontend-dev, developer]`)
-- `migrate_repos_registry.split_registry()` — parse `---` followed by `- repo:` list
+    if cmd == "tickets_json":
+        print(json.dumps(data.get("tickets") or []))
+    elif cmd == "tickets_count":
+        tickets = data.get("tickets") or []
+        print(len(tickets) if isinstance(tickets, list) else 0)
+    elif cmd == "get":
+        field = sys.argv[3] if len(sys.argv) > 3 else ""
+        if not field:
+            print("usage: prd_io.py get <prd.md> <field>", file=sys.stderr)
+            sys.exit(1)
+        print(data.get(field) or "")
+    elif cmd == "slices_json":
+        print(json.dumps(data.get("slices") or {}))
+    else:
+        print(f"unknown command: {cmd}", file=sys.stderr)
+        sys.exit(1)
 
-### 3. Bash 3.2 (macOS) — `templates/spec-repo/bin/lib/task_map.sh`
 
-**Problem:** `sync-fanout-bodies` and `fanout` used `declare -A TASK_TO_NUM`; macOS `/bin/bash` 3.2 errors: `declare: -A: invalid option`.
-
-**Fix:** Portable tab-delimited temp-file map (`task_map_init`, `task_map_set`, `task_map_get`, `task_map_cleanup`).
-
-**Synced via:** `sync_spec_tooling.sh` (includes `task_map.sh` in lib install list).
-
-### 4. `setup-project` empty-array crash
-
-**Problem:** `CREATE_ARGS[@]` / `TARGETS[@]` with `set -u` and empty arrays on Bash 3.2 → `unbound variable` at line 148.
-
-**Fix:** Build `SYNC_SPEC_ARGS` array; branch call when `CREATE_ARGS` non-empty.
-
-### 5. Minor template tweaks
-
-- `templates/spec-repo/bin/feature-check` — generic FAIL message pointing to FEATURE-PIPELINE
-- `templates/spec-repo/bin/feature-upgrade` — header comment (sync PRD → issues, not “redo” drama)
-- `bin/feature-upgrade` (project-parent wrapper) — same
-
----
-
-## BlocShed stack — verified state
-
-### Spec repo (`blocshed-spec`)
-
-| Check | Result |
-| --- | --- |
-| PRD `downgrade-archival-recovery.md` | 7 tickets; parent issue #1 |
-| `bin/feature-check --level fanout` | PASS on #77–#83 |
-| `bin/feature-check --level orchestrate` | PASS (stages[], plans present) |
-| `bin/feature-upgrade downgrade-archival-recovery` | Synced all 7 issues; STATUS PASS |
-| PRD typo | `publication_spec.rb` → `publication_test.rb` |
-| `docs/agents/repos.md` | Migrated to `repos:` schema via migrate script |
-
-### Implementation repo (`blocshed-web`)
-
-| Check | Result |
-| --- | --- |
-| `bin/orchestrate-readiness-check downgrade-archival-recovery` | PASS; next-runnable #77 |
-| Open issues | #77–#83 (label `feature:downgrade-archival-recovery`) |
-
-### Implementation repo (`blocshed-api`)
-
-| Check | Result |
-| --- | --- |
-| `setup-project --check-only` (before fix) | INCOMPLETE — missing impl bins |
-| `sync_impl_tooling.sh blocshed-api` | Synced `issue-expand-bundle`, `orchestrate-readiness-check`, `feature-check` |
-| `setup-project --check-only` (after fix) | OK: blocshed-api, OK: blocshed-web |
-
-### Explicitly rejected in app repos
-
-- **`blocshed-web/tmp/scripts/build_expanded_issues.py`** — hardcoded issue numbers/bodies; deleted
-- Project-local orchestrate-readiness scripts — logic lives in OpenCode templates only
-
----
-
-## Architect front door (implementation repo)
-
-**Problem:** On “hi”, architect showed an improvised shortened menu; spec workflow and legacy plan were merged into one line; A/B submenu was skipped; **issue-expand** was not discoverable.
-
-**Fix in `agents/architect.md`:**
-
-- **Two separate verbatim menus** — spec repo vs implementation repo
-- **Implementation repo** (present on every greeting):
-
-```text
-1. Implementation feature (spec workflow) — issue-expand → orchestrate GitHub backlog
-2. Legacy local plan — grill-me → .plan/feature.<slug>.md → orchestrate from file
-3–8. Bug, refactor, review, domain/ADR, explore, setup-skills
+if __name__ == "__main__":
+    main()
 ```
 
-- **Hard rule:** Present menu verbatim; no collapsing; no A/B submenu
-- **Routing:** Option **1** → `issue-expand` (ask slug); Option **2** → `grill-me` + `architect-plan`
-- **`skills/architect-plan/SKILL.md`** — defers greeting menu to architect agent; legacy = option 2 only
+**Install:** `chmod +x`; copy via `bin/stack/sync_spec_tooling.sh` lib loop.
 
 ---
 
-## Operator cheat sheet
+## 2. Wire `prd_io.py` into spec bins
 
-| Goal | Where | Action |
-| --- | --- | --- |
-| Update GitHub issues from PRD | `blocshed-spec` | `bin/feature-upgrade <slug>` |
-| Verify ticket format (spec) | `blocshed-spec` | `bin/feature-check <slug> --level orchestrate` |
-| Enrich / verify tickets (OpenCode) | `blocshed-web` + **architect** | Reply **`1`**, slug → **issue-expand** skill |
-| Run implementation | `blocshed-web` + **orchestrate** | GitHub backlog option B, slug |
-| Check stack wiring only | project parent | `GH_ORG=roborew setup-project --check-only` |
-| Refresh installed bins | project parent | `setup-project` (not required for each PRD sync) |
+### `sync-fanout-bodies` — replace `yq` on PRD
 
-**Slug:** filename stem of `docs/prd/<slug>.md` (e.g. `downgrade-archival-recovery`).
+**Before:**
+
+```bash
+PARENT_URL=$(yq -r '.parent_issue // ""' "$PRD_PATH")
+TICKET_COUNT=$(yq '.tickets // [] | length' "$PRD_PATH")
+yq -o=json '.tickets' "$PRD_PATH" >"$TMP"
+declare -A TASK_TO_NUM=()
+```
+
+**After:**
+
+```bash
+PRD_IO="${BIN_DIR}/lib/prd_io.py"
+[[ -f "$PRD_IO" ]] || { echo "missing $PRD_IO" >&2; exit 8; }
+
+PARENT_URL=$(python3 "$PRD_IO" get "$PRD_PATH" parent_issue)
+TICKET_COUNT=$(python3 "$PRD_IO" tickets_count "$PRD_PATH")
+python3 "$PRD_IO" tickets_json "$PRD_PATH" >"$TMP"
+# shellcheck source=lib/task_map.sh
+source "${BIN_DIR}/lib/task_map.sh"
+task_map_init
+trap 'task_map_cleanup; rm -f "$TMP"' EXIT
+# ... per ticket ...
+task_map_set "$TID" "$NUM"
+dn=$(task_map_get "$dep_id")
+```
+
+### `feature-check` — replace `yq`
+
+```bash
+PRD_IO="${BIN_DIR}/lib/prd_io.py"
+python3 "$PRD_IO" tickets_json "$PRD_PATH" >"$TMP"
+TICKET_COUNT=$(jq 'length' "$TMP")
+```
+
+### `fanout` — replace `yq` for tickets; registry via Python
+
+```bash
+PRD_IO="${BIN_DIR}/lib/prd_io.py"
+PARENT_URL=$(python3 "$PRD_IO" get "$PRD_PATH" parent_issue)
+python3 "$PRD_IO" tickets_json "$PRD_PATH" >"$TMP"
+TICKET_COUNT=$(python3 "$PRD_IO" tickets_count "$PRD_PATH")
+
+# Registry count (replaces yq on repos.md):
+REGISTRY_COUNT=$(python3 -c "
+import sys
+from pathlib import Path
+sys.path.insert(0, '${BIN_DIR}/lib')
+from validate_tickets import load_registry
+print(len(load_registry(Path('${REGISTRY_PATH}'))))
+")
+```
+
+Legacy slices keys:
+
+```bash
+python3 "$PRD_IO" slices_json "$PRD_PATH" | jq -r 'keys[]'
+```
+
+### `feature-upgrade` — impl repo list
+
+**Before:**
+
+```bash
+IMPL_REPOS=$(yq -o=json '.tickets[].repo' "${ROOT}/docs/prd/${SLUG}.md" | jq -r 'unique | .[]')
+```
+
+**After:**
+
+```bash
+IMPL_REPOS=$(python3 "${BIN_DIR}/lib/prd_io.py" tickets_json "${ROOT}/docs/prd/${SLUG}.md" | jq -r '.[].repo' | sort -u)
+```
+
+### `bin/stack/sync_spec_tooling.sh`
+
+Add to lib install loop:
+
+```bash
+for lib in validate_tickets.py validate_prd_frontmatter.py prd_io.py toposort_tickets.py \
+  build_issue_body.sh extract_issue_sections.py validate_issue_body.py task_map.sh; do
+```
+
+Replace PRD validation loop (`--check-only` and post-sync):
+
+```bash
+if [[ -f "$VALIDATE" ]] && [[ -f "$SPEC/bin/lib/prd_io.py" ]]; then
+  for prd in "$SPEC"/docs/prd/*.md; do
+    [[ "$(basename "$prd")" == "_template.md" ]] && continue
+    count=$(python3 "$SPEC/bin/lib/prd_io.py" tickets_count "$prd" 2>/dev/null || echo 0)
+    [[ "$count" =~ ^[0-9]+$ ]] && [[ "$count" -gt 0 ]] || continue
+    python3 "$SPEC/bin/lib/prd_io.py" tickets_json "$prd" | python3 "$VALIDATE" "$REGISTRY" || exit 6
+  done
+fi
+```
 
 ---
 
-## What orchestrate reads vs issue-expand
+## 3. New file — `templates/spec-repo/bin/lib/task_map.sh`
 
-| Source | Used when |
-| --- | --- |
-| GitHub issue body (`opencode-task-json`, `stages[]`) | **Orchestrate** execution (primary) |
-| Full PRD markdown | **issue-expand** / `issue-expand-bundle` / Mode F sign-off |
-| Fanout-only tickets | Too thin for stage loop — **issue-expand required once** |
+**Problem:** macOS `/bin/bash` 3.2 — `declare -A TASK_TO_NUM=()` → `declare: -A: invalid option`.
 
-For `downgrade-archival-recovery`, issue-expand was already complete; orchestrate can run without another architect pass unless PRD or tickets change.
+**Fix:** Tab-delimited temp file map.
+
+```bash
+#!/usr/bin/env bash
+# Portable task_id -> issue number map (bash 3.2+; no declare -A).
+task_map_init() {
+  TASK_MAP_FILE=$(mktemp)
+  : >"$TASK_MAP_FILE"
+}
+
+task_map_set() {
+  printf '%s\t%s\n' "$1" "$2" >>"$TASK_MAP_FILE"
+}
+
+task_map_get() {
+  awk -F'\t' -v id="$1" '$1==id {print $2; exit}' "$TASK_MAP_FILE"
+}
+
+task_map_cleanup() {
+  rm -f "${TASK_MAP_FILE:-}"
+}
+```
+
+**Usage in `fanout` / `sync-fanout-bodies`:**
+
+```bash
+source "${BIN_DIR}/lib/task_map.sh"
+task_map_init
+# ... loop: task_map_set "$TID" "$NUM"; dn=$(task_map_get "$dep_id") ...
+task_map_cleanup
+```
+
+Remove all `declare -A TASK_TO_NUM` and `${TASK_TO_NUM[$id]}` references.
 
 ---
 
-## Files touched (OpenCode config)
+## 4. `templates/spec-repo/bin/lib/validate_tickets.py`
 
-### New
+### `load_registry()` — parse bare list after `---`
 
-- `templates/spec-repo/bin/lib/prd_io.py`
-- `templates/spec-repo/bin/lib/task_map.sh`
+**Problem:** `yaml.safe_load(entire repos.md)` fails on markdown header; `data.get("repos")` empty for blocshed format:
 
-### Modified (representative)
+```markdown
+# Application repo registry
+...
+---
 
-- `agents/architect.md`
-- `bin/setup-project`
-- `bin/feature-upgrade`
-- `bin/stack/sync_spec_tooling.sh`
-- `bin/lib/migrate_repos_registry.py`
-- `templates/spec-repo/bin/{fanout,sync-fanout-bodies,feature-check,feature-upgrade}`
-- `templates/spec-repo/bin/lib/validate_tickets.py`
-- `skills/{issue-expand,architect-plan,setup-project,fanout-issues}/SKILL.md`
-- `docs/{FEATURE-PIPELINE,RUNBOOK}.md`
-- `README.md`
-- `bin/stack/print_next_steps.sh`
+- repo: roborew/blocshed-web
+  application_role: ...
+```
+
+**Replace `load_registry` with:**
+
+```python
+def load_registry(path: Path) -> list[dict]:
+    text = path.read_text(encoding="utf-8")
+
+    m = re.search(r"(?ms)^repos:\s*\n(.*)$", text)
+    if m and yaml is not None:
+        try:
+            data = yaml.safe_load("repos:\n" + m.group(1))
+            if isinstance(data, dict) and isinstance(data.get("repos"), list):
+                return [r for r in data["repos"] if isinstance(r, dict)]
+        except yaml.YAMLError:
+            pass
+
+    parts = text.split("---")
+    if len(parts) >= 2:
+        tail = parts[-1].strip()
+        if re.match(r"^-\s*(repo|name):", tail):
+            if yaml is not None:
+                try:
+                    loaded = yaml.safe_load(tail)
+                    if isinstance(loaded, list):
+                        return [r for r in loaded if isinstance(r, dict)]
+                except yaml.YAMLError:
+                    pass
+            return _parse_repos_minimal(tail)
+
+    if yaml is not None:
+        try:
+            data = yaml.safe_load(text) or {}
+            repos = data.get("repos") or []
+            if isinstance(repos, list) and repos:
+                return [r for r in repos if isinstance(r, dict)]
+        except yaml.YAMLError:
+            pass
+
+    return _parse_repos_minimal(text)
+
+
+def _parse_repos_minimal(body: str) -> list[dict]:
+    repos: list[dict] = []
+    current: dict | None = None
+    list_key: str | None = None
+    for raw in body.splitlines():
+        # ... existing line parser (must use `body`, not undefined `text`) ...
+```
+
+### `agent_owner` validation — allow list
+
+**Before:**
+
+```python
+if owner and expected and owner != expected:
+    errors.append(...)
+```
+
+**After:**
+
+```python
+if owner and expected:
+    allowed = expected if isinstance(expected, list) else [expected]
+    if owner not in allowed:
+        errors.append(
+            f"ticket {tid}: owner '{owner}' not in registry agent_owner {allowed} for {repo}"
+        )
+```
+
+---
+
+## 5. `bin/lib/migrate_repos_registry.py` — `split_registry()`
+
+When no `repos:` marker, parse list after final `---`:
+
+```python
+    elif idx == -1:
+        parts = text.split("---")
+        if len(parts) >= 2:
+            tail = parts[-1].strip()
+            if re.match(r"^-\s*(repo|name):", tail):
+                header = parts[0].rstrip() + "\n\n"
+                if yaml is not None:
+                    try:
+                        loaded = yaml.safe_load(tail)
+                        if isinstance(loaded, list):
+                            return header, [r for r in loaded if isinstance(r, dict)]
+                    except yaml.YAMLError:
+                        pass
+                return header, _parse_repos_minimal(tail)
+        return text, []
+```
+
+Running migrate on spec repo rewrites `docs/agents/repos.md` to canonical `repos:` block (creates `.bak` once).
+
+---
+
+## 6. `bin/setup-project` — Bash 3.2 empty-array fix
+
+**Problem:** line ~148 — `"${CREATE_ARGS[@]}"` with empty array + `set -u` → `unbound variable`.
+
+**Before:**
+
+```bash
+CREATE_ARGS=()
+[[ "$KEEP_BRANCH" == "true" ]] && CREATE_ARGS+=(--keep-branch)
+SPEC_PATH="$("${STACK}/create_or_sync_spec.sh" "${CREATE_ARGS[@]}" "$PARENT" "$APP" "$ORG" "${TARGETS[@]}")"
+```
+
+**After:**
+
+```bash
+CREATE_ARGS=()
+[[ "$KEEP_BRANCH" == "true" ]] && CREATE_ARGS+=(--keep-branch)
+SYNC_SPEC_ARGS=("$PARENT" "$APP" "$ORG")
+[[ ${#TARGETS[@]} -gt 0 ]] && SYNC_SPEC_ARGS+=("${TARGETS[@]}")
+if [[ ${#CREATE_ARGS[@]} -gt 0 ]]; then
+  SPEC_PATH="$("${STACK}/create_or_sync_spec.sh" "${CREATE_ARGS[@]}" "${SYNC_SPEC_ARGS[@]}")"
+else
+  SPEC_PATH="$("${STACK}/create_or_sync_spec.sh" "${SYNC_SPEC_ARGS[@]}")"
+fi
+```
+
+Requires `GH_ORG` or `--org` for any run.
+
+---
+
+## 7. Architect front door — `agents/architect.md`
+
+**Problem:** On “hi”, model improvised a shortened menu; merged issue-backed + legacy into one line; never showed A/B fork; **issue-expand** not discoverable.
+
+**Fix:** Two verbatim menus; options **1** and **2** are top-level (no submenu).
+
+### Implementation repo menu (present on every greeting)
+
+```text
+What are we planning?
+
+1. Implementation feature (spec workflow) — PRD and child GitHub issues already exist (label feature:<slug> from spec fanout). Load issue-expand: pull PRD + tickets, verify and enrich each issue (user stories, implementation plan, TDD stages[] in opencode-task-json), run readiness gates, then prompt: switch to orchestrate → GitHub backlog for that slug.
+2. Legacy local plan — grill-me → architect-plan → scribe writes .plan/feature.<slug>.md → orchestrate from file (no GitHub ticket queue).
+3. Bug / debug investigation — reproduce, rank hypotheses, plan fix + regression test.
+4. Refactor / technical cleanup — behavior-preserving plan with characterization tests.
+5. Review / sign-off / remediation — inspect completed work, follow-up fixes, or GitHub feature sign-off (feature:<slug> vs PRD) after issue-backed orchestration.
+6. Domain language or ADR — update CONTEXT.md terms or document a durable architecture decision.
+7. Explore / understand repo — read-only map before deciding what to change.
+8. Setup skills — bootstrap this repo's agent context (issue-tracker, triage labels, domain docs).
+```
+
+**Hard rules to add:**
+
+```markdown
+When the user greets you or gives an underspecified request, detect repo role and present **exactly one** menu below **verbatim** (same numbering, no collapsing options, no A/B submenus). **Do not** invent a shortened menu.
+
+- **Option 1** → ask for **feature slug** if missing → load **`issue-expand`** immediately. Do **not** load `architect-plan`.
+- **Option 2** → **`grill-me`** when required → **`architect-plan`** + scribe → `.plan/`.
+```
+
+### Spec repo menu (abbreviated)
+
+```text
+1. Product feature / PRD — grill-me → to-prd → approve → bin/fanout
+2. Resync PRD to existing issues — bin/feature-upgrade <slug>
+3. Feature complete — feature-complete
+...
+7. Setup / bootstrap stack — setup-project
+```
+
+### Skill routing line
+
+```markdown
+- **Issue expand:** Implementation repo front-door **option 1** → load **`issue-expand`**
+```
+
+### `skills/architect-plan/SKILL.md`
+
+Remove duplicate greeting menu; defer to architect agent:
+
+```markdown
+- If greeting only: **do not invent a menu** — architect agent presents repo-specific front door.
+- **Legacy local plan** (implementation repo option 2) → this skill after grill-me.
+- **Spec workflow** (option 1) → **`issue-expand`**, not this skill.
+```
+
+### `skills/issue-expand/SKILL.md`
+
+```markdown
+## When
+
+- User chose **implementation repo front-door option 1** (spec workflow / issue-expand).
+```
+
+### `README.md` daily use
+
+```markdown
+1. **architect** in impl repo → **option 1** (spec workflow / issue-expand)
+**Legacy path:** architect **option 2** (legacy local plan)
+```
+
+---
+
+## 8. Documentation cleanup
 
 ### Deleted
 
-- `skills/feature-upgrade/SKILL.md`
+- `skills/feature-upgrade/SKILL.md` — merged into `issue-expand` + `bin/feature-upgrade`
+
+### `docs/FEATURE-PIPELINE.md` (structure)
+
+```markdown
+| 3 | impl | bin/issue-expand-bundle → architect issue-expand |
+| PRD edits | bin/feature-upgrade <slug> |
+Levels: fanout | orchestrate
+```
+
+### `bin/stack/print_next_steps.sh`
+
+```bash
+echo "Pipeline: docs/FEATURE-PIPELINE.md"
+echo "  grill-me → to-prd → bin/fanout → issue-expand → orchestrate → feature-complete"
+echo "  PRD edits: bin/feature-upgrade <slug> (spec) or feature-upgrade <slug> (project parent)"
+```
+
+### Removed pattern (do not re-add)
+
+Defensive paragraphs like “Do not write one-off Python with hardcoded issue numbers” — workflow is positive: use `bin/feature-upgrade`, `issue-expand`, templates only.
 
 ---
 
-## Follow-up (optional, not done in chat)
+## 9. BlocShed verification (commands run in chat)
 
-- Commit/push OpenCode config changes and sync to sibling clones
-- Commit `blocshed-api` new `bin/*` files
-- Remove stale artifacts in spec: `.plan/prd.downgrade-archival-recovery.md`, `docs/agents/repos.md.bak`, `scripts/stack-bootstrap-blocshed-web.sh`
-- Update `blocshed-spec/README.md` workflow section (still mentions legacy architect-plan path)
-- Align `CONTEXT.md` archive window (2 months) with PRD admin purge (3 months)
+### Spec — sync + upgrade
+
+```bash
+~/.config/opencode/bin/stack/sync_spec_tooling.sh ~/05_Repos/.../blocshed-spec
+cd blocshed-spec
+bin/feature-upgrade downgrade-archival-recovery
+# Synced #77–#83; STATUS: PASS — ready for orchestrate
+```
+
+### Spec — checks
+
+```bash
+bin/feature-check downgrade-archival-recovery --level fanout
+bin/feature-check downgrade-archival-recovery --level orchestrate
+```
+
+### Impl web
+
+```bash
+cd blocshed-web
+bin/orchestrate-readiness-check downgrade-archival-recovery
+# PASS: ready for orchestrate option B; next-runnable #77
+```
+
+### Impl api — wiring gap fixed
+
+```bash
+~/.config/opencode/bin/stack/sync_impl_tooling.sh ~/05_Repos/.../blocshed-api
+export GH_ORG=roborew
+setup-project --check-only ~/05_Repos/.../apps/blocshed
+# OK: blocshed-api; OK: blocshed-web; All checks passed
+```
+
+### PRD typo (blocshed-spec)
+
+```yaml
+    test_commands:
+      - bin/rails test test/models/publication_test.rb   # was publication_spec.rb
+```
+
+### Rejected / deleted in app repos
+
+- `blocshed-web/tmp/scripts/build_expanded_issues.py` — hardcoded #77–#83 bodies
+- Per-project orchestrate-readiness shell duplicates
 
 ---
 
-## Related TO REVIEW docs
+## 10. Operator cheat sheet
 
-Same folder, date-prefixed for sort order:
+| Goal | Where | OpenCode / shell |
+| --- | --- | --- |
+| Update issues from PRD | spec | `bin/feature-upgrade <slug>` |
+| Enrich tickets before orchestrate | web + **architect** | Menu **1** + slug → **issue-expand** (architect runs bins) |
+| Run implementation | web + **orchestrate** | GitHub backlog **option B**, slug |
+| Check stack wiring | project parent | `GH_ORG=… setup-project --check-only` |
+| Refresh installed bins | project parent | `setup-project` (not per PRD sync) |
 
-- `2026-06-01-spec-repo-markdown-parser.md` — `SPEC_REPO` parsing in impl repos (separate session fix)
-- `2026-06-01-setup-project-shell-bootstrap.md` — setup-project bootstrap behavior
-- Other `2026-05-20-*` / `2026-06-01-*` setup-project investigations
+**Slug:** `docs/prd/<slug>.md` basename (e.g. `downgrade-archival-recovery`).
+
+---
+
+## 11. Context model (why issue-expand exists)
+
+| Layer | Holds |
+| --- | --- |
+| Spec PRD | Narrative, user stories, `tickets[]` acceptance/tests |
+| Fanout issues | Thin bodies + `opencode-task-json` placeholders |
+| **issue-expand** | `stages[]`, Implementation plan, User stories covered on each GitHub issue |
+| **Orchestrate** | Reads **issue body only** (`opencode_meta`, `stages[]`) — not full PRD unless developer explores |
+| Mode F | Architect compares closed issues vs PRD via `SPEC_REPO` |
+
+Fanout alone is **not** enough for stage loop. Option **1** in impl architect is the mandatory enrich/verify step (once per feature, or again after PRD changes + `feature-upgrade`).
+
+---
+
+## 12. Files touched (checklist for another AI)
+
+### New under `templates/spec-repo/bin/lib/`
+
+- [ ] `prd_io.py`
+- [ ] `task_map.sh`
+
+### Modified templates
+
+- [ ] `templates/spec-repo/bin/fanout`
+- [ ] `templates/spec-repo/bin/sync-fanout-bodies`
+- [ ] `templates/spec-repo/bin/feature-check`
+- [ ] `templates/spec-repo/bin/feature-upgrade`
+- [ ] `templates/spec-repo/bin/lib/validate_tickets.py`
+
+### Modified OpenCode root
+
+- [ ] `bin/setup-project` (empty-array fix)
+- [ ] `bin/lib/migrate_repos_registry.py`
+- [ ] `bin/stack/sync_spec_tooling.sh`
+- [ ] `bin/stack/print_next_steps.sh`
+- [ ] `bin/feature-upgrade` (wrapper comment)
+- [ ] `agents/architect.md` (front door)
+- [ ] `skills/issue-expand/SKILL.md`
+- [ ] `skills/architect-plan/SKILL.md`
+- [ ] `skills/setup-project/SKILL.md`
+- [ ] `skills/fanout-issues/SKILL.md`
+- [ ] `docs/FEATURE-PIPELINE.md`
+- [ ] `docs/RUNBOOK.md`
+- [ ] `README.md`
+
+### Deleted
+
+- [ ] `skills/feature-upgrade/SKILL.md`
+
+### App repo (BlocShed, optional commit)
+
+- [ ] `blocshed-spec/docs/prd/downgrade-archival-recovery.md` (test path typo)
+- [ ] `blocshed-spec/docs/agents/repos.md` (migrated)
+- [ ] `blocshed-api/bin/{issue-expand-bundle,orchestrate-readiness-check,feature-check}` (synced)
+
+---
+
+## 13. Related TO REVIEW docs (same chat era)
+
+| File | Topic |
+| --- | --- |
+| `2026-05-19-spec-central-stack-workflow-implementation.md` | Broader spec-central stack plan |
+| `2026-05-19-spec-impl-issue-workflow-split.md` | Spec vs impl responsibilities |
+| `2026-05-19-prd-yaml-frontmatter-validation.md` | PRD YAML validation |
+| `2026-05-19-registry-migration-scribe-write-fixes.md` | Registry migration |
+| `2026-05-20-setup-project-empty-targets-fix.md` | Related setup-project fixes |
+| `2026-06-01-issue-backed-workflow-orchestrate-handoff.md` | ready-for-agent vs orchestrate handoff (investigation only) |
+
+---
+
+## 14. Follow-up (optional, not done in chat)
+
+- Commit/push OpenCode config; re-run `sync_spec_tooling.sh` / `sync_impl_tooling.sh` on clones
+- Remove stale spec artifacts: `.plan/prd.downgrade-archival-recovery.md`, `repos.md.bak`, `scripts/stack-bootstrap-blocshed-web.sh`
+- Update `blocshed-spec/README.md` workflow section
+- Align `CONTEXT.md` archive window (2 months) vs PRD admin purge (3 months)

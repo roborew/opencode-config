@@ -1,12 +1,19 @@
 # 2026-05-17 — Subagent bash permissions and orchestrator delegation fix
 
-**Session date:** Work in this chat completed **2026-05-17** (message timestamps ~13:47–13:51 UTC+1). Filename uses that date so `TO REVIEW` sorts by session completion, not the date a summary doc was filed.
+**Filename date (`YYYY-MM-DD` prefix):** **2026-05-17** — the calendar day this **Cursor chat was created** and all implementation work in that session ran (not the day this markdown was last saved or a later resume turn).
+
+| Field | Date / ID | Source |
+| --- | --- | --- |
+| Chat created | **2026-05-17**, ~13:47 UTC+1 | First message timestamp + transcript file birth: `2026-05-17 13:47` |
+| Session work finalized | **2026-05-17**, ~13:47–13:51 UTC+1 | Message timestamps in transcript |
+| This TO REVIEW doc first written | 2026-06-01 | Later resume; does **not** change the filename prefix |
+| Cursor transcript | [`67e2c6e5-0a3e-474a-912b-8cee14ef76c8`](67e2c6e5-0a3e-474a-912b-8cee14ef76c8) | `~/.cursor/projects/Users-robo-config-opencode/agent-transcripts/67e2c6e5-0a3e-474a-912b-8cee14ef76c8/67e2c6e5-0a3e-474a-912b-8cee14ef76c8.jsonl` |
+
+If Finder shows **Modified: Jun 1**, that is file-save time — keep **`2026-05-17`** in the name for date-ordered filing with other session records.
 
 **Session scope:** Stop repeated OpenCode **Permission required** prompts during orchestrated implementation work. Execution subagents (`developer`, `frontend-dev`, `senior-dev`, `ux-dev`) needed permission to run normal in-repo shell (especially `git add` / `git commit` and `cd <worktree> && …` chains) without asking the operator on every stage. Clarify why **orchestrate** must not run bash itself, fix a skill/protocol mismatch that made the orchestrator appear “stuck” on **Always allow**, and extend **verifier** read/test bash allows without granting commits.
 
-**Status:** Designed, implemented, and finalized in this chat. **Verify on disk before merge** — the config repo may have moved on (e.g. wildcard unattended bash, slimmer `opencode.json`, or removed per-agent `permission.bash` frontmatter). See [Relationship to later work](#relationship-to-later-work) and [Current on-disk check](#current-on-disk-check).
-
-**Naming:** Prefix `2026-05-17-` keeps this file in date order by **session completion** (ISO date, then slug). Later follow-ups on the same topic may appear under `2026-06-01-*` in this folder.
+**Status:** Designed, implemented, and finalized in chat **2026-05-17**. **Verify on disk before merge** — the config repo may have moved on (permissions removed from frontmatter, wildcard `bash: "*": allow`, or skill sections relocated). See [Relationship to later work](#relationship-to-later-work) and [Current on-disk check](#current-on-disk-check).
 
 ---
 
@@ -17,11 +24,11 @@
 | Symptom | `△ Permission required` on commits, tests, and discovery commands during `.plan` / GitHub-issue execution |
 | Misconception | “Developers have permissions” referred to **file edit** (`permission.edit`), not **bash** (`permission.bash`) |
 | Execution subagents | Expanded `permission.bash` allowlist: `git add` / `git commit`, `cd * && …` compounds, Rails/Ruby test runners, existing npm/go/cargo patterns |
-| Verifier | Added read/test bash allowlist; **deny** `git add` / `git commit` (evidence only) |
-| Orchestrate | **No config change required** — keep `bash: false`; delegate all shell to subagents via Task |
-| Skill fix | `orchestrate-execution`: plan precondition `check-plan.sh` must be Task-delegated to `developer`, not run by orchestrate |
+| Verifier | Added full `permission.bash` block: read/test **allow**; `git add` / `git commit` **deny** |
+| Orchestrate | **No bash config change** — keep `bash: false`; delegate all shell to subagents via Task |
+| Skill fix | `orchestrate-execution`: plan precondition `check-plan.sh` → Task `developer` `load: minimal` |
 | Stuck “Always allow” loop | UI approvals apply until **OpenCode restart**; orchestrate cannot “grant” bash it does not have |
-| Later evolution | Same-day follow-up doc may supersede granular lists with `bash: { "*": allow }` on the execution lane |
+| Later evolution | Follow-up chat [`940a773f-367d-477c-a1d6-23bd264d60ba`](940a773f-367d-477c-a1d6-23bd264d60ba) added `check-plan.sh` paths then `bash: { "*": allow }` — see [`2026-06-01-unattended-execution-permissions-and-opencode-config-access.md`](2026-06-01-unattended-execution-permissions-and-opencode-config-access.md) |
 
 ---
 
@@ -37,11 +44,7 @@ Commit the fix
 $ cd /Users/robo/.warp/worktrees/BlocShed/cobalt-shimmer && git add app/controllers/publication_users_controller.rb test/controllers/publication_users_controller_test.rb && git commit -m "fix: scope set_publication to current_user's publications in PublicationUsersController" 2>&1
 ```
 
-Operator expectation: when **architect** or **orchestrate** delegates to **developer** / **frontend-dev**, subagents should complete stages (edit + test + commit) inside the project without constant confirmation.
-
 ### 1.2 Stuck loop on “Always allow”
-
-Orchestrator session appeared to loop on prompts such as:
 
 ```text
 Always allow
@@ -50,272 +53,538 @@ This will allow the following patterns until OpenCode is restarted
 - grep *
 ```
 
-Operator could approve patterns, but work still did not progress — orchestrate was effectively trying to do shell-shaped work without having bash access, or subagents still hit unmatched command shapes.
+Work did not progress because **orchestrate** has no bash tool, **verifier** lacked bash allows, and **developer** did not allow compound `cd && git …` or `git commit`.
 
 ---
 
-## 2. Root cause analysis
+## 2. Root cause (short)
 
-### 2.1 Edit permissions ≠ bash permissions
+1. **`permission.edit`** (global + agent) ≠ **`permission.bash`** (per-agent, default `"*": ask`).
+2. Allow rules like `git status *` do **not** match `cd /worktree && git add … && git commit …`.
+3. **`orchestrate-execution`** told orchestrate to run `check-plan.sh` directly while **`orchestrate`** has `bash: false`.
+4. **`verifier`** had `tools.bash: true` but no `permission.bash` block → prompts on `git show`, `grep`, tests.
+5. Running sessions cache permission UI until **restart**.
 
-Global `opencode.json` (at session time) allowed most edits:
+---
+
+## 3. Files changed (this session)
+
+| File | Action |
+| --- | --- |
+| `agents/developer.md` | Expand `permission.bash` |
+| `agents/frontend-dev.md` | Expand `permission.bash` (+ `npx vite`) |
+| `agents/senior-dev.md` | Expand `permission.bash` |
+| `agents/ux-dev.md` | Expand `permission.bash` (subset) |
+| `agents/verifier.md` | **Add** `permission.bash` |
+| `skills/orchestrate-execution/SKILL.md` | Delegate `check-plan.sh` to `developer` |
+| `agents/orchestrate.md` | **Unchanged** (correct) |
+| `agents/architect.md` | **Unchanged** in this session |
+| `opencode.json` | **Unchanged** in this session |
+
+---
+
+## 4. Reproducible implementation for another AI
+
+Apply the snippets below to agent frontmatter (YAML between `---` fences) and the skill section. **Pattern order matters:** specific `allow` / `deny` lines before wildcard `"*": ask` where your OpenCode build uses first-match semantics.
+
+### 4.1 Global context at session time — `opencode.json`
+
+Edits were allowed globally; bash was **not** configured here:
 
 ```json
 "permission": {
   "edit": {
     "*": "allow",
     "opencode.json": "ask",
-    ...
+    "*.pem": "deny",
+    "*.key": "deny",
+    ".env": "deny",
+    ".env.*": "deny"
   }
 }
 ```
 
-That does **not** authorize shell. Subagents with `tools.bash: true` still had:
+(Subsequent repo commits may have slimmed this block — check live `opencode.json`.)
 
-```yaml
-permission:
-  bash:
-    "*": ask
-    "git status *": allow
-    "git diff *": allow
-    ...
-```
-
-Anything not explicitly allowed — including `git add`, `git commit`, and `cd … && git add … && git commit …` — triggered **ask**.
-
-### 2.2 Compound commands did not match single-command allows
-
-Allow rules like `git status *` did not match:
-
-```bash
-cd /path/to/worktree && git add … && git commit -m "…"
-```
-
-So worktree-relative pipelines kept prompting even when “obvious” git subcommands were partially allowlisted.
-
-### 2.3 Orchestrate is intentionally bashless
-
-`agents/orchestrate.md`:
+### 4.2 `agents/orchestrate.md` — leave as-is
 
 ```yaml
 tools:
+  write: false
+  edit: false
   bash: false
+  skill: true
 permission:
   edit: deny
+  skill: { "orchestrate-execution": "allow", "orchestrate-recovery": "allow", ... }
   task:
+    "*": deny
+    scribe: allow
+    worktree-env: allow
     developer: allow
     frontend-dev: allow
-    ...
+    ux-dev: allow
+    verifier: allow
+    helper: allow
+    vision: allow
+    senior-dev: allow
+    review: allow
 ```
 
-Orchestrate coordinates via **Task** only. It must **not** receive bash permissions; it should delegate shell to `developer` (or peers).
+**Do not** set `bash: true` on orchestrate.
 
-### 2.4 Skill told orchestrate to run bash directly (bug)
+### 4.3 `agents/developer.md` — full `permission.bash` after this session
 
-`skills/orchestrate-execution/SKILL.md` **Plan precondition** (before fix) said orchestrate should run:
+Insert under existing `permission:` (keep `skill` and `edit` blocks as they were). **Final `bash` block** to merge with pre-existing allows (`pwd`, `ls`, `rg`, `git status`, tests, denies):
 
-```bash
-bash skills/orchestrate-execution/lib/check-plan.sh "<artifact_path>"
+```yaml
+  bash:
+    "*": ask
+    "pwd": allow
+    "cd * && pwd": allow
+    "ls": allow
+    "ls *": allow
+    "cd * && ls": allow
+    "cd * && ls *": allow
+    "rg": allow
+    "rg *": allow
+    "cd * && rg *": allow
+    "git status": allow
+    "git status *": allow
+    "cd * && git status": allow
+    "cd * && git status *": allow
+    "git diff": allow
+    "git diff *": allow
+    "cd * && git diff": allow
+    "cd * && git diff *": allow
+    "git show": allow
+    "git show *": allow
+    "cd * && git show *": allow
+    "git log": allow
+    "git log *": allow
+    "cd * && git log *": allow
+    "git ls-files": allow
+    "git ls-files *": allow
+    "cd * && git ls-files *": allow
+    "git grep": allow
+    "git grep *": allow
+    "cd * && git grep *": allow
+    "git add *": allow
+    "cd * && git add *": allow
+    "git commit *": allow
+    "cd * && git commit *": allow
+    "git add * && git commit *": allow
+    "cd * && git add * && git commit *": allow
+    "npm test": allow
+    "npm test *": allow
+    "cd * && npm test": allow
+    "cd * && npm test *": allow
+    "npm run *": allow
+    "cd * && npm run *": allow
+    "npm install": allow
+    "npm install *": allow
+    "cd * && npm install": allow
+    "cd * && npm install *": allow
+    "pnpm *": allow
+    "cd * && pnpm *": allow
+    "yarn *": allow
+    "cd * && yarn *": allow
+    "bun *": allow
+    "cd * && bun *": allow
+    "npx tsc *": allow
+    "cd * && npx tsc *": allow
+    "python -m pytest *": allow
+    "cd * && python -m pytest *": allow
+    "pytest *": allow
+    "cd * && pytest *": allow
+    "go test *": allow
+    "cd * && go test *": allow
+    "cargo test *": allow
+    "cd * && cargo test *": allow
+    "bundle exec *": allow
+    "cd * && bundle exec *": allow
+    "bin/rails *": allow
+    "cd * && bin/rails *": allow
+    "rails test *": allow
+    "cd * && rails test *": allow
+    "make test": allow
+    "make test *": allow
+    "cd * && make test": allow
+    "cd * && make test *": allow
+    "rm -rf *": deny
+    "sudo *": deny
+    "chmod 777 *": deny
+    "chmod a+rwx *": deny
+    "curl *|*sh*": deny
+    "wget *|*sh*": deny
 ```
 
-That contradicted `bash: false` and encouraged permission UI / retry loops instead of:
+**Pre-existing `edit` block** at session time (keep unless you intentionally change secret policy):
 
-> Task `developer` with `load: minimal` to run `check-plan.sh` from repo root.
+```yaml
+  edit:
+    "*": allow
+    "opencode.json": ask
+    "*.pem": deny
+    "*/*.pem": deny
+    "**/*.pem": deny
+    "*.key": deny
+    "*/*.key": deny
+    "**/*.key": deny
+    ".env": deny
+    ".env.*": deny
+    "*/.env": deny
+    "*/.env.*": deny
+    "**/.env": deny
+    "**/.env.*": deny
+```
 
-### 2.5 Verifier had bash tool but no allowlist
+### 4.4 `agents/frontend-dev.md` — same as developer plus Vite
 
-`verifier` had `tools.bash: true` with only `permission.edit: deny` and no `permission.bash` block — so verification steps using `git show`, `grep`, `rg`, or project test commands could still prompt.
+Use §4.3 **and** add:
 
-### 2.6 Session cache vs config file changes
+```yaml
+    "npx vite *": allow
+    "cd * && npx vite *": allow
+```
 
-OpenCode copy: **“Always allow … until OpenCode is restarted.”** Updating agent markdown on disk does not retroactively fix an already-running session; restart (or new session) is required after permission edits.
+(Omit `go test` / `cargo test` if your copy of frontend-dev never had them; the session patch mirrored developer’s test matrix.)
+
+### 4.5 `agents/senior-dev.md`
+
+Identical bash expansion to §4.3 (escalation lane must commit and test like `developer`).
+
+### 4.6 `agents/ux-dev.md` — prototype subset
+
+Under `permission.bash`, add `cd * &&` variants and git write allows; **do not** add `go test` / `cargo test` / full Rails matrix unless you extend scope:
+
+```yaml
+  bash:
+    "*": ask
+    "pwd": allow
+    "cd * && pwd": allow
+    "ls": allow
+    "ls *": allow
+    "cd * && ls": allow
+    "cd * && ls *": allow
+    "rg": allow
+    "rg *": allow
+    "cd * && rg *": allow
+    "git status": allow
+    "git status *": allow
+    "cd * && git status": allow
+    "cd * && git status *": allow
+    "git diff": allow
+    "git diff *": allow
+    "cd * && git diff": allow
+    "cd * && git diff *": allow
+    "git add *": allow
+    "cd * && git add *": allow
+    "git commit *": allow
+    "cd * && git commit *": allow
+    "git add * && git commit *": allow
+    "cd * && git add * && git commit *": allow
+    "npm test": allow
+    "npm test *": allow
+    "cd * && npm test": allow
+    "cd * && npm test *": allow
+    "npm run *": allow
+    "cd * && npm run *": allow
+    "pnpm *": allow
+    "cd * && pnpm *": allow
+    "yarn *": allow
+    "cd * && yarn *": allow
+    "bun *": allow
+    "cd * && bun *": allow
+    "rm -rf *": deny
+    "sudo *": deny
+    "chmod 777 *": deny
+    "chmod a+rwx *": deny
+    "curl *|*sh*": deny
+    "wget *|*sh*": deny
+```
+
+(`ux-dev` `edit` at session time restricted writes to `.prototype/**` — leave that block unchanged.)
+
+### 4.7 `agents/verifier.md` — new `permission.bash` (insert after `skill:` line)
+
+```yaml
+permission:
+  edit: deny
+  skill: { "verifier": "allow" }
+  bash:
+    "*": ask
+    "pwd": allow
+    "cd * && pwd": allow
+    "ls": allow
+    "ls *": allow
+    "cd * && ls": allow
+    "cd * && ls *": allow
+    "rg": allow
+    "rg *": allow
+    "cd * && rg *": allow
+    "grep *": allow
+    "cd * && grep *": allow
+    "git status": allow
+    "git status *": allow
+    "cd * && git status": allow
+    "cd * && git status *": allow
+    "git diff": allow
+    "git diff *": allow
+    "cd * && git diff": allow
+    "cd * && git diff *": allow
+    "git show": allow
+    "git show *": allow
+    "cd * && git show *": allow
+    "git log": allow
+    "git log *": allow
+    "cd * && git log *": allow
+    "git ls-files": allow
+    "git ls-files *": allow
+    "cd * && git ls-files *": allow
+    "git grep": allow
+    "git grep *": allow
+    "cd * && git grep *": allow
+    "npm test": allow
+    "npm test *": allow
+    "cd * && npm test": allow
+    "cd * && npm test *": allow
+    "npm run *": allow
+    "cd * && npm run *": allow
+    "pnpm *": allow
+    "cd * && pnpm *": allow
+    "yarn *": allow
+    "cd * && yarn *": allow
+    "bun *": allow
+    "cd * && bun *": allow
+    "npx tsc *": allow
+    "cd * && npx tsc *": allow
+    "python -m pytest *": allow
+    "cd * && python -m pytest *": allow
+    "pytest *": allow
+    "cd * && pytest *": allow
+    "go test *": allow
+    "cd * && go test *": allow
+    "cargo test *": allow
+    "cd * && cargo test *": allow
+    "bundle exec *": allow
+    "cd * && bundle exec *": allow
+    "bin/rails *": allow
+    "cd * && bin/rails *": allow
+    "rails test *": allow
+    "cd * && rails test *": allow
+    "make test": allow
+    "make test *": allow
+    "cd * && make test": allow
+    "cd * && make test *": allow
+    "git add *": deny
+    "git commit *": deny
+    "rm -rf *": deny
+    "sudo *": deny
+    "chmod 777 *": deny
+    "chmod a+rwx *": deny
+    "curl *|*sh*": deny
+    "wget *|*sh*": deny
+```
+
+### 4.8 `skills/orchestrate-execution/SKILL.md` — Plan precondition (add or replace)
+
+If your skill file has no **Plan precondition** section, insert this block **after** `## Required Inputs` and **before** `## Session Bootstrap` (or before `## Stage Loop`):
+
+```markdown
+## Plan precondition (mandatory before the stage loop)
+
+When an artifact path is known (user supplied, handoff, or selected from `.plan/`):
+
+1. Invoke **`developer`** via Task with **`load: minimal`** to run this from the **repository root**:
+
+   `bash skills/orchestrate-execution/lib/check-plan.sh "<artifact_path>"`
+
+   Orchestrate has no `bash` tool; this precondition must be delegated, not run directly.
+
+2. On **non-zero** exit from the delegated command, print the script’s stderr **verbatim**, **do not** start stage execution, and instruct the user to return to **`architect` / `architect-plan`** to repair the plan artifact.
+
+3. On success, continue to **Stage Loop**.
+```
+
+**Before (remove this anti-pattern):**
+
+```markdown
+1. From the **repository root**, run:
+
+   `bash skills/orchestrate-execution/lib/check-plan.sh "<artifact_path>"`
+```
+
+### 4.9 Orchestrate → developer Task prompt (copy-paste template)
+
+When **orchestrate** starts a `.plan` run:
+
+```text
+load: minimal
+
+From the repository root of the implementation workspace, run:
+
+bash skills/orchestrate-execution/lib/check-plan.sh ".plan/feature.<slug>.md"
+
+Return exit code and stderr verbatim. Do not implement stages — plan validation only.
+```
+
+For GitHub-issue mode, orchestrate already delegates `gh` and helper scripts to `developer` with `load: minimal` per `github-issue-run` (see unattended doc if that skill was added later).
+
+### 4.10 Architect / reviewers — intentional commit deny (session-era planners)
+
+Planning agents such as **`architect`** used read-only bash with explicit commit denial (do **not** copy to `developer`):
+
+```yaml
+  bash:
+    "*": ask
+    "git add *": deny
+    "git commit *": deny
+```
+
+(Current `architect.md` may have removed inline `permission.bash`; restore only if you want the old guarded model.)
 
 ---
 
-## 3. Design decisions (this session)
+## 5. Exact ApplyPatch hunks from transcript (2026-05-17)
 
-| Decision | Rationale |
-| --- | --- |
-| Change **execution subagents only** | User wants unattended stage work in impl repos; keep **architect** / **orchestrate** / reviewers read-only or delegation-only |
-| Granular allowlist (this session) | Allow normal in-repo git, tests, and `cd &&` chains without opening full `bash: "*": allow` yet |
-| Deny dangerous patterns unchanged | `rm -rf *`, `sudo *`, `chmod 777 *`, `curl *\|*sh*` stay **deny** on writers |
-| Verifier: read/test allow, commit deny | Verifier gathers evidence; must not commit on behalf of implementation |
-| Orchestrate: no bash config | Fix protocol (skill text) + delegation; do not enable bash on primary orchestrator |
-| Restart after changes | Required for new rules to apply; clears stale approval loops |
+These are the **literal** patches applied in order in chat `67e2c6e5-…`. A replayer can apply them with the same diff tool or by hand-merging §4.
+
+### Patch 1 — `agents/developer.md` (excerpt: lines added with `+`)
+
+```diff
++    "cd * && pwd": allow
++    "cd * && ls": allow
++    "cd * && ls *": allow
++    "cd * && rg *": allow
++    "cd * && git status": allow
++    "cd * && git status *": allow
++    "cd * && git diff": allow
++    "cd * && git diff *": allow
++    "cd * && git show *": allow
++    "cd * && git log *": allow
++    "cd * && git ls-files *": allow
++    "cd * && git grep *": allow
++    "git add *": allow
++    "cd * && git add *": allow
++    "git commit *": allow
++    "cd * && git commit *": allow
++    "git add * && git commit *": allow
++    "cd * && git add * && git commit *": allow
++    "cd * && npm test": allow
++    "cd * && npm test *": allow
++    "cd * && npm run *": allow
++    "cd * && npm install": allow
++    "cd * && npm install *": allow
++    "cd * && pnpm *": allow
++    "cd * && yarn *": allow
++    "cd * && bun *": allow
++    "cd * && npx tsc *": allow
++    "cd * && python -m pytest *": allow
++    "cd * && pytest *": allow
++    "cd * && go test *": allow
++    "cd * && cargo test *": allow
++    "bundle exec *": allow
++    "cd * && bundle exec *": allow
++    "bin/rails *": allow
++    "cd * && bin/rails *": allow
++    "rails test *": allow
++    "cd * && rails test *": allow
++    "cd * && make test": allow
++    "cd * && make test *": allow
+```
+
+### Patch 2–4 — `frontend-dev.md`, `senior-dev.md`, `ux-dev.md`
+
+Same family as Patch 1; `frontend-dev` adds `npx vite` / `cd * && npx vite`; `ux-dev` stops after `bun` (no go/cargo/rails test lines).
+
+### Patch 5 — `skills/orchestrate-execution/SKILL.md`
+
+```diff
+-1. From the **repository root**, run:
++1. Invoke **`developer`** via Task with **`load: minimal`** to run this from the **repository root**:
+ ...
++   Orchestrate has no `bash` tool; this precondition must be delegated, not run directly.
+-2. On **non-zero** exit, print the script’s stderr
++2. On **non-zero** exit from the delegated command, print the script’s stderr
+```
+
+### Patch 6 — `agents/verifier.md`
+
+Inserts entire `bash:` block from §4.7 between `skill:` and `---` / `# Verifier Agent`.
 
 ---
 
-## 4. Implementation (this chat)
-
-### 4.1 `agents/developer.md`
-
-Under `permission.bash`, added (non-exhaustive categories):
-
-- **Navigation / discovery:** `cd * && pwd`, `cd * && ls`, `cd * && rg`
-- **Git read:** `cd * && git status|diff|show|log|ls-files|grep`
-- **Git write (stage commits):** `git add *`, `git commit *`, `git add * && git commit *`, and `cd * && …` variants
-- **Tests / package managers:** `cd * && npm|pnpm|yarn|bun|…`, `go test`, `cargo test`, `make test`
-- **Rails / Ruby (BlocShed-class repos):** `bundle exec *`, `bin/rails *`, `rails test *` (+ `cd * && …` forms)
-
-Left ` "*": ask` as default for unmatched commands; kept explicit **deny** list for destructive/shell-pipe installs.
-
-### 4.2 `agents/frontend-dev.md`
-
-Same bash expansion pattern as `developer`, plus existing `npx vite *` with `cd * &&` variants.
-
-### 4.3 `agents/senior-dev.md`
-
-Same pattern as `developer` (escalation lane must commit and run tests like primary executor).
-
-### 4.4 `agents/ux-dev.md`
-
-Subset appropriate to prototype lane: git add/commit, `cd * &&` discovery, npm/pnpm/yarn/bun runs; no full backend test matrix required for every ux stage.
-
-### 4.5 `agents/verifier.md`
-
-Added `permission.bash` block:
-
-- **Allow:** read/discovery and test commands (mirror developer read/test patterns, including `grep *`, `git show *`, `cd * && …`)
-- **Deny:** `git add *`, `git commit *` (verifier must not mutate git history)
-
-### 4.6 `skills/orchestrate-execution/SKILL.md`
-
-**Plan precondition** updated:
-
-1. Invoke **`developer`** via Task with **`load: minimal`** to run `check-plan.sh`.
-2. Explicit note: **Orchestrate has no `bash` tool** — precondition must be delegated, not run directly.
-3. On non-zero exit, surface stderr and send operator back to architect to repair the plan artifact.
-
-### 4.7 Agents intentionally not changed
-
-| Agent | Why unchanged |
-| --- | --- |
-| `orchestrate` | Coordinator; `bash: false` is correct |
-| `architect` | Read-only planning; `git add` / `git commit` remain **deny** |
-| `helper`, `scribe` (this session) | No bash expansion in this chat slice |
-| Review family (`review`, `security-reviewer`, …) | Read-only bash allowlists; commits stay **deny** |
-
----
-
-## 5. Orchestrator vs subagent — who needs what
+## 6. Orchestrator vs subagent
 
 ```mermaid
 flowchart TB
-  subgraph primary [Primary agents — no implementation bash]
-    A[architect]
-    O[orchestrate]
-  end
-  subgraph exec [Execution subagents — bash for in-repo work]
-    D[developer]
-    F[frontend-dev]
-    S[senior-dev]
-    U[ux-dev]
-    V[verifier]
-  end
-  A -->|Task planning specialists / scribe| O
-  O -->|Task per stage| D
-  O -->|Task per stage| F
-  O -->|Task verify| V
-  O -->|Task escalation| S
-  D -->|git add / commit / tests| Repo[(Implementation repo)]
-  F --> Repo
-  S --> Repo
-  V -->|read + test only| Repo
+  O[orchestrate bash:false] -->|Task load:minimal| D[developer check-plan]
+  O -->|Task load:full| D2[developer stage work]
+  O -->|Task| V[verifier read/test]
+  D2 -->|git add commit| Repo[(impl repo)]
+  V -->|no git commit| Repo
 ```
 
-**Answer to “does orchestrate need config changes?”**
-
-- **No** — for bash. It needs correct **Task** delegation and an accurate **orchestrate-execution** skill (check-plan via `developer`).
-- **Yes** — if orchestrate is still prompting for `git show` / `grep`, the running agent is likely **not** orchestrate’s bash (it has none) but a **child** or a **stale session**; fix subagent bash rules and **restart OpenCode**.
-
 ---
 
-## 6. Operator playbook
+## 7. Operator playbook
 
-1. **Pull / sync** `~/.config/opencode` so agent frontmatter and skills match this session (or later unattended policy).
-2. **Restart OpenCode** (quit app or start a new session) after permission edits.
-3. Start **orchestrate** (or architect → handoff to orchestrate with `.plan` path).
-4. Confirm stage commits report `git_commit` hash in child completion reports (orchestrate-execution grading gate).
-5. If prompts persist for a **new** command shape, either:
-   - add a targeted allow rule to the owning subagent (granular model), or
-   - adopt wildcard execution-lane bash per `2026-06-01-unattended-execution-permissions-and-opencode-config-access.md`.
-
----
-
-## 7. Files touched in this chat
-
-| File | Change |
-| --- | --- |
-| `agents/developer.md` | Expanded `permission.bash` (git commit, `cd &&`, Rails/Ruby, tests) |
-| `agents/frontend-dev.md` | Same |
-| `agents/senior-dev.md` | Same |
-| `agents/ux-dev.md` | Git commit + prototype-appropriate bash |
-| `agents/verifier.md` | New `permission.bash` (read/test allow; commit deny) |
-| `skills/orchestrate-execution/SKILL.md` | Delegate `check-plan.sh` to `developer`; document no orchestrate bash |
-
-**Not modified in this chat:**
-
-- `agents/orchestrate.md` (bash stays false)
-- `agents/architect.md`
-- `opencode.json` global permission block (edit-focused only at session time)
+1. Apply §4 snippets (or transcript patches).
+2. **Restart OpenCode** so permission rules and UI “Always allow” cache refresh.
+3. Run orchestrate on a `.plan` path; confirm `developer` runs `check-plan.sh` without orchestrate bash.
+4. Confirm stage commit command (BlocShed example) runs without prompt.
 
 ---
 
 ## 8. Acceptance checklist
 
-- [ ] `developer` can `cd <worktree> && git add … && git commit -m "…"` without prompt (after restart)
-- [ ] `developer` can run project test commands (`bin/rails test`, `npm test`, etc.) without prompt
-- [ ] `verifier` can `git show`, `grep`/`rg`, and run plan `test_commands` without prompt
-- [ ] `verifier` cannot `git commit` via bash (deny or role-only)
-- [ ] `orchestrate` never runs `check-plan.sh` directly; delegates to `developer` `load: minimal`
-- [ ] `architect` still cannot commit via bash
-- [ ] No recurring “Always allow until restart” loop after one clean restart
+- [ ] `developer`: `cd <worktree> && git add … && git commit -m "…"` — no prompt after restart
+- [ ] `developer`: `bin/rails test …`, `bundle exec …` — no prompt
+- [ ] `verifier`: `git show`, `grep`, plan `test_commands` — no prompt
+- [ ] `verifier`: `git commit` — denied or blocked
+- [ ] `orchestrate`: never invokes bash; Tasks `developer` for `check-plan.sh`
+- [ ] `architect`: still cannot commit via bash (if guarded model enabled)
 
 ---
 
 ## 9. Relationship to later work
 
-Same folder, same date — likely **supersedes or extends** this session:
-
-| Document | Relationship |
+| Document / chat | Relationship |
 | --- | --- |
-| [`2026-06-01-unattended-execution-permissions-and-opencode-config-access.md`](2026-06-01-unattended-execution-permissions-and-opencode-config-access.md) | Evolves from granular allowlists to `bash: { "*": allow }` on execution/review subagents, `external_directory` policy for `~/.config/opencode/**`, and validator enforcement |
-| [`2026-05-18-external-directory-permissions.md`](2026-05-18-external-directory-permissions.md) | Broader external path access when skills live outside impl repo cwd |
-| [`2026-06-01-crlf-line-endings-and-architect-bash-permissions.md`](2026-06-01-crlf-line-endings-and-architect-bash-permissions.md) | Separate: architect spec-repo bash (not execution lane) |
+| [`2026-06-01-unattended-execution-permissions-and-opencode-config-access.md`](2026-06-01-unattended-execution-permissions-and-opencode-config-access.md) | Supersedes granular lists with `bash: { "*": allow }`, `external_directory`, OpenCode config edit deny |
+| Transcript `940a773f-367d-477c-a1d6-23bd264d60ba` | Adds `check-plan.sh` absolute-path allows, then wildcard bash |
+| [`2026-05-18-external-directory-permissions.md`](2026-05-18-external-directory-permissions.md) | External paths outside impl cwd |
 
-This document remains the **record of the first-principles fix** (edit vs bash, orchestrate delegation, verifier split, granular git/commit allows). If both policies exist in git history, prefer the **latest committed** agent frontmatter plus `validate-opencode-config.sh` when present.
+**This doc** is the canonical record for the **2026-05-17** granular fix + orchestrate delegation.
 
 ---
 
 ## 10. Current on-disk check
 
-At documentation time, some agent files may **no longer contain** inline `permission.bash` blocks (permissions centralized elsewhere or replaced by unattended wildcard policy). Verify:
-
 ```bash
 cd ~/.config/opencode
-rg -n 'permission:' agents/developer.md agents/verifier.md agents/orchestrate.md
-rg -n 'check-plan|Plan precondition' skills/orchestrate-execution/SKILL.md
+rg -n 'permission:' agents/developer.md agents/verifier.md
+rg -n 'Plan precondition|check-plan' skills/orchestrate-execution/SKILL.md
 ./scripts/validate-opencode-config.sh 2>/dev/null || true
 ```
 
-If `git add` / `git commit` prompts return after a merge:
-
-1. Confirm which policy is active (granular vs `bash: "*": allow`).
-2. Restart OpenCode.
-3. Reconcile with [`2026-06-01-unattended-execution-permissions-and-opencode-config-access.md`](2026-06-01-unattended-execution-permissions-and-opencode-config-access.md) if overnight unattended runs are the goal.
+If `permission.bash` is missing from agents, either re-apply §4 or use the unattended wildcard policy from the 2026-06-01 doc.
 
 ---
 
-## 11. Conversation trace (for audit)
+## 11. Conversation trace
 
 | Turn | Topic |
 | --- | --- |
-| 1 | Why permission checks still appear on `git commit` despite “developer permissions” |
-| 2 | User requirement: subagents must finish work without constant operator approval |
-| 3 | Implementation of granular bash allows on execution agents + verifier |
-| 4 | Stuck “Always allow” loop; whether orchestrate needs config — delegation fix + restart guidance |
+| 1 | Why permission checks on `git commit` |
+| 2 | Subagents must complete work without constant approval |
+| 3 | Granular bash allows + verifier + orchestrate skill fix |
+| 4 | Stuck “Always allow”; orchestrate config? → delegate + restart |
+| 5 | TO REVIEW doc; filename = chat creation date |
+| 6 | Full snippets for AI replay (this section expansion) |
 
-**Example command shape unblocked (developer):**
+**Unblocked command shape:**
 
 ```bash
 cd /Users/robo/.warp/worktrees/BlocShed/cobalt-shimmer \

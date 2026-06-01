@@ -1,14 +1,25 @@
 # 2026-05-19 — CRLF line endings and architect bash permissions (allow-by-default)
 
+| Field | Value |
+| --- | --- |
+| **Cursor chat created** | **2026-05-19** (transcript dir birth `2026-05-19 18:23` local) |
+| **Cursor chat ID** | `5d55ef77-4483-4b24-a602-48722ec6eb71` |
+| **Transcript** | `~/.cursor/projects/Users-robo-config-opencode/agent-transcripts/5d55ef77-4483-4b24-a602-48722ec6eb71/5d55ef77-4483-4b24-a602-48722ec6eb71.jsonl` |
+| **Config repo** | `~/.config/opencode` |
+| **Work finalized in chat** | 2026-05-19 (implementation turns); TO REVIEW doc amended 2026-06-01 |
+| **Filename date** | **`2026-05-19`** — matches **chat creation** date for `TO REVIEW/` sort order |
+
 **Session scope:** Fix `env: bash\r: No such file or directory` when running spec-repo `bin/fanout` and related tooling; stop architect permission prompts (`△ Permission required`) for routine spec work (`yq`, `file`, `gh`, `bin/*`) while keeping strict deny rules for destructive or local-mutating shell.
 
-**Status:** Implemented and finalized in this chat. **Verify on disk before merge** — the workspace may have diverged since this session (e.g. later docs/commits may subsume or relocate the same files). **Companion docs (same or adjacent days):**
+**Status:** Implemented and finalized in chat `5d55ef77-…`. **Verify on disk before merge** — later sessions may have moved scripts (e.g. under `bin/stack/`), removed `permission.bash` from architect, or changed redirect rules (`*>*` → spaced patterns). Treat snippets below as the **authoritative target for this session**.
 
-- [`2026-05-19-crlf-line-endings-hardening.md`](2026-05-19-crlf-line-endings-hardening.md) — deeper sync/`feature-upgrade`/`strip_crlf` hardening path
-- [`2026-06-01-setup-project-workflow-and-deepseek-bash-fixes.md`](2026-06-01-setup-project-workflow-and-deepseek-bash-fixes.md) — narrowed redirect denies (`*>*` → spaced `* > *`); `validate-opencode-config.sh` profiles (later session)
-- [`2026-06-01-feature-pipeline-and-architect-front-door.md`](2026-06-01-feature-pipeline-and-architect-front-door.md) — PRD parser / architect front door (later session)
+**Companion docs:**
 
-**Primary slug referenced in chat:** `downgrade-archival-recovery` (blocshed-spec fanout path).
+- [`2026-05-19-crlf-line-endings-hardening.md`](2026-05-19-crlf-line-endings-hardening.md) — `feature-upgrade` wrapper, impl `strip_crlf`, extended sync loops
+- [`2026-06-01-setup-project-workflow-and-deepseek-bash-fixes.md`](2026-06-01-setup-project-workflow-and-deepseek-bash-fixes.md) — **later**: `* > *` redirect denies; `validate-opencode-config.sh`
+- [`2026-06-01-feature-pipeline-and-architect-front-door.md`](2026-06-01-feature-pipeline-and-architect-front-door.md) — **later**: PRD `prd_io.py`, architect menu
+
+**Primary slug:** `downgrade-archival-recovery` (blocshed-spec fanout).
 
 ---
 
@@ -16,20 +27,18 @@
 
 | Area | Outcome |
 | --- | --- |
-| CRLF root cause | Windows-style `\r\n` on shell shebangs → `env: bash\r` on macOS/Linux |
-| Repo hygiene | Bulk normalize **112** text files to LF in OpenCode config repo |
+| CRLF root cause | `\r\n` shebangs → `env: bash\r` on macOS/Linux |
+| Repo hygiene | **112** files normalized to LF in OpenCode config |
 | Prevention | `.gitattributes`, `check-crlf.sh`, `normalize-line-endings.py`, `strip_crlf` on spec sync |
-| Architect UX | Replaced **ask-by-default + long allowlist** with **allow-by-default + explicit deny list** |
-| Spec skills | Added **`fanout-issues`** to architect skill allowlist and routing |
-| Operator action | **New architect session** after config pull; **re-sync** stale spec repos |
+| Architect UX | `permission.bash`: `"*": ask` + 70-line allowlist → **`"*": allow` + deny list** |
+| Spec skills | **`fanout-issues`** added to architect `permission.skill` + routing bullet |
+| Operator | New architect session after pull; re-sync stale spec repos |
 
 ---
 
-## 1. Problem 1 — `bin/fanout` fails with `env: bash\r`
+## 1. Problems and symptoms
 
-### Symptom
-
-In a spec repo (e.g. during **downgrade-archival-recovery**):
+### 1.1 CRLF — `bin/fanout`
 
 ```bash
 ./bin/fanout downgrade-archival-recovery
@@ -39,188 +48,455 @@ In a spec repo (e.g. during **downgrade-archival-recovery**):
 env: bash\r: No such file or directory
 ```
 
-The `\r` after `bash` in the error indicates a **CRLF shebang** (`#!/usr/bin/env bash\r`) or CRLF throughout copied `bin/*` scripts.
+`\r` in the error means the shebang line is `#!/usr/bin/env bash\r` (CRLF), not LF.
 
-### Root cause
+### 1.2 Architect — permission prompts
 
-- Many files under `~/.config/opencode` (and copies in spec repos) had **CRLF** line endings.
-- `.gitattributes` was incomplete and was itself CRLF, so Git did not enforce LF on checkout.
-- `bin/stack/sync_spec_tooling.sh` copied templates into spec repos **without** normalizing line endings, so bad bytes persisted in `APP-spec/bin/`.
+```text
+△ Permission required
+# Check PRD file line endings
+$ file docs/prd/downgrade-archival-recovery.md
+```
 
-### Fix implemented (OpenCode config repo)
+Same root cause class: `agents/architect.md` had `"*": ask` under `permission.bash`; only explicitly listed commands ran without approval (`yq`, `file`, `bin/fanout`, etc. were **not** listed initially).
 
-| Change | Purpose |
-| --- | --- |
-| **`scripts/normalize-line-endings.py`** | One-shot: walk repo tree, replace `\r\n` / lone `\r` with `\n` (skip binary via NUL check) |
-| **Bulk run** | Normalized **112** files (agents, skills, `bin/`, `templates/spec-repo/bin/*`, `scripts/`, docs, etc.) |
-| **Root `.gitattributes`** | `* text=auto eol=lf` plus `bin/**`, `scripts/**`, `templates/**` |
-| **`scripts/check-crlf.sh`** | CI/local gate: fail if `\r` in `bin/`, `scripts/`, `templates/`, `.gitattributes` |
-| **`bin/stack/sync_spec_tooling.sh`** | After each `install` into spec repo: **`strip_crlf`** (Python bytes normalize) via `sync_bin` helper |
-| **`.github/workflows/config-integrity.yml`** | Added step: `bash scripts/check-crlf.sh` (paths trigger may need to include `bin/**` / `templates/**` if not already) |
+---
 
-### Operator recovery (spec repo)
+## 2. Recreation guide (ordered steps for another AI)
 
-Re-sync tooling from config (paths as installed on your machine):
+Apply in **`~/.config/opencode`** unless noted.
+
+### Step A — Bulk LF normalize (one-shot)
+
+1. Add `scripts/normalize-line-endings.py` (full file in §3.2).
+2. Run:
+
+```bash
+cd ~/.config/opencode
+python3 scripts/normalize-line-endings.py
+chmod +x scripts/normalize-line-endings.py
+```
+
+Expected: `normalized 112 file(s):` (count may vary slightly).
+
+### Step B — Git attributes
+
+1. Write root `.gitattributes` (§3.3).
+
+### Step C — CRLF CI gate
+
+1. Add `scripts/check-crlf.sh` (§3.4).
+2. `chmod +x scripts/check-crlf.sh`
+3. Wire into `.github/workflows/config-integrity.yml` (§3.6).
+
+### Step D — Spec sync strips CRLF on install
+
+1. Patch `bin/stack/sync_spec_tooling.sh` sync section (§3.5) — use the **fixed** `strip_crlf` (compare `raw` once, not double `read_bytes`).
+
+### Step E — Architect bash policy
+
+1. In `agents/architect.md` frontmatter, replace entire `permission.bash` block from `"*": ask` … with §4.1 (**allow + deny**).
+2. Update `permission.skill` line to include `fanout-issues`, `to-prd`, `setup-project`, `feature-complete`, etc. (§4.2).
+3. Add Fanout routing bullet (§4.3); update Claude Context / Hard Rules text (§4.4).
+
+### Step F — RUNBOOK
+
+1. Patch `docs/RUNBOOK.md` paragraphs (§4.5).
+
+### Step G — Spec repo operator
 
 ```bash
 "$HOME/.config/opencode/bin/stack/sync_spec_tooling.sh" /path/to/APP-spec
+file bin/fanout   # no CRLF
 ```
 
-Or project-parent `setup-project` when that stack path is wired.
+### Step H — Reload OpenCode
 
-Verify:
-
-```bash
-file bin/fanout   # must NOT say "CRLF"
-bin/fanout downgrade-archival-recovery   # expect "slug required" or real fanout, not bash\r
-```
-
-Optional one-shot in spec repo if sync is not enough:
-
-```bash
-python3 "$HOME/.config/opencode/scripts/normalize-line-endings.py" "$(pwd)"
-```
+New **architect** session or `/reload` so frontmatter permissions apply.
 
 ---
 
-## 2. Problem 2 — Architect △ Permission required on routine commands
+## 3. CRLF implementation — full snippets
 
-### Symptom
+### 3.1 `scripts/normalize-line-endings.py` (create new file)
 
-Using **architect** in a **spec repo**, every unfamiliar bash command prompted approval, including:
+```python
+#!/usr/bin/env python3
+"""Convert CRLF to LF in repo text files. Skips binary files (NUL bytes)."""
+from __future__ import annotations
 
-- `yq --version`
-- `file docs/prd/downgrade-archival-recovery.md`
-- `bin/fanout <slug>`
-- Other read-only diagnostics
+import sys
+from pathlib import Path
 
-This blocked PRD/fanout workflows and caused agents to stall or ask the human repeatedly.
+SKIP_DIRS = {".git", "__pycache__", "node_modules", ".venv", "venv"}
+SKIP_SUFFIXES = {".pyc", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".woff", ".woff2"}
 
-### Root cause
 
-`agents/architect.md` frontmatter used:
+def should_skip(path: Path) -> bool:
+    if any(part in SKIP_DIRS for part in path.parts):
+        return True
+    return path.suffix.lower() in SKIP_SUFFIXES
 
-```yaml
-permission:
-  bash:
-    "*": ask
-    # … dozens of per-command "allow" lines …
+
+def normalize_file(path: Path) -> bool:
+    data = path.read_bytes()
+    if b"\x00" in data:
+        return False
+    if b"\r\n" not in data and b"\r" not in data:
+        return False
+    normalized = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    if normalized != data:
+        path.write_bytes(normalized)
+        return True
+    return False
+
+
+def main() -> None:
+    root = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path(__file__).resolve().parents[1]
+    changed: list[str] = []
+    for path in sorted(root.rglob("*")):
+        if not path.is_file() or should_skip(path):
+            continue
+        if normalize_file(path):
+            changed.append(str(path.relative_to(root)))
+    if changed:
+        print(f"normalized {len(changed)} file(s):")
+        for name in changed:
+            print(f"  {name}")
+    else:
+        print("no CRLF files to normalize")
+
+
+if __name__ == "__main__":
+    main()
 ```
 
-Global `opencode.json` allows bash broadly, but **agent frontmatter overrides** global rules. Anything not explicitly `allow` matched `ask`.
+### 3.2 Root `.gitattributes` (create or replace)
 
-Whitelisting (`yq`, `file`, `gh`, …) was **whack-a-mole**: each new command needed another line.
+```gitattributes
+# Normalize line endings on checkout and commit (critical for bin/* shebangs on macOS/Linux).
+* text=auto eol=lf
 
-### Fix implemented — allow-by-default, deny dangerous
-
-Replaced the long allowlist with:
-
-```yaml
-permission:
-  bash:
-    "*": allow
-    # explicit denies: rm, mv, cp, mkdir, touch, chmod, ln, sudo,
-    # destructive git (commit, push, reset, checkout, pull, clone, …),
-    # in-place sed, package installs, shell file redirects, tee
+*.sh text eol=lf
+bin/** text eol=lf
+scripts/** text eol=lf
+templates/** text eol=lf
 ```
 
-**Still allowed without prompts (examples):** `yq`, `jq`, `file`, `xxd`, `gh` (issues/labels/PRs/search), `bin/fanout`, `bin/new-prd`, `bin/status`, `python3`, `rg`, `git diff`/`status`/`log`, discovery helpers.
+### 3.3 `scripts/check-crlf.sh` (create new file)
 
-**Still denied:** local tree mutation via shell (`rm`, `mv`, `cp`, `mkdir`, `git commit`, `git push`, `sed -i`, `* > *`, `* >> *`, `npm install`, etc.). **Markdown/PRD writes** remain **`edit: deny`** → **scribe** via Task.
+**Note:** Initial version used `shopt -s globstar` (fails on macOS Bash 3.2). Final version omits `globstar` and uses `find` only.
 
-### Related architect updates (same session)
+```bash
+#!/usr/bin/env bash
+# Fail if any tracked text file under bin/, scripts/, or templates/ uses CRLF.
+set -euo pipefail
 
-| Item | Change |
-| --- | --- |
-| **`fanout-issues`** | Added to `permission.skill` allow map |
-| **Skill routing** | Bullet: approved PRD → load `fanout-issues`, run `bin/fanout <slug>` |
-| **Claude Context / Hard Rules** | Wording: shell fallback for discovery + GitHub/bin tooling; no local file mutation via shell |
-| **`docs/RUNBOOK.md`** | Architect bash described as allow-by-default with deny list (not allowlist + ask) |
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
 
-### Intermediate step (superseded in same chat)
+paths=(
+  bin
+  scripts
+  templates
+  .gitattributes
+)
 
-Before allow-by-default, the session briefly added explicit allows for `yq`, `file`, `gh issue view`, `bin/fanout`, etc. That approach was **replaced** by `"*": allow` after user feedback (“every action architect needs … allowed”).
+bad=()
+for base in "${paths[@]}"; do
+  [[ -e "$base" ]] || continue
+  while IFS= read -r -d '' f; do
+    [[ -f "$f" ]] || continue
+    if grep -q $'\r' "$f" 2>/dev/null; then
+      bad+=("$f")
+    fi
+  done < <(find "$base" -type f ! -path '*/__pycache__/*' ! -name '*.pyc' -print0 2>/dev/null)
+done
 
-### Operator requirement
+if ((${#bad[@]} > 0)); then
+  echo "ERROR: CRLF line endings (use LF for shell scripts and tooling):" >&2
+  printf '  %s\n' "${bad[@]}" >&2
+  echo "Fix: python3 scripts/normalize-line-endings.py" >&2
+  exit 1
+fi
 
-**Start a new architect session** (or `/reload` config) after pulling changes. Old sessions retain previous `permission.bash` rules.
+echo "check-crlf: ok"
+```
 
----
+### 3.4 `bin/stack/sync_spec_tooling.sh` — replace sync install block
 
-## 3. Files touched (this chat)
+**Find** (approximate legacy block):
 
-| Path | Role |
-| --- | --- |
-| `scripts/normalize-line-endings.py` | Bulk CRLF → LF |
-| `scripts/check-crlf.sh` | Guardrail script |
-| `.gitattributes` (repo root) | Git LF normalization |
-| `bin/stack/sync_spec_tooling.sh` | `strip_crlf` / `sync_bin` after install |
-| `.github/workflows/config-integrity.yml` | `check-crlf.sh` in validate job |
-| `agents/architect.md` | Bash `allow` + deny list; `fanout-issues` skill; routing/docs text |
-| `docs/RUNBOOK.md` | Permission conventions paragraph |
+```bash
+echo "==> Syncing spec tooling..."
+install -m0755 "$TEMPLATE/bin/fanout" "$SPEC/bin/fanout"
+install -m0755 "$TEMPLATE/bin/lib/validate_tickets.py" "$SPEC/bin/lib/validate_tickets.py"
+install -m0755 "$TEMPLATE/bin/lib/toposort_tickets.py" "$SPEC/bin/lib/toposort_tickets.py"
+[[ -f "$TEMPLATE/bin/status" ]] && install -m0755 "$TEMPLATE/bin/status" "$SPEC/bin/status"
+[[ -f "$TEMPLATE/bin/new-prd" ]] && install -m0755 "$TEMPLATE/bin/new-prd" "$SPEC/bin/new-prd"
+```
 
-**Templates / spec copies (content normalized in config repo):**
+**Replace with:**
+
+```bash
+echo "==> Syncing spec tooling..."
+# Ensure LF shebangs (CRLF breaks `env: bash\r` on macOS/Linux).
+strip_crlf() {
+  python3 -c "
+import pathlib, sys
+p = pathlib.Path(sys.argv[1])
+raw = p.read_bytes()
+data = raw.replace(b'\r\n', b'\n').replace(b'\r', b'\n')
+if data != raw:
+    p.write_bytes(data)
+" "$1"
+}
+sync_bin() {
+  install -m0755 "$1" "$2"
+  strip_crlf "$2"
+}
+sync_bin "$TEMPLATE/bin/fanout" "$SPEC/bin/fanout"
+sync_bin "$TEMPLATE/bin/lib/validate_tickets.py" "$SPEC/bin/lib/validate_tickets.py"
+sync_bin "$TEMPLATE/bin/lib/toposort_tickets.py" "$SPEC/bin/lib/toposort_tickets.py"
+[[ -f "$TEMPLATE/bin/status" ]] && sync_bin "$TEMPLATE/bin/status" "$SPEC/bin/status"
+[[ -f "$TEMPLATE/bin/new-prd" ]] && sync_bin "$TEMPLATE/bin/new-prd" "$SPEC/bin/new-prd"
+```
+
+**Bug fix in same session:** Do **not** ship the first `strip_crlf` draft that called `p.read_bytes()` twice in the `if` — it never writes. Use `raw` + `data != raw` as above.
+
+### 3.5 `.github/workflows/config-integrity.yml` — paths + step
+
+**Extend `on.pull_request.paths` and `on.push.paths`** with:
+
+```yaml
+      - "bin/**"
+      - "templates/**"
+      - "scripts/**"
+      - ".gitattributes"
+```
+
+**Add job step before validate:**
+
+```yaml
+      - name: Check shell script line endings (LF only)
+        run: bash scripts/check-crlf.sh
+      - name: Validate OpenCode config
+        run: bash scripts/validate-opencode-config.sh
+```
+
+### 3.6 Files bulk-normalized (representative list)
+
+Templates and bins (non-exhaustive; run normalize script for ground truth):
 
 - `templates/spec-repo/bin/fanout`
 - `templates/spec-repo/bin/lib/validate_tickets.py`
 - `templates/spec-repo/bin/lib/toposort_tickets.py`
 - `templates/spec-repo/bin/new-prd`, `bin/status`
 - `bin/lib/oc-root.sh`, `bin/lib/migrate_repos_registry.py`
-- Plus ~100 other CRLF text files across agents/skills/docs (see normalize script output in session)
+- All `agents/*.md`, most `skills/**/SKILL.md`, `scripts/*.sh`, many `docs/**` — **112 total** in session output
 
 ---
 
-## 4. Security model (unchanged intent)
+## 4. Architect permissions — full snippets
+
+### 4.1 BEFORE (remove this pattern)
+
+`agents/architect.md` used **ask-by-default** and a long allowlist. Minimal excerpt of the old model:
+
+```yaml
+permission:
+  edit: deny
+  bash:
+    "*": ask
+    "pwd": allow
+    "ls": allow
+    "ls *": allow
+    # … rg, git diff, gh issue create, etc. (70+ lines)
+    "rm *": deny
+    "mv *": deny
+    # …
+```
+
+**Intermediate (same session, superseded):** explicit allows were added for `yq *`, `file *`, `bin/fanout *`, `gh issue view *`, etc. User still hit prompts on unlisted commands → replaced by allow-by-default.
+
+### 4.2 AFTER — full `permission.bash` block (paste into `agents/architect.md` frontmatter)
+
+Keep `tools:` (`write: false`, `edit: false`, `bash: true`) and `edit: deny` unchanged. Replace **`bash:`** subtree with:
+
+```yaml
+  bash:
+    # Allow-by-default for spec/planning work (yq, gh, bin/*, file, python, etc.).
+    # Deny filesystem mutation, destructive git, shell redirects, and package installs.
+    # Artifact/source writes stay on scribe (edit: deny on this agent).
+    "*": allow
+    "rm *": deny
+    "rm -rf *": deny
+    "mv *": deny
+    "cp *": deny
+    "mkdir *": deny
+    "touch *": deny
+    "chmod *": deny
+    "chown *": deny
+    "ln *": deny
+    "truncate *": deny
+    "sudo *": deny
+    "doas *": deny
+    "sed -i *": deny
+    "sed -i'*": deny
+    "perl -pi *": deny
+    "git add *": deny
+    "git commit *": deny
+    "git push *": deny
+    "git push * --force*": deny
+    "git push * -f*": deny
+    "git reset *": deny
+    "git checkout *": deny
+    "git restore *": deny
+    "git clean *": deny
+    "git apply *": deny
+    "git merge *": deny
+    "git rebase *": deny
+    "git cherry-pick *": deny
+    "git stash *": deny
+    "git pull *": deny
+    "git clone *": deny
+    "git switch *": deny
+    "git tag *": deny
+    "npm install*": deny
+    "npm i *": deny
+    "pnpm install*": deny
+    "yarn install*": deny
+    "pip install *": deny
+    "pip3 install *": deny
+    "brew install *": deny
+    "*>*": deny
+    "*>>*": deny
+    "*| tee *": deny
+    "*|tee *": deny
+```
+
+**Important (later session note):** Broad `"*>*"` / `"*>>*"` denies also block `gh … 2>&1` and `ls … 2>/dev/null` on some OpenCode builds. If that regresses, see [`2026-06-01-setup-project-workflow-and-deepseek-bash-fixes.md`](2026-06-01-setup-project-workflow-and-deepseek-bash-fixes.md) for spaced redirect patterns (`"* > *"`, `"* 2> *"`).
+
+### 4.3 `permission.skill` line (architect frontmatter)
+
+```yaml
+  skill: { "architect-plan": "allow", "architect-review": "allow", "fanout-issues": "allow", "github-issue-run": "allow", "grill-me": "allow", "handoff": "allow", "to-issues": "allow", "to-prd": "allow", "triage": "allow", "research": "allow", "improve-codebase-architecture": "allow", "zoom-out": "allow", "caveman": "allow", "setup-skills": "allow", "setup-project": "allow", "issue-expand": "allow", "feature-complete": "allow" }
+```
+
+(`fanout-issues` was **missing** before this session; template lives at `templates/spec-repo/skills/fanout-issues/SKILL.md` and is copied into spec repos on sync.)
+
+### 4.4 Skill routing bullet (body of `agents/architect.md`)
+
+Add after the **To PRD** bullet:
+
+```markdown
+- **Fanout:** User approved PRD and wants child issues in target repos → load **`fanout-issues`** and run `bin/fanout <slug>` (uses `yq` + `gh`).
+```
+
+### 4.5 Claude Context / Hard Rules text (replacements)
+
+**Claude Context readiness gate** (shell fallback wording):
+
+```markdown
+- If `claude-context` is unavailable, errors, or indexing fails after retry, you may use shell for read-only discovery only (`rg`, `find`, `git diff`, `git status`, `file`, `yq`, `gh`, `bin/*`, etc.). Denied patterns in `permission.bash` still apply. Record `MCP_FALLBACK: claude-context unavailable or indexing failed — <error>` in the plan `Context` or `Gaps`.
+- Never use shell to mutate the local tree (writes go to **scribe**). GitHub/issue tooling (`gh`, `bin/fanout`) is allowed when skills require it.
+```
+
+**Hard rule 12:**
+
+```markdown
+12. **Claude Context readiness.** Before any planning discovery, enforce the Claude Context readiness gate above. If MCP fails, use shell for read-only discovery only; respect `permission.bash` denials (no local file mutation via shell).
+```
+
+### 4.6 `docs/RUNBOOK.md` patches
+
+**Overview bullet** — replace guarded-shell wording:
+
+```markdown
+- **Primary planning mode** (`architect`) — read-only with allow-by-default bash (explicit deny for destructive/mutating shell): exploration, reporting, drafting plans;
+```
+
+**Permission conventions paragraph:**
+
+```markdown
+Both primaries (`architect`, `orchestrate`) are non-writing (`edit: deny`). Architect bash is **allow-by-default** with an explicit **deny** list (no `rm`/`mv`/`cp`, destructive git, shell redirects, package installs); planning tooling (`yq`, `gh`, `bin/fanout`, `file`, `python3`, etc.) runs without prompts. Only `scribe` writes plan artifacts, docs, `README.md`, and `.env.example` in allowed paths.
+```
+
+### 4.7 Global `opencode.json` (context only — not changed this session)
+
+At time of session, global bash was broadly allowed:
+
+```json
+    "bash": {
+      "*": "allow",
+      "rm -rf /*": "deny",
+      ...
+    }
+```
+
+Architect **frontmatter overrides** global for the architect agent. Orchestrate and other agents are unaffected by §4.2.
+
+---
+
+## 5. Security model (unchanged intent)
 
 | Layer | Rule |
 | --- | --- |
-| **Architect role** | Read-only coordinator; no direct source edits |
-| **`edit: deny`** | No Write/Edit tools on architect |
-| **Bash allow** | Planning/spec/GitHub tooling runs without prompts |
-| **Bash deny** | No shell-based local file mutation, destructive git, installs, redirects to files |
-| **Writes** | **scribe** (and delegated **developer** only where skills say GitHub comment/edit) |
+| Architect role | Read-only coordinator |
+| `edit: deny` + `write: false` | No direct artifact/source writes |
+| `bash: "*": allow` | Spec/planning/GitHub/bin tooling without prompts |
+| Bash denies | No shell local mutation, destructive git, package installs, file redirects |
+| Writes | **scribe** via Task; **developer** only where skills require `gh issue edit` |
 
 ---
 
-## 5. Verification checklist
+## 6. Verification commands
 
-### OpenCode config repo
+```bash
+# Config repo
+cd ~/.config/opencode
+bash scripts/check-crlf.sh
+find . -type f ! -path '*/.git/*' -print0 | xargs -0 file 2>/dev/null | grep CRLF || echo "no CRLF"
 
-- [ ] `bash scripts/check-crlf.sh` → `check-crlf: ok`
-- [ ] `find . -type f -path './bin/*' -print0 \| xargs -0 file \| grep CRLF` → empty
-- [ ] `agents/architect.md` has `"*": allow` under `permission.bash` (not `"*": ask` with long allow list)
-- [ ] `fanout-issues` in architect `permission.skill`
-- [ ] `scripts/normalize-line-endings.py` and `scripts/check-crlf.sh` exist and are LF
+# Spec repo
+file bin/fanout
+./bin/fanout downgrade-archival-recovery   # not bash\r
 
-### Spec repo (e.g. blocshed-spec)
-
-- [ ] Re-run `sync_spec_tooling.sh` on spec path
-- [ ] `file bin/fanout` → ASCII text, **no** CRLF
-- [ ] `./bin/fanout <slug>` runs (may exit on validation, not on shebang)
-- [ ] New **architect** session: `yq --version` and `file docs/prd/<slug>.md` run **without** △ prompt
-
-### CI
-
-- [ ] `config-integrity` workflow runs `check-crlf.sh` when `bin/`, `scripts/`, or `templates/` change (extend `paths:` if checks do not fire)
+# Architect (new session)
+yq --version
+file docs/prd/downgrade-archival-recovery.md
+```
 
 ---
 
-## 6. What this session did *not* do
+## 7. Chat timeline
 
-- Did not commit or push (user rule: commit only on request).
-- Did not run `bin/fanout downgrade-archival-recovery` to completion in chat (blocked earlier by CRLF/permissions; fixes were config-side).
-- Did not replace **`2026-05-19-crlf-line-endings-hardening.md`** (wrapper `feature-upgrade`, impl sync, `.gitattributes` in spec template) — see that doc for the fuller hardening narrative.
-- Did not fix DeepSeek V4 / OpenRouter `reasoning_content` tool loops — see **`2026-06-01-setup-project-workflow-and-deepseek-bash-fixes.md`** (later session).
-
----
-
-## 7. Chat timeline (for auditors)
-
-1. User hit `env: bash\r` on `./bin/fanout`; agent attempted CRLF convert via python (permission blocked in that turn).
-2. Bulk `normalize-line-endings.py`, `.gitattributes`, `check-crlf.sh`, sync `strip_crlf`, CI hook.
-3. User hit repeated △ on `yq`, then `file docs/prd/...`; expanded architect allowlist.
-4. User requested no more prompts within strict security → architect bash flipped to **`"*": allow`** + deny list; RUNBOOK + `fanout-issues` routing updated.
+| # | Event |
+| --- | --- |
+| 1 | `./bin/fanout` → `env: bash\r`; CRLF diagnosis |
+| 2 | `normalize-line-endings.py`, `.gitattributes`, `check-crlf.sh`, `strip_crlf` in sync, CI step; 112 files normalized |
+| 3 | △ on `yq --version`; whitelist grows (`yq`, `gh`, `bin/fanout`, …) |
+| 4 | △ on `file docs/prd/...` |
+| 5 | User: allow all architect work within strict security → `"*": allow` + deny list |
+| 6 | `fanout-issues` skill + routing; RUNBOOK updated |
+| 7 | TO REVIEW doc created (filename corrected to chat-creation date **2026-05-19**) |
 
 ---
 
-*Document created for `TO REVIEW/` — filename prefix **`2026-05-19`** (date this chat completed its work). Sorts with other `2026-05-19-*` notes; before `2026-05-20-*` and later June sessions.*
+## 8. Out of scope / not done
+
+- No git commit/push in chat.
+- `bin/fanout downgrade-archival-recovery` not run to completion (blocked before fixes).
+- Did not fix DeepSeek V4 / OpenRouter `reasoning_content` tool failures.
+- Did not implement `feature-upgrade` always-sync wrapper (see hardening doc).
+
+---
+
+## 9. `TO REVIEW/` sort key
+
+**Filename:** `2026-05-19-crlf-line-endings-and-architect-bash-permissions.md`  
+Sorts with other **`2026-05-19-*`** entries by date prefix, then slug.
+
+---
+
+*End of session record for Cursor chat `5d55ef77-4483-4b24-a602-48722ec6eb71` (created 2026-05-19).*
