@@ -49,6 +49,14 @@ Iterate until the user approves.
 
 Publish in **dependency order** (blockers first) so "Blocked by" can cite real issue numbers.
 
+**Duplicate guard (required before every `gh issue create`):**
+
+- List existing issues for the feature slug: `gh issue list --repo <owner/name> --state all --label "feature:<slug>" --limit 200 --json number,title,body`
+- **Do not create** if an open or closed issue already has the same exact **title** or the same **`task_id`** in an `opencode-task-yaml` / `opencode-task-json` fence.
+- If the approved breakdown itself contains duplicate titles, stop and ask the user to merge, rename, or split before publishing.
+- If publishing is interrupted and resumed, re-run the guard before **each** create — never assume a prior create failed.
+- Publish **sequentially** (one issue at a time); do not parallelize creates for the same slug.
+
 For each approved slice:
 
 ```bash

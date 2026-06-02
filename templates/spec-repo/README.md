@@ -6,7 +6,7 @@ This repository owns **PRDs** (`docs/prd/`), **parent GitHub issues**, and cross
 
 If this repo was just created by shell `setup-project`, finish in OpenCode **here only** (do not repeat in `*-web`, `*-api`, etc.):
 
-1. `cd` into this spec repo and run `opencode`
+1. `cd` into this spec repo and run `opencode` (no `.opencode/` folder here — config loads from `OPENCODE_CONFIG_DIR`, default `~/.config/opencode`)
 2. **architect** → **7. Setup / bootstrap stack** — interview, complete `docs/agents/repos.md`, delegate **stack-bootstrap** to each implementation sibling
 
 Full walkthrough (new projects, existing repos, validation): **`~/.config/opencode/README.md`** — sections *New multi-repo project* and *Existing repositories*.

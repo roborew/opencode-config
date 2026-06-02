@@ -41,6 +41,9 @@ if [[ "$CHECK_ONLY" == "true" ]]; then
       yq -o=json '.tickets' "$prd" | python3 "$VALIDATE" "$REGISTRY" || exit 6
     done
   fi
+  if [[ -d "$SPEC/.opencode" ]]; then
+    echo "WARN: $SPEC/.opencode should not exist in a spec repo (remove it; use OPENCODE_CONFIG_DIR only)" >&2
+  fi
   echo "==> check-only: ok"
   exit 0
 fi
@@ -75,6 +78,10 @@ strip_crlf "$SPEC/bin/lib/toposort_tickets.py"
 cp "$TEMPLATE/docs/prd/_template.md" "$SPEC/docs/prd/_template.md"
 cp "$TEMPLATE/skills/fanout-issues/SKILL.md" "$SPEC/skills/fanout-issues/SKILL.md"
 [[ -f "$TEMPLATE/.gitattributes" ]] && cp "$TEMPLATE/.gitattributes" "$SPEC/.gitattributes"
+if [[ -d "$SPEC/.opencode" ]]; then
+  echo "WARN: removing stray $SPEC/.opencode (spec repos use OPENCODE_CONFIG_DIR, not project OpenCode config)" >&2
+  rm -rf "$SPEC/.opencode"
+fi
 
 REGISTRY="$SPEC/docs/agents/repos.md"
 if [[ ! -f "$REGISTRY" ]]; then
