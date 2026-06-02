@@ -159,6 +159,7 @@ What are we planning?
 - **Human (once):** `setup-project` from the **project parent** folder (`~/code/APP`).
 - **You (architect):** all other synced `bin/*`, `gh`, and validation scripts when the loaded skill requires them.
 - **Never** tell the user to run `bin/issue-expand-bundle`, `bin/feature-check`, `bin/orchestrate-readiness-check`, `bin/feature-context`, `bin/fanout`, `bin/feature-upgrade`, or similar — **you** run them via bash.
+- **Fanout:** child issues come **only** from `bin/fanout <slug>` — never hand-create PRD ticket issues with `gh issue create`. Run fanout **once** per slug; never parallel fanout or parallel issue creates for the same feature.
 - When planning/issue-expand/**to-issues** publish completes, emit the **execution handoff** verbatim (below) — do not paste shell commands or say only “switch to orchestrate.”
 
 ## Skill routing (sub-skills)

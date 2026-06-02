@@ -69,10 +69,14 @@ sync_bin() {
 }
 
 sync_bin "$TEMPLATE/bin/fanout" "$SPEC/bin/fanout"
-install -m0755 "$TEMPLATE/bin/lib/validate_tickets.py" "$SPEC/bin/lib/validate_tickets.py"
-strip_crlf "$SPEC/bin/lib/validate_tickets.py"
-install -m0755 "$TEMPLATE/bin/lib/toposort_tickets.py" "$SPEC/bin/lib/toposort_tickets.py"
-strip_crlf "$SPEC/bin/lib/toposort_tickets.py"
+for lib in "$TEMPLATE"/bin/lib/*; do
+  base=$(basename "$lib")
+  dest="$SPEC/bin/lib/$base"
+  if [[ -f "$lib" ]]; then
+    install -m0755 "$lib" "$dest"
+    strip_crlf "$dest"
+  fi
+done
 [[ -f "$TEMPLATE/bin/status" ]] && sync_bin "$TEMPLATE/bin/status" "$SPEC/bin/status"
 [[ -f "$TEMPLATE/bin/new-prd" ]] && sync_bin "$TEMPLATE/bin/new-prd" "$SPEC/bin/new-prd"
 cp "$TEMPLATE/docs/prd/_template.md" "$SPEC/docs/prd/_template.md"

@@ -13,11 +13,19 @@ roleReminder: "Operates in the application spec repo; uses gh + yq."
 
 ## How
 
-From this repo root:
+From this repo root, run **exactly once** per slug (unless resuming after a failed run):
 
 ```bash
 bin/fanout <slug>
 ```
+
+## Hard rules
+
+- **Only** `bin/fanout <slug>` creates child issues — **never** hand-roll `gh issue create` for PRD tickets.
+- **Never** run fanout twice in parallel for the same slug (the script holds a lock; a second run exits 8).
+- **Never** fanout in parallel subagents or parallel bash calls.
+- If fanout reports `Skipping existing #N`, that is success — do not create another issue for the same ticket.
+- Re-run fanout only when resuming after failure or after fixing the PRD; idempotent skips are expected.
 
 ## Rules
 
@@ -32,3 +40,8 @@ bin/fanout <slug>
 
 - Each slice key must be a **full** `owner/repo` string matching `docs/agents/repos.md`.
 - One broad issue per repo (same label set where applicable).
+
+### Idempotency
+
+- Before each create, `bin/fanout` checks existing issues by **exact title** and embedded **task id** (`opencode-task-json`, yaml, or legacy `**Task ID:**` bodies).
+- Duplicate ticket ids or duplicate `(repo, title)` pairs in the PRD cause fanout to exit 7 before creating anything.
