@@ -226,12 +226,42 @@ tmp/
 
 ### Implementation (per repo, dependency order)
 
-1. `**architect`** in impl repo → **option 1** (spec workflow / issue-expand) for `feature:<slug>` — codebase-backed implementation planning on each issue (readable markdown + `opencode-task-yaml` stages).
-2. `**orchestrate`** → GitHub backlog `feature:<slug>` (stage-by-stage when expanded).
-3. `**architect**` → per-issue / Mode F sign-off → `**ship**` for PR in that repo.
-4. When all repos done: `**feature-complete**` in **spec** (closes parent PRD issue, rollup PR links).
+1. **`architect`** (impl repo) → **option 1** + `feature:<slug>` → **issue-expand** on each ticket → readiness gates → handoff when queue is ready.
+2. **New OpenCode session** → **`orchestrate`** → `feature:<slug>` (GitHub backlog; stage loop when issues were expanded). Do not continue the architect session on MiniMax after heavy tool use — see [Session handoffs](#session-handoffs-architect--orchestrate).
+3. When orchestrate reports queue exhausted (+ optional PR URL): **new session** → **`architect`** (impl repo) → **option 5** (review / sign-off) or say *ready for review* with `feature:<slug>` and PR link → **Mode F** sign-off vs PRD/tickets → issues → `state:done`.
+4. **Human:** review and merge the impl-repo PR on GitHub (orchestrate may have opened it via `feature-finish-pr.sh`; use **`ship`** only if PR was skipped).
+5. When **every** impl repo for the feature is signed off: **`architect`** in **spec** → **option 3** (**feature-complete**) → human confirms closing the spec parent PRD issue.
 
-**Legacy path:** architect **option 2** (legacy local plan) → `.plan/feature.<slug>.md` → orchestrate.
+**Legacy path:** architect **option 2** (local `.plan`) → orchestrate on artifact path → architect **option 5** Mode B (review + docs + `*.completed.md` archive).
+
+### Session handoffs (architect ↔ orchestrate)
+
+OpenCode can switch agents in one session, but **architect (Qwen) + many tools → orchestrate (MiniMax)** often breaks if the full tool transcript is replayed. Use **GitHub as the handoff**, not chat memory.
+
+| Step | Session | Agent | You do |
+|------|---------|-------|--------|
+| Plan + expand | A (planning) | **architect** | Option 1, slug, approve issue bodies in chat |
+| Execute backlog | **B (new)** | **orchestrate** | `/new`, then: `feature:<slug>` — start first runnable issue |
+| Sign-off per impl repo | **C (new)** | **architect** | Option 5 or: *Orchestrate done. feature:\<slug\>. PR: \<url\>* |
+| Close feature (multi-repo) | **D (spec)** | **architect** | Option 3 **feature-complete** after all impl repos |
+
+Optional same-session path: architect ends with a short **HANDOFF** block → you run **`/compact`** → switch to orchestrate → kickoff with `feature:<slug>`. If MiniMax returns duplicate `tool_call` errors, use **`/new`** instead.
+
+### Who does what at execution time
+
+| Action | Who |
+|--------|-----|
+| Implement stages, edit code, run tests | **`developer`** / **`frontend-dev`** (Task from **orchestrate**) |
+| Per-stage / per-issue verification | **`verifier`** |
+| `git commit` on feature branch (`Refs:` / `Closes:` issue #) | Implementation subagents (orchestrate requires evidence in completion report) |
+| Issue labels `state:in-progress` → `state:ready-for-review` | **orchestrate** via **`developer`** + `issue-state-transition.sh` |
+| Push branch + open ready-for-review PR when queue empty | **orchestrate** via **`developer`** + `feature-finish-pr.sh` (skip with `ORCHESTRATE_AUTO_PR=0`) |
+| Code/PR review vs tickets + PRD; `state:done` on issues | **architect** **Mode F** (option 5) — not orchestrate |
+| Remediation after failed sign-off | **architect** publishes fixes (**to-issues** or review plan) → **new orchestrate session** |
+| Merge PR on GitHub | **You** (human) |
+| Cross-repo rollup + close spec parent issue | **architect** + **feature-complete** in spec (human confirms parent close) |
+
+Orchestrate **does not** run final product sign-off, write changelog/docs for GitHub-only features, or close tickets as done — that is **architect** after you switch back.
 
 ---
 

@@ -10,7 +10,33 @@ Spec-driven path from PRD to orchestrate-ready GitHub issues. **Agents run `bin/
 | 2 | spec | **architect** (fanout-issues): creates child issues per repo |
 | 3 | impl | User: **architect option 1** + slug → **issue-expand** runs bundle, plans each issue, gates |
 | 4 | impl | User approves issue edits in chat → **architect** runs checks → prompts **orchestrate** |
-| 5 | impl | **orchestrate** auto-pushes branch + opens ready-for-review PR to `develop` at queue exhaustion → **architect** sign-off → **feature-complete** in spec |
+| 5 | impl | **orchestrate** exhausts `feature:<slug>` queue → push + ready-for-review PR (unless opted out) → **new session** → **architect** Mode F sign-off → human merge PR |
+| 6 | spec | **feature-complete** after all impl repos signed off (closes PRD parent issue) |
+
+### Session boundaries (recommended)
+
+- **Planning (issue-expand):** architect session in each impl repo.
+- **Execution:** **new** OpenCode session → orchestrate with `feature:<slug>` only (issues + YAML are source of truth).
+- **Review:** **new** session → architect impl repo **option 5** with slug + PR URL from orchestrate.
+
+Same-session handoff is optional (`/compact` after a short HANDOFF block); use a new session if the provider errors on tool history.
+
+### Sign-off and ticket closure
+
+| Label / state | Set by | Meaning |
+|---------------|--------|---------|
+| `state:in-progress` | orchestrate | Actively executing issue/stages |
+| `state:ready-for-review` | orchestrate (verifier PASS) | Implementation done; awaiting architect/human |
+| `state:done` | architect Mode F | Accepted after review vs PRD/tickets |
+| Issue **closed** on GitHub | architect Mode F (via **developer** `gh`) | Ticket complete |
+
+Orchestrate does **not** close issues as done. Per-issue commits happen during execution; one **feature PR** is opened when the queue is empty (`feature-finish-pr.sh`).
+
+**Mode F** (GitHub-first): architect compares closed/`state:done` issues and acceptance vs `$SPEC_REPO/docs/prd/<slug>.md` when `SPEC_REPO` is set; runs **review** subagent; may **document** + **scribe**; no `.plan` archive unless a local plan was executed.
+
+**Mode B** (legacy `.plan`): after local plan execution — review, docs, **`archive_plan`** to `*.completed.md`.
+
+**Remediation:** review requests fixes → architect **to-issues** or review sidecar → **orchestrate** again (prefer new session).
 
 ## Two execution modes
 
