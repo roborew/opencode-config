@@ -77,7 +77,7 @@ Apply the triage label for AFK-ready work (default: `state:ready-for-agent`) and
 
 **Do not** write local `.plan` files — issues are the source of truth.
 
-After publish, tell the user: **Switch to `orchestrate`** with the feature label or issue numbers.
+After publish, emit the architect agent **execution handoff** verbatim: use the **feature backlog** variant when issues share `feature:<slug>`; otherwise the **targeted queue** variant with issue numbers. Do not say only “switch to orchestrate.”
 
 ### Default triage labels (when `docs/agents/triage-labels.md` absent)
 

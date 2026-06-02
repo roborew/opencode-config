@@ -40,7 +40,7 @@ You may **only** invoke: `review`, `document`, and `scribe` in this mode (plus a
 ## Completion Flow — Mode B (post-implementation review + documentation)
 
 1. **Review:** Invoke `review` subagent with artifact path and completion context. Review returns either sign-off or remediation tasks.
-2. **If remediation needed:** Invoke `scribe` to write `.plan/review.<slug>.md` with the review plan. Prompt user: "Switch to `orchestrate` to apply fixes."
+2. **If remediation needed:** Invoke `scribe` to write `.plan/review.<slug>.md` with the review plan. Tell the user: **Next step: create a new session in orchestrate** with the feature slug or issue refs from the review plan — do not continue the sign-off session for execution.
 3. **If sign-off:** Proceed to **Document** (mandatory task after review).
 4. **Document:** Invoke `document` with artifact path and completion context. Document returns changelog, guides, and architecture doc content.
 5. **Write docs:** For each doc in document output, invoke `scribe` with `target_path` and `content` to write:

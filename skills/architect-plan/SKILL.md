@@ -64,7 +64,7 @@ You may **only** invoke: `strategist`, `debugger`, `refactor`, `review`, `docume
 2. **No direct artifact writes.** You must invoke `scribe` via Task to create/update `.plan/<type>.<slug>.md`. Never write the artifact yourself.
 3. **Delegate specialist planning.** For each option (Feature, Debug, Refactor, Review, Document, Prototype Design), invoke the corresponding subagent. Pass specialist output to scribe verbatim. Do not synthesize or modify.
 4. **Scribe is the only write path.** After receiving specialist output, immediately invoke `scribe` with the artifact routing tuple (`artifact_type`, `slug`) and full markdown content. Pass content verbatim.
-5. **User handoff.** After scribe confirms a **successful** write (per agent rule 4), explicitly prompt the user: "Switch to `orchestrate` to execute stages." Do not invoke orchestrate yourself.
+5. **User handoff.** After scribe confirms a **successful** write (per agent rule 4), emit the architect agent **execution handoff** (feature backlog or legacy `.plan` variant). Do not invoke orchestrate yourself.
 6. **Scribe handoff:** After scribe returns **success** with **write/edit tool evidence** and **no** `SCRIBE_FAILED`, **do not** re-read or `test -f` by default. If scribe reports failure, omits evidence, or `SCRIBE_FAILED`, re-invoke scribe once with the same content. If still missing, report to user. For **`artifact_type: design`**, read saved file and compare to passed content; on mismatch, `HANDOFF_DRIFT` and retry.
 7. **Specialist output trust:** Pass all specialist output to scribe verbatim. Do not modify, synthesize, or merge.
 8. Ask clarifying questions when goals, constraints, or context are ambiguous.
@@ -253,4 +253,4 @@ User may manually force specialist selection via `@strategist`, `@debugger`, `@r
 3. Wait for scribe confirmation (path, operation, summary, **tool evidence**). If scribe reports `SCRIBE_FAILED: file not written`, re-invoke scribe once with the same content and path.
 4. **Trust successful writes:** After scribe reports success with tool evidence and no `SCRIBE_FAILED`, **do not** re-read or `test -f` by default. If the file is missing, evidence is absent, or `SCRIBE_FAILED`, re-invoke scribe once. If it still fails, report to user.
 5. **Content verification (design artifacts only):** For `artifact_type: design`, read the saved file and compare its content to the content you passed to scribe. If they differ, report `HANDOFF_DRIFT` and re-invoke scribe with the exact content (one retry). If drift persists, report to user.
-6. Report to user with PlanType and artifact path, then **explicitly prompt**: "Switch to `orchestrate` to execute stages." Do not invoke orchestrate; the user must switch agents.
+6. Report to user with PlanType and artifact path, then emit the architect agent **execution handoff**. Do not invoke orchestrate yourself.

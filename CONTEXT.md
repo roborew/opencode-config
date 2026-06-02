@@ -47,10 +47,10 @@ _Avoid_: Plan file, local backlog
 ## Example dialogue
 
 > **Operator:** "I want to tweak the web header layout — no PRD."
-> **Architect:** "That's a **Targeted change** in `APP-web`. I'll create GitHub issue(s) via **to-issues**, optionally **issue-expand** for TDD stages, then you switch to orchestrate."
+> **Architect:** "That's a **Targeted change** in `APP-web`. I'll create GitHub issue(s) via **to-issues**, optionally **issue-expand** for TDD stages, then: *Next step: create a new session in orchestrate…*"
 
 > **Operator:** "Ship the new billing flow across API and web."
-> **Architect:** "That's a **Spec feature**. We'll **grill-me** → **to-prd** → fanout, then **issue-expand** in each impl repo before orchestrate."
+> **Architect:** "That's a **Spec feature**. We'll **grill-me** → **to-prd** → fanout, then **issue-expand** in each impl repo — then a **new orchestrate session** per impl repo (`feature:<slug>`)."
 
 ## Flagged ambiguities
 

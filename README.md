@@ -226,8 +226,8 @@ tmp/
 
 ### Implementation (per repo, dependency order)
 
-1. **`architect`** (impl repo) → **option 1** + `feature:<slug>` → **issue-expand** on each ticket → readiness gates → handoff when queue is ready.
-2. **New OpenCode session** → **`orchestrate`** → `feature:<slug>` (GitHub backlog; stage loop when issues were expanded). Do not continue the architect session on MiniMax after heavy tool use — see [Session handoffs](#session-handoffs-architect--orchestrate).
+1. **`architect`** (impl repo) → **option 1** or targeted **to-issues** → planning gates → ends with the canonical handoff, e.g. *Next step: create a new session in orchestrate with the feature slug 'Google Auth' (`google-auth`). First message: `feature:google-auth`.*
+2. **`/new`** → **`orchestrate`** → paste or type the **first message** from that handoff (usually `feature:<slug>`). See [Session handoffs](#session-handoffs-architect--orchestrate).
 3. When orchestrate reports queue exhausted (+ optional PR URL): **new session** → **`architect`** (impl repo) → **option 5** (review / sign-off) or say *ready for review* with `feature:<slug>` and PR link → **Mode F** sign-off vs PRD/tickets → issues → `state:done`.
 4. **Human:** review and merge the impl-repo PR on GitHub (orchestrate may have opened it via `feature-finish-pr.sh`; use **`ship`** only if PR was skipped).
 5. When **every** impl repo for the feature is signed off: **`architect`** in **spec** → **option 3** (**feature-complete**) → human confirms closing the spec parent PRD issue.

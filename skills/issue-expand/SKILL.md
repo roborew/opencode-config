@@ -67,7 +67,13 @@ Both must **PASS** with substantive plans. If FAIL, continue planning — do not
 
 ### 5. Handoff (user action only)
 
-Tell the user: **Switch to `orchestrate`** with slug `<slug>`. Do not list shell commands.
+Emit the architect agent **execution handoff** verbatim (feature backlog variant). Example for slug `google-auth`:
+
+```text
+Next step: create a new session in orchestrate with the feature slug 'Google Auth' (`google-auth`). First message: `feature:google-auth`.
+```
+
+Do not list shell commands. Do not say only “switch to orchestrate.”
 
 ## Issue body (target)
 
