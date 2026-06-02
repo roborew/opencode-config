@@ -97,6 +97,19 @@ When check passes:
 - Implementation work uses **issue-expand** → **orchestrate** (not per-repo setup-skills).
 - Close features with **feature-complete** in this spec repo.
 
+## Bash (architect)
+
+Architect runs discovery and validation shell; **stack-bootstrap** / **scribe** / **developer** Tasks handle writes.
+
+| Allowed (examples) | Denied (architect `permission.bash`) |
+|--------------------|--------------------------------------|
+| `gh repo view … -q .nameWithOwner` | `rm`, `mv`, `cp`, `mkdir`, `chmod` |
+| `ls -d ../*/` (no `2>/dev/null` with space before `2>`) | `git add`, `git commit`, `git push` |
+| `bash -lc "$OC/bin/setup-project --check-only …"` | `echo … > file` (`* > *` deny) |
+| `bin/fanout`, `yq`, `file`, `python3 bin/lib/*` | Package installs (`npm install`, etc.) |
+
+Prefer bare commands over `2>&1` / `2>/dev/null` when a deny might match spaced `* 2> *`.
+
 ## Hard rules
 
 - Do not invoke `orchestrate` from this skill.

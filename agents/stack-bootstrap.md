@@ -14,7 +14,7 @@ permission:
     "~/.ssh/**": deny
     "~/.gnupg/**": deny
     "~/.aws/**": deny
-    "*": ask
+    "*": allow
   bash:
     "*": allow
     "rm -rf /*": deny

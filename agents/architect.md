@@ -10,69 +10,56 @@ tools:
 permission:
   edit: deny
   bash:
-    "*": ask
-    "pwd": allow
-    "ls": allow
-    "ls *": allow
-    "find": allow
-    "find *": allow
-    "rg": allow
-    "rg *": allow
-    "grep": allow
-    "grep *": allow
-    "sed -n *": allow
-    "git status": allow
-    "git status *": allow
-    "git diff": allow
-    "git diff *": allow
-    "git show": allow
-    "git show *": allow
-    "git log": allow
-    "git log *": allow
-    "git ls-files": allow
-    "git ls-files *": allow
-    "git grep": allow
-    "git grep *": allow
-    "git remote get-url origin": allow
-    "git remote -v": allow
-    "git branch --show-current": allow
-    "gh auth status": allow
-    "gh repo view --json nameWithOwner": allow
-    "gh repo view --json nameWithOwner *": allow
-    "gh repo view --repo *": allow
-    "gh label list": allow
-    "gh label list *": allow
-    "gh label create *": allow
-    "gh issue list *": allow
-    "gh issue view *": allow
-    "gh issue create": allow
-    "gh issue create *": allow
-    "bin/fanout *": allow
-    "bin/feature-upgrade *": allow
-    "bin/feature-check *": allow
-    "bin/sync-fanout-bodies *": allow
-    "bin/issue-expand-bundle *": allow
-    "bin/orchestrate-readiness-check *": allow
-    "bin/feature-context *": allow
-    "python3 bin/lib/*": allow
+    # Allow-by-default for spec/planning (yq, gh, bin/*, setup-project --check-only, file, python, etc.).
+    # Deny filesystem mutation, destructive git, spaced file redirects, and package installs.
+    # Do not use "*>*" — it blocks gh "2>&1" and ls "2>/dev/null". Writes stay on scribe (edit: deny).
+    "*": allow
     "rm *": deny
+    "rm -rf *": deny
     "mv *": deny
     "cp *": deny
     "mkdir *": deny
     "touch *": deny
     "chmod *": deny
+    "chown *": deny
+    "ln *": deny
+    "truncate *": deny
+    "sudo *": deny
+    "doas *": deny
+    "sed -i *": deny
+    "sed -i'*": deny
+    "perl -pi *": deny
     "git add *": deny
     "git commit *": deny
     "git push *": deny
+    "git push * --force*": deny
+    "git push * -f*": deny
     "git reset *": deny
     "git checkout *": deny
     "git restore *": deny
     "git clean *": deny
     "git apply *": deny
-    "sed -i *": deny
-    "*>*": deny
-    "*>>*": deny
+    "git merge *": deny
+    "git rebase *": deny
+    "git cherry-pick *": deny
+    "git stash *": deny
+    "git pull *": deny
+    "git clone *": deny
+    "git switch *": deny
+    "git tag *": deny
+    "npm install*": deny
+    "npm i *": deny
+    "pnpm install*": deny
+    "yarn install*": deny
+    "pip install *": deny
+    "pip3 install *": deny
+    "brew install *": deny
+    "* > *": deny
+    "* >> *": deny
+    "* 2> *": deny
+    "* 2>> *": deny
     "*| tee *": deny
+    "*|tee *": deny
   skill:
     {
       "architect-plan": "allow",
@@ -191,7 +178,7 @@ If the skill tool fails, output `SKILL_UNAVAILABLE: <skill-name>` and report to 
 
 ## Claude Context Readiness Gate
 
-Before planning discovery, run `get_indexing_status` → `index_codebase` if needed. If MCP unavailable, use only read-only shell allowed by `permission.bash` and record `MCP_FALLBACK` in outputs. Shell is read-only discovery only — never create, edit, move, or delete files via shell.
+Before planning discovery, run `get_indexing_status` → `index_codebase` if needed. If MCP unavailable, use shell for read-only discovery (`rg`, `find`, `git diff`, `file`, `yq`, `gh`, `bin/*`, etc.); `permission.bash` denials still apply. Record `MCP_FALLBACK` in outputs. Never mutate the local tree via shell (writes go to **scribe**); GitHub/bin tooling is allowed when skills require it.
 
 ## Subagent skill-load vocabulary (Task prompts)
 

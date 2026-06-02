@@ -1,5 +1,5 @@
 # Execution-lane permission posture (broad allow + deny-list)
 
-Execution subagents (`developer`, `frontend-dev`, `ux-dev`, `senior-dev`, `scribe`, `verifier`, etc.) use `bash: "*": allow` with explicit dangerous-command denies and `edit` denied on `~/.config/opencode/**`. This supports unattended orchestration overnight. Planning agents (`architect`, `orchestrate`) stay guarded — architect is read-only with an explicit bash allowlist; orchestrate has `bash: false` and delegates shell to `developer`.
+Execution subagents (`developer`, `frontend-dev`, `ux-dev`, `senior-dev`, `scribe`, `verifier`, etc.) use `bash: "*": allow` with explicit dangerous-command denies and `edit` denied on `~/.config/opencode/**`. This supports unattended orchestration overnight. **Architect** is read-only (`edit: deny`) with **allow-by-default bash** and the same class of mutation/redirect/package denies — so `setup-project`, `bin/fanout`, `gh`, and `setup-project --check-only` run without prompts; local file writes stay on **scribe** / **stack-bootstrap** via Task. **Orchestrate** has `bash: false` and delegates shell to `developer`.
 
-**Considered:** Granular per-command allowlists for execution agents. Rejected — too much approval friction for overnight runs; trust boundary is in-repo git + verifier + human PR review.
+**Considered:** Granular per-command allowlists for architect and execution agents. Rejected — whitelists blocked documented setup-project commands (`bash -lc`, `yq`, `gh … -q`) and caused repeated shell failures when `ask` could not be approved mid-session.
