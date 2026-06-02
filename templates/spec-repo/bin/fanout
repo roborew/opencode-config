@@ -190,6 +190,10 @@ fanout_tickets() {
 TICKET_COUNT=$(python3 "$PRD_IO" tickets_count "$PRD_PATH")
 if [[ "${TICKET_COUNT}" -gt 0 ]]; then
   fanout_tickets
+  echo "==> Normalizing child issue bodies (Parent PRD, opencode-task-json, sections)..."
+  "${BIN_DIR}/sync-fanout-bodies" "$SLUG"
+  echo "==> Validating fanout contract..."
+  "${BIN_DIR}/feature-check" "$SLUG" --level fanout
 else
   fanout_legacy_slices
 fi
