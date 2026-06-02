@@ -5,15 +5,29 @@ ISSUE="${1:?issue number required}"
 OUT="tmp/feature-context.md"
 mkdir -p tmp
 
+BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
+OC_LIB="${HOME}/.config/opencode/bin/lib"
+if [[ -f "${BIN_DIR}/lib/fetch_spec_prd.sh" ]]; then
+  # shellcheck source=lib/fetch_spec_prd.sh disable=SC1091
+  source "${BIN_DIR}/lib/fetch_spec_prd.sh"
+elif [[ -f "${OC_LIB}/fetch_spec_prd.sh" ]]; then
+  # shellcheck source=/dev/null disable=SC1091
+  source "${OC_LIB}/fetch_spec_prd.sh"
+else
+  echo "ERROR: missing fetch_spec_prd.sh (run setup-project / sync_impl_tooling)" >&2
+  exit 8
+fi
+
 REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 ISSUE_JSON=$(gh issue view "$ISSUE" --repo "$REPO" --json title,body,labels,url,number)
+TRACKER="docs/agents/issue-tracker.md"
 
 SPEC_REPO=""
-if [[ -f docs/agents/issue-tracker.md ]]; then
-  SPEC_REPO=$(grep -E '^[[:space:]]*(SPEC_REPO|spec_repo|Spec repo|spec repository):' docs/agents/issue-tracker.md | head -1 | sed -E 's/^[^:]*:[[:space:]]*//' | tr -d '\r' || true)
+if [[ -f "$TRACKER" ]]; then
+  SPEC_REPO=$(read_spec_repo_from_file "$TRACKER" 2>/dev/null || true)
 fi
 if [[ -z "$SPEC_REPO" ]]; then
-  echo "WARN: docs/agents/issue-tracker.md missing or no SPEC_REPO line — parent PRD fetch may fail. Run bin/link-spec-repo <owner/name>-spec" >&2
+  echo "WARN: $TRACKER missing or no SPEC_REPO line — parent PRD fetch may fail. Run bin/link-spec-repo <owner/name>-spec" >&2
 fi
 
 SLUG=$(echo "$ISSUE_JSON" | jq -r '.labels[].name' | grep '^feature:' | head -1 | cut -d: -f2- || true)
@@ -22,9 +36,10 @@ if [[ -z "$SLUG" ]]; then
   SLUG="unknown"
 fi
 
-PARENT_URL=""
-if [[ -n "$(echo "$ISSUE_JSON" | jq -r '.body')" ]]; then
-  PARENT_URL=$(echo "$ISSUE_JSON" | jq -r '.body' | grep -oE 'https://github.com/[^/]+/[^/]+/issues/[0-9]+' | head -1 || true)
+ISSUE_BODY=$(echo "$ISSUE_JSON" | jq -r '.body // ""')
+PARENT_URL=$(parent_prd_url_from_text "$ISSUE_BODY" 2>/dev/null || true)
+if [[ -z "$PARENT_URL" ]]; then
+  PARENT_URL=$(echo "$ISSUE_BODY" | grep -oE 'https://github.com/[^/]+/[^/]+/issues/[0-9]+' | head -1 || true)
 fi
 
 {
@@ -33,7 +48,7 @@ fi
   echo "## This issue"
   echo "$ISSUE_JSON" | jq -r '"Title: \(.title)\nURL: \(.url)\n\n\(.body)"'
   echo
-  if [[ -n "$PARENT_URL" && -n "$SPEC_REPO" ]]; then
+  if [[ -n "$PARENT_URL" ]]; then
     echo "## Parent PRD issue"
     PARENT_JSON=$(gh issue view "$PARENT_URL" --json title,body,url 2>/dev/null || true)
     if [[ -n "$PARENT_JSON" ]] && echo "$PARENT_JSON" | jq -e 'type == "object"' >/dev/null 2>&1; then
@@ -42,25 +57,32 @@ fi
       echo "_Could not load parent issue._"
     fi
     echo
-    PRD_PATH="docs/prd/${SLUG}.md"
-    echo "## PRD file (${SPEC_REPO} ${PRD_PATH})"
-    if out=$(gh api "repos/${SPEC_REPO}/contents/${PRD_PATH}" --jq .content 2>/dev/null); then
-      echo "$out" | base64 -d
-    else
-      echo "_Could not fetch PRD from ${SPEC_REPO} (missing file or auth)._"
-    fi
-    echo
-  elif [[ -z "$PARENT_URL" ]]; then
-    echo "## Parent PRD"
-    echo "_No parent issue URL found in issue body._"
+  else
+    echo "## Parent PRD issue"
+    echo "_No Parent PRD: line or issue URL in this issue body._"
     echo
   fi
+
+  if [[ -n "$SPEC_REPO" && "$SLUG" != "unknown" ]]; then
+    PRD_PATH="docs/prd/${SLUG}.md"
+    echo "## PRD file (${SPEC_REPO} ${PRD_PATH})"
+    if PRD_BODY=$(fetch_spec_prd_markdown "$SPEC_REPO" "$SLUG" "$TRACKER"); then
+      echo "_Source: ${FETCH_SPEC_PRD_SOURCE}${FETCH_SPEC_PRD_REF:+, ref ${FETCH_SPEC_PRD_REF}}_"
+      echo
+      echo "$PRD_BODY"
+    else
+      echo "_Could not fetch PRD file (set \`SPEC_PRD_REF: develop\` in ${TRACKER} or keep spec repo checked out on the branch with the PRD)._"
+      echo "_Planning can still use this issue body and the parent PRD issue above._"
+    fi
+    echo
+  fi
+
   echo "## Local CONTEXT.md"
   if [[ -f CONTEXT.md ]]; then
     cat CONTEXT.md
   else
     echo "_No CONTEXT.md at repo root._"
   fi
-} > "$OUT"
+} >"$OUT"
 
 echo "Wrote $OUT"

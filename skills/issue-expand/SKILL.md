@@ -31,7 +31,7 @@ Phase 4 of the feature pipeline: turn spec fanout tickets into **developer-revie
 ### 1. Bootstrap — you run
 
 `bin/issue-expand-bundle <slug>`  
-Read `tmp/issue-expand-bundle.md`. Optional per ticket: `bin/feature-context <n>`.
+Read `tmp/issue-expand-bundle.md`. PRD file is loaded from the **local spec sibling checkout**, else `SPEC_PRD_REF` in `docs/agents/issue-tracker.md` (e.g. `develop`), else `develop`/`main` — **not** spec default branch only. If the file is missing, the bundle still lists **GitHub child issues** and the parent PRD issue from `Parent PRD:` lines. Optional per ticket: `bin/feature-context <n>`.
 
 ### 2. Claude Context (mandatory)
 

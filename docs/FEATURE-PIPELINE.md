@@ -77,7 +77,7 @@ Synced to each repo for architect/orchestrate — **not** a user runbook:
 
 | Script | Used by |
 |--------|---------|
-| `bin/issue-expand-bundle` | issue-expand |
+| `bin/issue-expand-bundle` | issue-expand (PRD from local spec checkout, `SPEC_PRD_REF`, or `develop`/`main` — not default branch only) |
 | `bin/feature-check` | issue-expand, feature-upgrade |
 | `bin/orchestrate-readiness-check` | issue-expand |
 | `bin/feature-context` | issue-expand, orchestrate |
