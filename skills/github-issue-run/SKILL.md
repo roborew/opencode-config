@@ -11,6 +11,7 @@ Companion to **`orchestrate-execution`** when working from a **GitHub `feature:<
 
 ## Preconditions
 
+- **Environment readiness gate** passed this session (`worktree-env` → `developer` preflight). Orchestrate runs this before step 1 below if not already `env_gate_passed`.
 - Implementation repo with child issues from spec fanout + impl **issue-expand** (`opencode-task-yaml` with non-empty `stages[]` for orchestrate level).
 - `gh` authenticated (via delegated **developer** Tasks).
 - Issues labelled `feature:<slug>` and `state:ready-for-agent` (or transitioned to `state:in-progress` during execution).
@@ -54,15 +55,16 @@ bash "$OC/skills/github-issue-run/lib/issue-state-transition.sh" "<repo>" "<numb
 ## Execution loop
 
 1. Obtain kebab-case **feature slug** from user if missing.
-2. **next-runnable-issue.sh** → capture JSON.
-3. Transition to **`state:in-progress`**.
-4. If **`opencode_meta.stages`** is non-empty → follow **stage loop** in **`orchestrate-execution`** (`execution_mode: github_issue_stage`).
-5. Else **flat mode** → single implement pass (`execution_mode: github_issue`) using root acceptance + test_commands from meta.
-6. Task **verifier** with same contract + completion report.
-7. Grade per **Child Report Grading Gate**; require **`git_commit`** with `Refs: #<n>` when files changed.
-8. On PASS → **`state:ready-for-review`** + optional `gh issue comment` with summary + commit hash.
-9. On FAIL → **`state:blocked`** or **helper** / **orchestrate-recovery** — do not advance queue.
-10. Repeat from step 2 until discovery fails.
+2. **Environment readiness gate** (orchestrate: `worktree-env` then `developer` preflight) if not already passed this session.
+3. **next-runnable-issue.sh** → capture JSON.
+4. Transition to **`state:in-progress`**.
+5. If **`opencode_meta.stages`** is non-empty → follow **stage loop** in **`orchestrate-execution`** (`execution_mode: github_issue_stage`).
+6. Else **flat mode** → single implement pass (`execution_mode: github_issue`) using root acceptance + test_commands from meta.
+7. Task **verifier** with same contract + completion report.
+8. Grade per **Child Report Grading Gate**; require **`git_commit`** with `Refs: #<n>` when files changed.
+9. On PASS → **`state:ready-for-review`** + optional `gh issue comment` with summary + commit hash.
+10. On FAIL → **`state:blocked`** or **helper** / **orchestrate-recovery** — do not advance queue.
+11. Repeat from step 3 until discovery fails.
 
 ## Queue exhausted
 
