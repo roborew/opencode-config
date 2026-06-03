@@ -58,7 +58,7 @@ When no artifact path or `feature:<slug>` is provided (new session, greeting, un
    - **`no`** → set `env_gate_declined: true`; do not run preflight this session unless the user later asks to rerun.
    - **Already `env_gate_passed` or `env_gate_declined`** → do not ask again; continue.
 2. **Claude Context readiness gate** (below).
-3. **Fresh Context: Work selection** — present **(B)/(C)/(D)/(A)** menu only after step 1 is resolved.
+3. **Fresh Context: Work selection** — present the **(1)/(2)/(3)/(4)** menu only after step 1 is resolved.
 
 When the user provides a **`.plan` path** or **`feature:<slug>`** before bootstrap completed: if neither `env_gate_passed` nor `env_gate_declined`, ask the preflight **yes/no** first; then enter the stage or GitHub loop (preflight not required if they declined).
 
@@ -75,13 +75,13 @@ On fresh context, and before delegating discovery-heavy planning or review work:
 After session bootstrap, when no artifact path or `feature:<slug>` is provided:
 
 1. **Run the Claude Context readiness gate** if not already done this turn.
-2. **Present the work-selection menu** in the same order and labels as the orchestrate agent **Fresh Context: Session Bootstrap + Work Selection**. **(B)** GitHub backlog is primary; **(A)** legacy `.plan` is listed last.
-3. **On (B):** proceed to **GitHub feature backlog loop** (obtain kebab slug if missing).
-4. **On (C):** stop and prompt: switch to `architect` with the user's goal (e.g. Mode F sign-off, new planning).
-5. **On (D):** ask for a one-line description; route to `architect` for non-backlog work unless the user supplies a `feature:<slug>`, issue #, or explicit execution scope—then use **(B)** or targeted issue flow as appropriate.
-6. **On (A) — legacy only:** continue to **Legacy `.plan` selection** below. Do not glob or list `.plan/` before the user chooses **(A)**.
+2. **Present the work-selection menu** verbatim from the orchestrate agent **Fresh Context: Session Bootstrap + Work Selection** block (**(1)** GitHub backlog first; **(4)** legacy `.plan` last; numbers match display order).
+3. **On (1):** proceed to **GitHub feature backlog loop** (obtain kebab slug if missing).
+4. **On (2):** stop and prompt: switch to `architect` with the user's goal (e.g. Mode F sign-off, new planning).
+5. **On (3):** ask for a one-line description; route to `architect` for non-backlog work unless the user supplies a `feature:<slug>`, issue #, or explicit execution scope—then use **(1)** or targeted issue flow as appropriate.
+6. **On (4) — legacy only:** continue to **Legacy `.plan` selection** below. Do not glob or list `.plan/` before the user chooses **(4)**.
 
-## Legacy `.plan` selection (only after user chooses (A))
+## Legacy `.plan` selection (only after user chooses (4))
 
 1. **Read `.plan/` from disk first (non-negotiable).** Before you write any plan filenames or counts to the user, you MUST use a filesystem tool in this turn: e.g. glob `.plan/*.md` (and `.plan/**/*.md` if you use nested plans), or list/read the `.plan/` directory. **Never** invent, guess, or recall-from-memory what is in `.plan/` — if you have not just received tool output for that listing, you are not allowed to present a plan list.
 2. **Derive active plans** from that tool output only: include `*.md` files whose basename does **not** end with `.completed.md`. Omit archived `.plan/<type>.<slug>.completed.md` after architect Mode B sign-off.
@@ -90,7 +90,7 @@ After session bootstrap, when no artifact path or `feature:<slug>` is provided:
 5. If the user chooses "create new", stop and prompt: "Switch to `architect` to create a plan, then return here with the plan path."
 6. **Do not proceed** with orchestration until a plan path is selected.
 
-If there are no **active** plans (only archived `*.completed.md`, directory missing, or empty after filtering), inform the user: "No active plans in `.plan/` (archived `*.completed.md` files are omitted). Switch to `architect` to create a plan, provide a GitHub `feature:<slug>`, or choose GitHub backlog **(B)**."
+If there are no **active** plans (only archived `*.completed.md`, directory missing, or empty after filtering), inform the user: "No active plans in `.plan/` (archived `*.completed.md` files are omitted). Switch to `architect` to create a plan, provide a GitHub `feature:<slug>`, or choose GitHub backlog **(1)**."
 
 ## GitHub feature backlog loop (no `.plan` artifact)
 

@@ -75,12 +75,16 @@ When no artifact path or feature slug is provided:
    - **no** → set `env_gate_declined`; continue without preflight.
    - Already passed or declined → skip this question.
 2. Run Claude Context readiness gate.
-3. Ask the user (**GitHub-first** — present in this order; letters are stable, order is not):
-   - **(B)** Work from a GitHub `feature:<slug>` backlog in this repo? **(primary — use for all new spec/targeted execution)**
-   - **(C)** Hand back to `architect` (review, sign-off, new planning)?
-   - **(D)** Something else (debug, refactor, hotfix, doc review, etc.) — describe the task; usually switch to `architect` unless they give a `feature:<slug>`, issue #, or narrow execution scope
-   - **(A)** *(legacy)* Run a local `.plan` artifact? (glob `.plan/*.md`, exclude `*.completed.md`; prefer **(B)** for new work)
-4. Do not proceed until (B) slug, (C) handoff, (D) is resolved, or (A) path is chosen.
+3. Present **exactly** this menu **verbatim** (numbers **1–4** match display order; do not add a title line or rephrase):
+
+   ```text
+   (1) Work from a GitHub `feature:<slug>` backlog in this repo? (primary — use for all new spec/targeted execution)
+   (2) Hand back to `architect` (review, sign-off, new planning)?
+   (3) Something else (debug, refactor, hotfix, doc review, etc.) — describe the task; usually switch to `architect` unless they give a `feature:<slug>`, issue #, or narrow execution scope
+   (4) (legacy) Run a local `.plan` artifact? (glob `.plan/*.md`, exclude `*.completed.md`; prefer (1) for new work)
+   ```
+
+4. Do not proceed until (1) slug, (2) handoff, (3) is resolved, or (4) path is chosen.
 
 When the user provides a **`.plan` path** or **`feature:<slug>`** immediately: if neither `env_gate_passed` nor `env_gate_declined`, ask preflight **yes/no** first; then start work (decline does not block execution).
 
