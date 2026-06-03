@@ -95,7 +95,7 @@ OpenCode does not define an in-repo model allowlist beyond [`opencode.json`](../
 5. `orchestrate` ensures artifact exists; if missing, dispatches `scribe` to write it.
 6. `orchestrate` runs the **Environment readiness gate** (mandatory, once per session): **`worktree-env`** (linked worktree `.env` / `.env.local` symlinks when applicable), then **`developer`** preflight; pauses for remediation if blocked. Escape hatch: `ORCHESTRATE_SKIP_ENV_GATE=1`.
 7. `orchestrate` runs Claude Context readiness (`get_indexing_status` → `index_codebase` if needed) before plan listing or discovery-heavy delegation.
-8. `orchestrate` **reads `.plan/` via a filesystem tool** (glob or list), then lists **active** plans (omit `*.completed.md`) from that output only—never from memory—and asks the user to select one, a GitHub `feature:<slug>`, or switch to `architect`.
+8. `orchestrate` shows the **work-selection menu** (GitHub **(B)** first; legacy `.plan` **(A)** last). On **(B)**, run the GitHub `feature:<slug>` backlog. On **(A)** only, **read `.plan/` via a filesystem tool** (glob or list), list **active** plans (omit `*.completed.md`) from that output only—never from memory—and ask the user to select one. **(C)** / **(D)** route to `architect` or clarified scope as in the orchestrate agent.
 9. Before the first stage or first GitHub issue, the env gate must already have passed this session (re-run only after remediation or `ENV_BLOCKED`).
 10. `orchestrate` dispatches one stage at a time to `developer`, `frontend-dev`, or `ux-dev` (by stage Owner). Design artifacts use `Owner: ux-dev`; `ux-dev` outputs HTML-only files to `.prototype/<slug>/`.
 11. Execution subagent returns completion report (`stage_id`, files, tests, checks, blockers, risks, next input).

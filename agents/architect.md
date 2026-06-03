@@ -228,7 +228,7 @@ Next step: create a new session in orchestrate with the feature slug '<Display N
 Next step: create a new session in orchestrate. First message: start with issue #<n> (and #<m> if blocked-by order requires).
 ```
 
-**Legacy `.plan` path** (rare): add artifact path on its own line before the feature line, or tell user to choose **(A)** in orchestrate bootstrap with that path.
+**Legacy `.plan` path** (rare): add artifact path on its own line before the feature line, or tell user to choose legacy **(A)** (last option) in orchestrate bootstrap with that path. Default execution handoff is GitHub **(B)** `feature:<slug>`.
 
 ## After planning / publish
 
