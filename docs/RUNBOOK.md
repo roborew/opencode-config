@@ -32,7 +32,7 @@ Shell bootstrap syncs `bin/*` and templates; registry **INCOMPLETE** until the O
 
 ## Overview
 
-- **Built-in agents:** `plan` uses Qwen3.7 Max; `build` uses MiniMax M3 in `opencode.json` for generic/quick tasks.
+- **Built-in agents:** `plan` uses DeepSeek V4 Flash; `build` uses MiniMax M3 in `opencode.json` for generic/quick tasks.
 - **Primary planning mode** (`architect`) — read-only with **allow-by-default bash** (explicit deny for destructive/mutating shell): exploration, `gh`, `bin/*`, `setup-project --check-only`; artifact writes via **scribe** / **stack-bootstrap** Tasks only. Invokes: `debugger`, `refactor`, `review`, `document`, `designer`, `scribe`. Never invokes `frontend-dev`, `developer`, or `orchestrate`. Prompts user to switch to orchestrate when done; receives user back for review + docs after orchestrate completes. **Skills:** `architect-plan` (new planning, features, specialists, Mode A); `architect-review` (post-implementation Mode B only). The monolithic `architect` skill package is removed.
 - **Primary execution mode** (`orchestrate`) runs delegated stage execution and recovery flow. Reads `## Difficulty` from the artifact (`easy` \| `medium` \| `hard`; default `medium` if missing). After all stages pass the final verifier: **medium/hard** — **CodeRabbit gate** via `review` + `code-review` skill (CLI review; remediation loop max 2×); **easy** — skips CodeRabbit. Then: **easy** — no further gates; **medium** — `review` post-execution check; **hard** — `senior-dev` (scheduled review, no user confirmation) then `helper` (strategy conformance). On completion, prompts user to switch to architect for review and documentation. **Skills:** `orchestrate-execution` (bootstrap: preflight yes/no, optional env gate, work selection, stage loop, grading, completion gates); `orchestrate-recovery` (helper triggers, loops, env, escalation, manual paste). The monolithic `orchestrate` skill package is removed.
 - **Planning specialists** (`debugger`, `refactor`, `review`, `designer`) — read-only subagents of architect; return plan drafts, never write code. `designer` synthesizes design briefs for Prototype Design. The **`review`** agent may Task **`security-reviewer`**, **`performance-reviewer`**, and **`doc-reviewer`** when change scope warrants (see `skills/review/SKILL.md`).
@@ -150,12 +150,14 @@ Provider-level `timeout` (e.g. 300000ms) and per-model **`temperature` / `top_p`
 
 | Layer | Agents | Model |
 | --- | --- | --- |
-| Planning / architecture | `architect`, `plan`, `strategist` | Qwen3.7 Max |
+| Planning (primary) | `architect`, `plan` | DeepSeek V4 Flash |
+| Scoped planning | `strategist` | DeepSeek V4 Pro |
 | Orchestration | `orchestrate` | MiniMax M3 |
 | Primary implementation | `developer`, `frontend-dev`, `build` | MiniMax M3 |
 | Design / prototypes | `designer`, `ux-dev` | Gemini 3 Flash |
-| Senior / second opinion | `senior-dev` | DeepSeek V4 Pro |
-| Fast utility | `debugger`, `helper`, `refactor`, `verifier`, `review`, reviewers, `mentor` | DeepSeek V4 Flash |
+| Senior / security depth | `senior-dev`, `security-reviewer` | DeepSeek V4 Pro |
+| Fast utility | `debugger`, `helper`, `refactor`, `verifier`, `review`, `performance-reviewer` | DeepSeek V4 Flash |
+| Teaching | `mentor` | Qwen3.7 Max |
 | Vision | `vision` | Qwen3 VL |
 | Writing / docs | `scribe`, `document`, `doc-reviewer`, `stack-bootstrap`, `worktree-env` | GPT-5 Nano |
 

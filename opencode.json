@@ -149,7 +149,7 @@
   },
   "agent": {
     "architect": {
-      "model": "openrouter/qwen/qwen3.7-max",
+      "model": "openrouter/deepseek/deepseek-v4-flash",
       "steps": 30
     },
     "orchestrate": {
@@ -157,13 +157,13 @@
       "steps": 50
     },
     "plan": {
-      "model": "openrouter/qwen/qwen3.7-max",
+      "model": "openrouter/deepseek/deepseek-v4-flash",
       "steps": 20
     },
     "strategist": {
       "mode": "subagent",
-      "model": "openrouter/qwen/qwen3.7-max",
-      "steps": 15
+      "model": "openrouter/deepseek/deepseek-v4-pro",
+      "steps": 12
     },
     "build": {
       "model": "openrouter/minimax/minimax-m3",
@@ -231,7 +231,7 @@
     },
     "security-reviewer": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v4-flash",
+      "model": "openrouter/deepseek/deepseek-v4-pro",
       "steps": 15
     },
     "performance-reviewer": {
@@ -251,7 +251,7 @@
     },
     "mentor": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v4-flash",
+      "model": "openrouter/qwen/qwen3.7-max",
       "steps": 10
     },
     "refactor": {

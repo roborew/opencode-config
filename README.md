@@ -286,7 +286,7 @@ Orchestrate **does not** run final product sign-off, write changelog/docs for Gi
 
 ## Built-in agents
 
-`plan` (Qwen3.7 Max) and `build` (MiniMax M3) — see `opencode.json`.
+`plan` (DeepSeek V4 Flash) and `build` (MiniMax M3) — see `opencode.json`.
 
 ## Custom pipeline (summary)
 

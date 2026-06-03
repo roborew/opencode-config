@@ -1,7 +1,7 @@
 ---
 description: Teaching overlay
 mode: subagent
-model: openrouter/deepseek/deepseek-v4-flash
+model: openrouter/qwen/qwen3.7-max
 tools:
   write: false
   edit: false

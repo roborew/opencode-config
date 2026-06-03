@@ -1,7 +1,7 @@
 ---
 description: Planning coordinator. GitHub-issue front door for spec and impl repos. Decomposes work, delegates specialists, persists via scribe for docs/PRD only — execution queue is GitHub issues.
 mode: primary
-model: openrouter/qwen/qwen3.7-max
+model: openrouter/deepseek/deepseek-v4-flash
 tools:
   write: false
   edit: false
