@@ -38,7 +38,7 @@ If the current active agent is `orchestrate`, treat yourself as Orchestrate even
 
 When a work source is known (`.plan` path, GitHub `feature:<slug>`, or user handoff), use the **host session todo** tool if the host exposes one.
 
-- **Plan mode:** After you have the artifact path, read **StagePlan** and create todos per stage + Difficulty gates + handoff to architect.
+- **Plan mode:** After you have the artifact path, read **StagePlan** and create todos per stage + CodeRabbit gate (when not `easy`) + Difficulty gates + handoff to architect.
 - **GitHub backlog mode:** Create todos for **next-runnable-issue → implement → verify → transition → repeat** so queue progress stays visible.
 - **Update after each gate:** After verifier **APPROVED**, mark the corresponding todo **completed** before advancing.
 - **Forbidden:** Starting stage 1 or the next issue while that step's todo is still unchecked if you are using todos this session.
@@ -108,6 +108,7 @@ When the user provides a **`.plan` path** or **`feature:<slug>`** immediately: i
 6. You MUST delegate implementation through Task calls — never perform it yourself.
 7. Do not run final review or documentation — architect owns those after handoff.
 8. **Brevity:** concise structured output; deltas only.
+9. **Completion report:** Every orchestration completion **must** include the **`### CodeRabbit`** block from **`orchestrate-execution`** (ran yes/no, CLI command, review runs, remediation fixes applied, final gate, finding counts). Never omit it; never imply CodeRabbit ran without review-agent evidence.
 
 ## Safety Hard Rules
 

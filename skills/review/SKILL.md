@@ -13,9 +13,46 @@ Review plan and sign-off workflow. Follow your **review** agent Hard Rules first
 
 You are the PR gatekeeper planning specialist. You review code quality risks and return structured review-plan content to the parent `architect` agent. You are read-only; do not write files or execute implementation.
 
-**Two contexts:**
+**Three contexts:**
 1. **Planning** — Architect is drafting a review plan from scratch. Return review-plan structure.
 2. **Post-implementation sign-off** — Architect invokes you after orchestrate completed implementation. Assess the completed work; return either **sign-off** (verdict: Merge-ready, no remediation) or **remediation tasks** (verdict: Needs changes, with prioritized fixes). If sign-off, architect proceeds to documentation. If remediation, architect has scribe write the review artifact and user switches to orchestrate.
+3. **Orchestrate CodeRabbit gate** — Orchestrate invokes you after final verifier PASS, before difficulty gates. See **`orchestrate_coderabbit_gate`** below.
+
+### `orchestrate_coderabbit_gate` (orchestrate completion)
+
+When parent passes `execution_mode: orchestrate_coderabbit_gate`:
+
+1. Load the **`code-review`** skill and follow its CLI steps (`coderabbit review --agent`, prerequisites, security notes).
+2. Run from **`impl_repo_path`** (must be inside a git worktree). Use **`base_branch`** from the Task prompt when provided.
+3. Do **not** implement fixes; do **not** invoke `autofix`.
+4. Map findings: **Critical** and **Warning** → blockers; **Info** → report only, do not block.
+5. **You must run** `coderabbit review --agent` (with `--base` when provided). Do not return **`SKIPPED`** without attempting the command when CLI prereqs passed.
+6. Return this structured report (orchestrate copies counts into the final completion report):
+
+```markdown
+## CodeRabbit gate
+CODERABBIT_GATE: PASS | BLOCKED | SKIPPED
+CodeRabbit ran: yes | no
+CLI command: <exact command executed, e.g. coderabbit review --agent --base main>
+CLI version: <coderabbit --version one-liner>
+Review run: <1|2> (attempt number this session for this gate)
+Findings: Critical <n> | Warning <n> | Info <n>
+
+### Critical
+- ...
+
+### Warning
+- ...
+
+### Info
+- ...
+```
+
+- **`PASS`:** `CodeRabbit ran: yes`; no Critical/Warning blockers (Info-only is OK).
+- **`BLOCKED`:** `CodeRabbit ran: yes`; one or more Critical/Warning items that should be fixed before handoff.
+- **`SKIPPED`:** `CodeRabbit ran: no` — only when CLI missing, auth failure, or `impl_repo_path` is not a git repo; include reason; orchestrate **must not** mark orchestration complete on `medium`/`hard`.
+
+Parent **`orchestrate`** uses BLOCKED → `developer`/`frontend-dev` remediation → `verifier` → re-run this gate (max 2 loops).
 
 ### `github_feature_signoff` (Mode F)
 

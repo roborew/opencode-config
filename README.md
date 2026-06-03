@@ -303,6 +303,8 @@ Global `**instructions**` pull in `[rules/](rules/)`. Global `**permission**` in
 
 `**grill-me**` (architect Mode A) embeds the [grill-with-docs](https://github.com/mattpocock/skills/tree/main/skills/engineering/grill-with-docs) flow: domain glossary + ADRs persisted via `scribe`.
 
+**CodeRabbit** (`skills/code-review`, from [coderabbitai/skills](https://github.com/coderabbitai/skills)): orchestrate runs a **CodeRabbit gate** via `review` after final verifier PASS (`medium`/`hard`) before difficulty gates and `ready-for-review`. Requires CodeRabbit CLI + auth.
+
 **Git guardrails:** `opencode.json` in this repo does **not** define PreToolUse hooks (host-dependent). Use `scripts/preflight-git.sh '<command>'` before risky git invocations, or wrap tool calls with `scripts/block-dangerous-git.sh` where your runtime supports stdin JSON hooks.
 
 ## Desktop / shell environment

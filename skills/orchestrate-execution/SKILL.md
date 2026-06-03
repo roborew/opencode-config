@@ -20,7 +20,7 @@ You have the **Task** tool to invoke subagents (`scribe`, `worktree-env`, `devel
 1. Never write or edit files directly.
 2. Always use `scribe` for `.plan/*.md` and docs markdown writes.
 3. Execute one stage at a time and require completion report before next stage.
-4. Run `verifier` at stage gates and before final completion.
+4. Run `verifier` at stage gates and before final completion; run **CodeRabbit gate** via `review` after final verifier when difficulty is not `easy`.
 5. Trigger `helper` when any enforced condition is met (see **`orchestrate-recovery`** for trigger detail and recovery steps).
 6. Do not create new retry artifacts; amend existing artifact via `scribe`.
 7. Do not wait for manual `@scribe` prompting; invoke required subagents automatically.
@@ -116,7 +116,7 @@ Load **`github-issue-run`** together with this skill when the user chooses GitHu
    - `opencode_meta` verbatim
 6. **Verify (flat or per-stage):** Task `verifier` with `load: full` and the same contract plus completion report.
 7. **Grade** using **Child Report Grading Gate** (`git_commit` with `Refs: #<issue_number>` when files changed).
-8. On PASS (flat or all stages done): transition `state:ready-for-review`; optional `gh issue comment` with summary + commit hash.
+8. On PASS (flat or all stages done): run **CodeRabbit gate** when difficulty is not `easy` (see below); on **`CODERABBIT_GATE: PASS`**, transition `state:ready-for-review`; optional `gh issue comment` with summary, commit hash, and CodeRabbit outcome.
 9. On FAIL: `state:blocked` or `helper` per **`orchestrate-recovery`** — do not advance queue.
 10. **Repeat** from step 2 for the same slug until discovery fails.
 
@@ -131,7 +131,7 @@ When `stages[]` is present, for **each** stage in order:
 2. Task `verifier` with same stage contract + completion report.
 3. Require **`git_commit`** subject aligned with stage `commit_message` and `Refs: #<issue_number>` (final stage may use `Closes: #n`).
 4. On stage FAIL: retry or `helper`; do not advance stage index.
-5. After last stage PASS: proceed to step 8 (ready-for-review) for this issue.
+5. After last stage PASS: proceed to step 8 (CodeRabbit gate when applicable, then ready-for-review) for this issue.
 
 ### Exit when queue empty
 
@@ -214,15 +214,36 @@ Decision policy:
 - `NEEDS_RETRY` -> send corrective feedback and rerun same child task
 - `BLOCKED` -> invoke `helper`, amend artifact via `scribe`, then request user confirmation if environment-related — see **`orchestrate-recovery`** for deeper loop and env policy.
 
-## Difficulty-based completion gates (after all stages pass final verifier)
+## CodeRabbit gate (after final verifier, before difficulty gates)
 
-When **every** stage is complete and the **final** `verifier` passes:
+When **every** stage is complete and the **final** `verifier` has **APPROVED** (legacy `.plan` stage loop **or** last GitHub issue stage / flat issue verify):
+
+1. Read `## Difficulty` from the artifact when present (`easy` \| `medium` \| `hard`). For GitHub-only work with no `.plan`, assume **`medium`** unless the user or issue meta specifies otherwise.
+2. **`easy`:** Skip this gate. Continue to **Difficulty-based completion gates** (which also skips extra work for `easy`).
+3. **`medium` or `hard`:** Task **`review`** with **`load: full`** and this contract:
+   - `execution_mode: orchestrate_coderabbit_gate`
+   - `impl_repo_path`: absolute path to the **implementation** git root (session cwd when already in the impl repo; otherwise from handoff / issue context — must contain `.git`)
+   - `base_branch`: `develop` or `main` per project convention when known; else `main`
+   - `review_scope`: prefer committed changes since base — `coderabbit review --agent --base <base_branch>`; use `-t all` only when the user or stage context requires uncommitted review
+   - Pass aggregated completion summary (stages or issue id, `files_changed`, verifier verdict, commit refs)
+   - Instruct: load **`code-review`** skill; verify CLI (`coderabbit --version`, `coderabbit auth status`); run review; return **`CODERABBIT_GATE`** and severity-grouped findings
+4. **Outcomes:**
+   - **`CODERABBIT_GATE: PASS`** (no Critical/Warning blockers, or only Info) → continue to **Difficulty-based completion gates**.
+   - **`CODERABBIT_GATE: BLOCKED`** (Critical or Warning) → Task **`developer`** or **`frontend-dev`** per last stage `Owner` with **`load: full`**: numbered remediation from CodeRabbit only; do **not** use **`autofix`** unattended. Require completion report field **`coderabbit_fixes_applied: <n>`** (count of Critical/Warning items addressed). Then Task **`verifier`** `load: full` on affected acceptance criteria. Re-run this **CodeRabbit gate** (same Task contract). **Max 2** CodeRabbit iterations per artifact/issue; then invoke **`helper`** + user confirmation.
+   - **`CODERABBIT_GATE: SKIPPED`** (CLI missing, auth failure, or not a git repo) → report reason; do **not** mark orchestration complete; prompt user to fix CLI/auth or waive explicitly.
+5. **GitHub issue mode:** Run this gate **before** `state:ready-for-review` on the issue (after last stage verifier PASS, before step 8 transition in the issue loop). Include the **`### CodeRabbit`** fields (ran, review runs, fixes applied, final gate, finding counts) in the `gh issue comment` when transitioning.
+
+Orchestrate must **track** across the session: `coderabbit_runs` (CLI invocations), `coderabbit_remediation_fixes` (developer/frontend-dev commits or tasks that explicitly address a CodeRabbit Critical/Warning from a BLOCKED iteration), and final finding counts from the last PASS run. Pass these into the **Completion (mandatory)** block below — never omit the CodeRabbit section.
+
+## Difficulty-based completion gates (after CodeRabbit gate when applicable)
+
+When **every** stage is complete, the **final** `verifier` passes, and any required **CodeRabbit gate** has **`CODERABBIT_GATE: PASS`** (or was skipped because **`easy`**):
 
 1. Read `## Difficulty` from the artifact (`easy` \| `medium` \| `hard`). If the section is missing or unclear, assume **`medium`**.
 2. **`easy`:** Skip extra gates. Go to **Completion (mandatory)** and prompt the user to switch to architect.
-3. **`medium`:** Invoke `review` via Task with: artifact path; aggregated completion summary (each `stage_id`, `files_changed`, `tests_run` outcomes, verifier verdict). Require a concise post-execution assessment (sign-off vs remediation). If review indicates remediation, use `scribe` to update or create `.plan/review.<slug>.md` per existing review flow, then stop and prompt user to address remediation before final sign-off with architect.
+3. **`medium`:** Invoke `review` via Task with: artifact path; aggregated completion summary (each `stage_id`, `files_changed`, `tests_run` outcomes, verifier verdict); **include CodeRabbit gate findings** when that gate ran. Require a concise post-execution assessment (sign-off vs remediation). If review indicates remediation, use `scribe` to update or create `.plan/review.<slug>.md` per existing review flow, then stop and prompt user to address remediation before final sign-off with architect.
 4. **`hard`:**  
-   - **(a)** Invoke `senior-dev` via Task for **scheduled post-implementation review** (not STAGE_STUCK escalation): pass artifact path, aggregated implementation summary, and Goal + AcceptanceChecks excerpts. Instruct: read-only assessment unless explicit fix is in scope; return `APPROVED` or a numbered remediation list. **No user confirmation required** for this scheduled gate (unlike escalation).  
+   - **(a)** Invoke `senior-dev` via Task for **scheduled post-implementation review** (not STAGE_STUCK escalation): pass artifact path, aggregated implementation summary, Goal + AcceptanceChecks excerpts, and **CodeRabbit gate findings** when that gate ran. Instruct: read-only assessment unless explicit fix is in scope; return `APPROVED` or a numbered remediation list. **No user confirmation required** for this scheduled gate (unlike escalation).  
    - **(b)** Invoke `helper` via Task for **strategy conformance**: pass artifact path, Goal, AcceptanceChecks, and short summary of what was implemented. Instruct helper to compare implementation intent vs plan and list any logical/architectural mismatches (reasoning only; no code).  
    - If senior-dev or helper flags blockers, invoke `helper` + `scribe` to amend the artifact as usual before prompting the user.
 
@@ -235,10 +256,33 @@ When the user fixes env/worktree issues or asks to rerun checks:
 
 ## Completion (mandatory)
 
-When verifier passes for all stages **and** any **Difficulty-based completion gates** for that artifact have finished (see above):
+When verifier passes for all stages, any required **CodeRabbit gate** has **`CODERABBIT_GATE: PASS`** (or was skipped for **`easy`**), and any **Difficulty-based completion gates** for that artifact have finished (see above):
 
-1. Report: artifact path, completed stages, helper invocations (if any), verifier outcomes, child report grades by stage, and any review/senior-dev/helper gate outcomes.
+1. Report using the structure below. The **`## CodeRabbit`** section is **mandatory on every completion** — never omit it. If CodeRabbit did not run, state **why** explicitly (`easy`, `SKIPPED`, or user waiver). Do not mark orchestration complete on `medium`/`hard` without **`CodeRabbit ran: yes`** and evidence of a successful CLI review.
 2. **Explicitly prompt the user:** "Implementation complete. Switch to `architect` for review and documentation sign-off."
 3. Architect still owns final review + documentation in Mode B; orchestrate may have run **medium/hard** pre-handoff gates only.
 
-Do not present orchestration as completed unless required Task call evidence exists for each completed stage and for the applicable Difficulty gates.
+### Completion report template (required)
+
+```markdown
+## Orchestration complete
+
+### CodeRabbit (required — do not omit)
+- **CodeRabbit ran:** yes | no
+- **Reason if no:** (only `difficulty: easy`, `CODERABBIT_GATE: SKIPPED — <reason>`, or `user waived` — never leave blank)
+- **CLI command:** (exact `coderabbit review ...` from review agent, or `n/a`)
+- **Review runs:** <count of coderabbit CLI invocations>
+- **Remediation fixes applied:** <count of Critical/Warning items fixed by developer/frontend-dev across CR remediation loops; 0 if none>
+- **Final gate:** PASS | BLOCKED | SKIPPED | not required (easy)
+- **Final findings:** Critical <n> | Warning <n> | Info <n> (from last PASS run, or last run if blocked)
+
+### Summary
+- Artifact / feature / issue: ...
+- Stages completed: ...
+- Verifier: ...
+- Difficulty gates: ...
+```
+
+When **`CODERABBIT_GATE: BLOCKED`**, increment **`Remediation fixes applied`** only when the child completion report lists which CodeRabbit finding IDs or numbered items were addressed (orchestrate sums across loops).
+
+Do not present orchestration as completed unless required Task call evidence exists for each completed stage, for the applicable **CodeRabbit gate** (when `medium`/`hard`), and for the applicable Difficulty gates, and unless the completion report includes the **CodeRabbit** section above.
