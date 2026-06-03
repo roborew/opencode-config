@@ -93,7 +93,7 @@ fetch_spec_prd_markdown() {
 
   local out="" default_ref=""
   if out=$(gh api "$api_path" --jq .content 2>/dev/null) && [[ -n "$out" && "$out" != "null" ]]; then
-    default_ref=$(gh repo view "$spec_repo" --json defaultBranchRef -q .defaultBranchRef.name 2>/dev/null || echo "default")
+    default_ref=$(gh repo view "$spec_repo" --json defaultBranchRef -q .defaultBranchRef.name 2>/dev/null || echo "unknown")
     FETCH_SPEC_PRD_REF="$default_ref"
     FETCH_SPEC_PRD_SOURCE="github:${spec_repo}@${default_ref}"
     echo "$out" | base64 -d

@@ -4,8 +4,6 @@ set -euo pipefail
 SLUG="${1:?slug required}"
 TITLE="${2:?title required}"
 BODY_FILE="${3:?body file required}"
-BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "$BIN_DIR/.." && pwd)"
 
 [[ -f "$BODY_FILE" ]] || { echo "missing body file: $BODY_FILE" >&2; exit 2; }
 

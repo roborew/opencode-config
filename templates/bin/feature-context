@@ -59,7 +59,7 @@ fi
     echo
   else
     echo "## Parent PRD issue"
-    echo "_No Parent PRD: line or issue URL in this issue body._"
+    echo "_No Parent PRD line or issue URL found in this issue body._"
     echo
   fi
 

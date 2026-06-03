@@ -16,7 +16,7 @@ if [[ ! -x "$TRANSITION" ]]; then
   exit 1
 fi
 
-REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true)"
+REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner || true)"
 if [[ -z "$REPO" ]]; then
   echo "ERROR: could not resolve current repo (run from impl repo with gh auth)" >&2
   exit 1
@@ -25,7 +25,15 @@ fi
 COMMENT="Architect Mode F sign-off."
 [[ -n "$PR_URL" ]] && COMMENT="${COMMENT} PR: ${PR_URL}"
 
-issues_json="$(gh issue list --repo "$REPO" -l "$LABEL" --state open -L 200 --json number,labels 2>/dev/null || echo '[]')"
+owner="${REPO%%/*}"
+name="${REPO##*/}"
+if ! issues_json="$(gh api "repos/${owner}/${name}/issues" \
+  --paginate \
+  -f labels="${LABEL}" \
+  -f state=open \
+  --jq '[.[] | select(has("pull_request") | not) | {number, labels}]')"; then
+  issues_json='[]'
+fi
 count="$(echo "$issues_json" | jq 'length')"
 if [[ "$count" -eq 0 ]]; then
   echo "OK: no open issues with label ${LABEL} in ${REPO}"

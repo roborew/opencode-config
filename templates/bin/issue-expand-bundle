@@ -87,7 +87,7 @@ fi
   echo "$ISSUES_JSON" | jq -r '.[] | "### #\(.number) \(.title) (\(.state))\n\n\(.body)\n"'
   echo
   echo "## Readiness hints"
-  echo "$ISSUES_JSON" | jq -r '.[] | select(.body | test("## Implementation plan"; "") | not or (.body | test("_Add files, TDD order"; ""))) | "- #\(.number): missing or placeholder Implementation plan"'
+  echo "$ISSUES_JSON" | jq -r '.[] | select((.body | test("## Implementation plan"; "") | not) or (.body | test("_Add files, TDD order"; ""))) | "- #\(.number): missing or placeholder Implementation plan"'
   echo "$ISSUES_JSON" | jq -r '.[] | select(.body | test("opencode-task-json") | not) | "- #\(.number): missing opencode-task-json"'
   echo "$ISSUES_JSON" | jq -r '
     .[]

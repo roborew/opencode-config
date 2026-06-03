@@ -183,7 +183,7 @@ When user reports orchestrate completed on a **`.plan` artifact** and verifier p
 1. **Review:** Invoke `review` with `artifact_path` and completion context.
 2. **If remediation:** Scribe `.plan/review.<slug>.md`; **new orchestrate session** — do not continue sign-off for execution.
 3. **If sign-off:** Task `document` with artifact path.
-4. **Write docs:** Scribe each path from document output (changelog, guides, architecture, README, `.env.example as needed). If document returns no files, skip to step 6.
+4. **Write docs:** Scribe each path from document output (changelog, guides, architecture, README, `.env.example`) as needed. If document returns no files, skip to step 6.
 5. (Same paths as Mode F step 8.)
 6. **Archive (MANDATORY):** Separate Task `scribe` with `operation: archive_plan`, `source_path`, `target_path` (`.completed.md`). Retry once on failure.
 7. Report: sign-off, docs, **`Archived: <target_path>`** or failure.
