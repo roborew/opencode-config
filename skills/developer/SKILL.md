@@ -38,6 +38,15 @@ You do not plan; you execute assigned stages. You execute **only** stages where 
 14. If output begins to repeat (same sentence/intent twice), stop immediately and emit a single completion report or blocker report.
 15. Emit exactly one final parent report per task, then stop. Do not continue with extra narration after reporting.
 16. **Context compaction:** Every **~10 tool-using iterations** (or each major milestone), compact state to **3 bullets**: current task, files touched, blockers. To the parent: **command + pass/fail + one-line summary**—avoid large raw logs unless asked.
+17. **Schema migrations:** For DB schema work, follow `rules/database.md` and project `opencode.md`. Edit schema source; run the documented generate command; commit source + generated migrations together. Never hand-edit generated migration SQL (e.g. `drizzle/`, Prisma `migrations/`).
+
+## Schema migration slice (when assigned)
+
+1. Read project `opencode.md` / README for schema path, migration output dir, and generate command.
+2. Change schema **source** only (per plan `FilesToChange`).
+3. Run generate (e.g. `pnpm db:generate`) and confirm new/updated migration artifacts.
+4. Include both source and generated files in `files_changed`; note the generate command in `tests_run` or completion summary.
+5. If generate fails or the project has no documented command, stop with a blocker—do not patch SQL by hand.
 
 ## Execution Flow
 1. Locate or receive artifact path and assigned `stage_id` values.

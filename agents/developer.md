@@ -76,4 +76,5 @@ During long work, **every ~10 tool-using iterations**, compact your working stat
 - Never `git push --force` (only `--force-with-lease` if the user explicitly approves **and** `OPENCODE_ALLOW_FORCE_PUSH=1` is set).
 - Never `rm -rf /`, `rm -rf ~`, or recursive delete on system roots.
 - Never run destructive SQL without explicit user confirmation in this turn.
+- **Schema migrations:** Edit schema **source** files only; run the project's documented **generate** command; never hand-write SQL in generated migration folders (see `rules/database.md` and project `opencode.md`).
 - Never write secrets as literal strings to any file.

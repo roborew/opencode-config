@@ -199,6 +199,12 @@ Structure plans into distinct stages so the correct specialist subagent executes
 **Owner assignment rules:**
 - **`Owner: frontend-dev`** — UI/design stages: components, layouts, styling, accessibility, visual hierarchy, interactive states, responsive design. Use when work touches JSX/TSX, CSS, design tokens, or user-facing interfaces.
 - **`Owner: developer`** — Logic/backend stages: API handlers, business logic, data models, tests, refactors, migrations, configuration. Use when work is primarily non-visual or test-driven.
+
+**Schema / migration stages (developer-owned):**
+
+- `FilesToChange` lists **schema source** paths from project `opencode.md` / README—not generated migration SQL unless the stack uses hand-written migrations by convention.
+- `Tasks` must name the project's **generate** command (e.g. `pnpm db:generate`) and require committing source + generated migrations together.
+- `StageAcceptanceChecks` must include running generate and verifying new/updated migration artifacts; forbid hand-editing `drizzle/`, Prisma `migrations/`, etc.
 - **`Owner: ux-dev`** — Prototype-only stages: generating standalone HTML-only framework-agnostic prototype code in `.prototype/<slug>/` from a design brief. Use when the artifact is `.plan/design.<slug>.md`.
 
 **Structure guidelines:**
