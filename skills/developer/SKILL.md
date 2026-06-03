@@ -47,9 +47,9 @@ You do not plan; you execute assigned stages. You execute **only** stages where 
 5. For implementation tasks, execute assigned stage tasks in order with micro-TDD.
 6. Run stage checks and report completion contract fields.
 
-## Environment Preflight Gate (orchestrate-mandatory)
+## Environment Preflight Gate (on orchestrate request)
 
-When the parent (**`orchestrate`**) requests preflight-only or preflight-rerun, load the `preflight` skill and run it. The preflight skill defines the checks (README, **read-only** linked-worktree env symlink verification, runtime versions, command resolution, smoke check, claude-context). **`worktree-env`** must run **before** you so symlink creation is not part of preflight.
+When the parent (**`orchestrate`**) requests preflight-only or preflight-rerun (user opted in at bootstrap or asked to rerun), load the `preflight` skill and run it. The preflight skill defines the checks (README, **read-only** linked-worktree env symlink verification, runtime versions, command resolution, smoke check, claude-context). **`worktree-env`** must run **before** you so symlink creation is not part of preflight.
 
 If preflight fails:
 - return blocker code `ENV_BLOCKED`

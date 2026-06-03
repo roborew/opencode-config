@@ -29,8 +29,8 @@ You have the **Task** tool to invoke subagents (`scribe`, `worktree-env`, `devel
 10. You must grade each child response before deciding next action.
 11. Do not advance stages on incomplete/low-evidence child reports.
 12. **Brevity:** Concise structured output; no reasoning narration unless the user asks; never repeat unchanged plan sections (deltas only).
-13. **Claude Context readiness.** Before fresh-context plan selection or any discovery-heavy delegation, call `get_indexing_status` for the workspace path. If the index is missing, stale, or not ready, call `index_codebase`, then re-check until ready. Run after the **Environment readiness gate** when that gate runs in the same turn.
-14. **Environment readiness gate (mandatory).** Before the first stage, first GitHub issue, or work-selection menu in a session, run the gate in **Environment readiness gate** below unless it already passed this session or the user explicitly requests a rerun. Do not ask `yes/no`. Escape hatch only: `ORCHESTRATE_SKIP_ENV_GATE=1` (report skip reason).
+13. **Claude Context readiness.** Before work selection or discovery-heavy delegation, call `get_indexing_status` for the workspace path. If the index is missing, stale, or not ready, call `index_codebase`, then re-check until ready. Run after preflight when the user opts in during bootstrap.
+14. **Preflight prompt (session bootstrap).** On greeting or fresh context with no work source yet: ask **“Run preflight now? (yes/no)”** unless `env_gate_passed` or `env_gate_declined` is already set this session. Do **not** show the work-selection menu until the user answers and any opted-in preflight finishes (or is skipped). Do **not** re-ask if preflight already passed or was declined this session.
 
 ## Required Inputs
 
@@ -38,28 +38,29 @@ You have the **Task** tool to invoke subagents (`scribe`, `worktree-env`, `devel
 - Artifact identity: `artifact_type` + `slug` (derive from path when only path is provided)
 - Stage order and acceptance checks from artifact
 
-## Environment readiness gate (mandatory)
+## Environment readiness gate (on user opt-in)
 
-Run **once per orchestrate session** before any implementation work (stage loop, GitHub issue loop, or work-selection menu). Re-run only when: preflight/worktree-env was Blocked and the user confirms remediation; the user asks to rerun environment checks; or a child reports `ENV_BLOCKED`.
-
-**Escape hatch:** If `ORCHESTRATE_SKIP_ENV_GATE=1`, note `env_gate: skipped_opt_out` and continue (do not skip Claude Context).
+Run only when the user answers **yes** to the preflight prompt, requests a **preflight rerun**, or remediation requires it after Blocked / `ENV_BLOCKED`.
 
 1. Invoke **`worktree-env`** via Task with **`load: full`** (instruct: run `worktree-env` skill—symlink `.env` and `.env.local` for linked git worktrees when applicable). If **worktree-env** reports Blocked, stop and request user remediation **before** calling `developer`.
 2. Invoke **`developer`** with an explicit preflight-only task (instruct: load `preflight` skill; run README, env symlinks, runtimes, command resolution, smoke check, claude-context). Return a concise preflight report to the user.
-3. If **developer** preflight reports `Status: Blocked`, stop and request remediation—do not start stages, issues, or work selection.
-4. On success, record `env_gate_passed: true` for this session and proceed.
+3. If **developer** preflight reports `Status: Blocked`, stop and request remediation—do not start stages or issues until fixed.
+4. On success, set `env_gate_passed: true` for this session.
 
-Do not re-run the full gate between stages or between GitHub issues in the same session unless step above applies.
+Do not re-run the full gate between stages or between GitHub issues unless the user asks or recovery policy applies.
 
 ## Session Bootstrap (mandatory, first in fresh context)
 
 When no artifact path or `feature:<slug>` is provided (new session, greeting, unspecified task):
 
-1. **Run the Environment readiness gate** (unless already passed this session).
-2. **Run the Claude Context readiness gate** below.
-3. Continue to **Fresh Context: Work selection** — do not name or imply `.plan` files until the user chooses legacy **(A)**.
+1. **Preflight choice** — unless `env_gate_passed` or `env_gate_declined` is already set this session, ask: **“Run preflight now? (yes/no)”** and wait for the answer. Do not list work options yet.
+   - **`yes`** → run **Environment readiness gate** above; on Blocked stop for remediation; on Ready continue.
+   - **`no`** → set `env_gate_declined: true`; do not run preflight this session unless the user later asks to rerun.
+   - **Already `env_gate_passed` or `env_gate_declined`** → do not ask again; continue.
+2. **Claude Context readiness gate** (below).
+3. **Fresh Context: Work selection** — present **(B)/(C)/(D)/(A)** menu only after step 1 is resolved.
 
-When the user provides a **`.plan` path** or **`feature:<slug>`** without a prior env gate this session: run the **Environment readiness gate** first, then enter the stage loop or GitHub backlog loop.
+When the user provides a **`.plan` path** or **`feature:<slug>`** before bootstrap completed: if neither `env_gate_passed` nor `env_gate_declined`, ask the preflight **yes/no** first; then enter the stage or GitHub loop (preflight not required if they declined).
 
 ## Claude Context Readiness Gate (mandatory)
 
@@ -104,21 +105,20 @@ Load **`github-issue-run`** together with this skill when the user chooses GitHu
 ### Loop
 
 1. Obtain kebab-case **feature slug** from the user if missing.
-2. **Environment readiness gate** — if not already `env_gate_passed` this session, run it now; stop on Blocked.
-3. Task `developer` `load: minimal`: `bash "$OC/skills/github-issue-run/lib/next-runnable-issue.sh" "<slug>"` — capture stdout JSON.
-4. Task `developer` `load: minimal`: `issue-state-transition.sh "<repo>" "<number>" state:in-progress`
-5. **Stages vs flat issue:** Parse `opencode_meta` from the discovery JSON.
+2. Task `developer` `load: minimal`: `bash "$OC/skills/github-issue-run/lib/next-runnable-issue.sh" "<slug>"` — capture stdout JSON.
+3. Task `developer` `load: minimal`: `issue-state-transition.sh "<repo>" "<number>" state:in-progress`
+4. **Stages vs flat issue:** Parse `opencode_meta` from the discovery JSON.
    - If **`stages`** is a non-empty array (from **issue-expand**): run **GitHub issue stage loop** below for this issue only — do not advance to the next issue until all stages pass verifier.
    - Else **flat mode:** single implement pass using root `acceptance` and `test_commands` (fanout default).
-6. **Implement (flat mode):** Task `developer` or `frontend-dev` per `opencode_meta.owner` with **`load: full`**. **GitHub issue contract:**
+5. **Implement (flat mode):** Task `developer` or `frontend-dev` per `opencode_meta.owner` with **`load: full`**. **GitHub issue contract:**
    - `execution_mode: github_issue`
    - `issue_number`, `repo`, `title`
    - `opencode_meta` verbatim
-7. **Verify (flat or per-stage):** Task `verifier` with `load: full` and the same contract plus completion report.
-8. **Grade** using **Child Report Grading Gate** (`git_commit` with `Refs: #<issue_number>` when files changed).
-9. On PASS (flat or all stages done): transition `state:ready-for-review`; optional `gh issue comment` with summary + commit hash.
-10. On FAIL: `state:blocked` or `helper` per **`orchestrate-recovery`** — do not advance queue.
-11. **Repeat** from step 3 for the same slug until discovery fails.
+6. **Verify (flat or per-stage):** Task `verifier` with `load: full` and the same contract plus completion report.
+7. **Grade** using **Child Report Grading Gate** (`git_commit` with `Refs: #<issue_number>` when files changed).
+8. On PASS (flat or all stages done): transition `state:ready-for-review`; optional `gh issue comment` with summary + commit hash.
+9. On FAIL: `state:blocked` or `helper` per **`orchestrate-recovery`** — do not advance queue.
+10. **Repeat** from step 2 for the same slug until discovery fails.
 
 ### GitHub issue stage loop (`opencode_meta.stages`)
 
@@ -147,7 +147,6 @@ When discovery fails (queue exhausted):
 
 ## Stage Loop
 
-0. **Environment readiness gate** — if not already `env_gate_passed` this session, run it before stage 1; stop on Blocked.
 1. Ensure artifact identity is explicit:
    - parse `artifact_type` + `slug` from artifact path when needed
    - pass identity fields to `scribe` on every artifact write/update call

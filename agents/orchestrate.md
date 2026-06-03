@@ -62,15 +62,18 @@ Include **`load: full|minimal|auto`** in every Task prompt. Delegate all `gh` an
 
 On fresh context, call `get_indexing_status` → `index_codebase` if needed before discovery-heavy delegation.
 
-## Environment readiness gate (mandatory)
+## Environment readiness gate (on opt-in)
 
-Before the first stage, first GitHub issue, or work-selection menu in a session: Task **`worktree-env`** (`load: full`) then **`developer`** preflight-only (`load: full`, load `preflight` skill). Stop on Blocked; do not ask `yes/no`. Once per session unless remediation or `ENV_BLOCKED`. Escape hatch: `ORCHESTRATE_SKIP_ENV_GATE=1`.
+When the user answers **yes** to preflight (or asks to rerun): Task **`worktree-env`** (`load: full`) then **`developer`** preflight-only (`load: full`, load `preflight` skill). Stop on Blocked. Set `env_gate_passed` on Ready.
 
 ## Fresh Context: Session Bootstrap + Work Selection
 
 When no artifact path or feature slug is provided:
 
-1. Run **Environment readiness gate** (unless already passed this session).
+1. **Preflight choice** — unless `env_gate_passed` or `env_gate_declined` this session, ask: **“Run preflight now? (yes/no)”**. Do not show work options until answered.
+   - **yes** → run env gate above; then continue.
+   - **no** → set `env_gate_declined`; continue without preflight.
+   - Already passed or declined → skip this question.
 2. Run Claude Context readiness gate.
 3. Ask the user (**GitHub-first** — present in this order; letters are stable, order is not):
    - **(B)** Work from a GitHub `feature:<slug>` backlog in this repo? **(primary — use for all new spec/targeted execution)**
@@ -79,7 +82,7 @@ When no artifact path or feature slug is provided:
    - **(A)** *(legacy)* Run a local `.plan` artifact? (glob `.plan/*.md`, exclude `*.completed.md`; prefer **(B)** for new work)
 4. Do not proceed until (B) slug, (C) handoff, (D) is resolved, or (A) path is chosen.
 
-When the user provides a **`.plan` path** or **`feature:<slug>`** immediately: run **Environment readiness gate** first if not already passed this session.
+When the user provides a **`.plan` path** or **`feature:<slug>`** immediately: if neither `env_gate_passed` nor `env_gate_declined`, ask preflight **yes/no** first; then start work (decline does not block execution).
 
 ## When Invoking Subagents
 
@@ -98,7 +101,7 @@ When the user provides a **`.plan` path** or **`feature:<slug>`** immediately: r
 ## Hard Rules
 
 1. Never write or edit files directly.
-2. **Environment readiness gate** is mandatory before implementation work (`worktree-env` → `developer` preflight); see **`orchestrate-execution`**. Not optional; not per-stage.
+2. **Preflight** is offered at session bootstrap (`yes` / `no`); do not show work options until that choice is resolved. Re-prompt only if the user asks to rerun preflight.
 3. **GitHub backlog:** Delegate every `gh` call and `skills/github-issue-run/lib/*.sh` script to **`developer`**.
 4. **Scribe handoff:** Trust scribe writes with tool evidence; re-invoke once on `SCRIBE_FAILED`.
 5. Execute one stage/issue at a time; require completion report before advancing.
