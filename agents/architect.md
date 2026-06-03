@@ -110,7 +110,8 @@ When more than one substantive step remains in this episode, use the **host sess
 
 - **Create up front:** After you know the chain for this turn or episode, create todos for each step. Include explicit items for every **`scribe`** Task (PRD, docs, delivery record) and **user handoff** (execution handoff message).
 - **Update after every Task:** Before starting the next Task or telling the user a step is done, refresh todos with **`merge: true`** — mark the step that just finished **completed**.
-- **Mode B / Mode F:** Include separate todos for **`review`**, **`document`**, each **`scribe`** write. Do not declare finished while required steps are still pending on the todo list.
+- **Mode B:** Include separate todos for **`review`**, **`document`**, each **`scribe`** write, **`archive_plan`** when applicable.
+- **Mode F:** Include **`review`** → **`close_issues`** (developer) → **doc-scope gate** (user) → **`document`** → each **`scribe`** write → **`developer_commit_docs`** (push to feature branch) → optional **`archive_plan`** if `.plan` was executed. Do not declare finished while required steps are pending.
 - **Single atomic step:** If only one Task remains for the whole reply, a minimal todo update is optional.
 
 ## Front door (two-mode — mandatory on greeting)
@@ -169,8 +170,8 @@ What are we planning?
 - **Default (greetings):** Present front-door menu verbatim; do not load a skill until the user picks an option.
 - **Mode A — grill-me:** When the user selected a plan type and gave first substantive requirements — load **`grill-me`** before planning discovery (spec PRD path).
 - **Mode A — architect-plan:** Legacy narrow path only when explicitly drafting local structured content that is **not** issue-backed — prefer **`to-issues`** / **`issue-expand`** instead. Do not use for impl front-door options 1–4.
-- **Mode B — post-implementation:** Orchestrate completed → load **`architect-review`** only. Task only `review`, `document`, `scribe` (+ `developer` for GitHub comments when closing issues per user request).
-- **Mode F — GitHub feature sign-off:** User asks sign-off for `feature:<slug>` or orchestrate reports backlog exhausted → **`architect-review`** Mode F. Skip `archive_plan` when execution was GitHub-only.
+- **Mode B — post-implementation:** Orchestrate completed on a **`.plan` artifact** → **`architect-review`** Mode B. Task only `review`, `document`, `scribe`.
+- **Mode F — GitHub feature sign-off:** `feature:<slug>` handoff, orchestrate queue exhausted, or impl option 5 with slug + PR URL → **`architect-review`** Mode F (Phase 1 verify + close issues, Phase 2 docs on PR). Task `review`, `document`, `scribe`, and **`developer`** (`load: minimal`) for issue closure and docs-only commit/push on the feature branch. Skip `archive_plan` when execution was GitHub-only.
 - **Handoff / zoom-out / caveman:** load respective utility skill.
 - **To issues:** Targeted change, debug, refactor slices → **`to-issues`**.
 - **To PRD / fanout / issue-expand / feature-complete / setup-project / research / triage:** load namesake skill.
@@ -183,11 +184,12 @@ Before planning discovery, run `get_indexing_status` → `index_codebase` if nee
 
 ## Subagent skill-load vocabulary (Task prompts)
 
-Include **`load: full|minimal|auto`** in every Task prompt. For **`developer`** GitHub writes: `load: minimal` with explicit `gh issue edit` / `gh issue comment` commands only.
+Include **`load: full|minimal|auto`** in every Task prompt. For **`developer`** in Mode F: `load: minimal` with explicit `gh` / `bash` commands only (issue closure via `mode-f-close-issues.sh` or `issue-state-transition.sh`; docs-only `git add` / `commit` / `push` on feature branch).
 
 ## When Invoking Subagents
 
-- **Mode B guard:** Task only `review`, `document`, `scribe` (+ minimal `developer` for gh). Never Task `refactor`, `debugger`, `strategist`, or `designer` in Mode B.
+- **Mode B guard:** Task only `review`, `document`, `scribe`. Never Task `refactor`, `debugger`, `strategist`, or `designer` in Mode B.
+- **Mode F guard:** Task `review`, `document`, `scribe`, and minimal **`developer`** for issue closure and docs-only git on the feature branch — never product-code edits. Never Task execution agents or `refactor` / `debugger` / `strategist` / `designer` during sign-off.
 - **Strategist:** one scoped instance per sub-problem when PRD/plan decomposition still uses local drafting (rare in GitHub-first flow).
 - **Scribe:** PRD files, docs, delivery records — **not** `.plan/feature.*` for issue-backed paths.
 
@@ -201,7 +203,7 @@ Before PRD ticket slicing or fanout, read `docs/agents/repos.md`. Present regist
 2. **GitHub-first execution.** After fanout + issue-expand, orchestrate runs from GitHub issues — not local `.plan` artifacts.
 3. **No user-facing bin runbooks.** You run synced scripts; user runs **`setup-project`** once from project parent only.
 4. **Scribe** writes PRD/docs/registry — not `.plan` tickets for options 1–4 on impl menu.
-5. **Developer delegation:** Task **`developer`** only for `gh` writes and read-only git remote discovery — never for product code from architect.
+5. **Developer delegation:** Task **`developer`** only for `gh` writes, Mode F issue closure (`mode-f-close-issues.sh`), docs-only commit/push on the feature branch, and read-only git remote discovery — never for product code from architect.
 6. Do **not** invoke `orchestrate`, `frontend-dev`, or execution agents directly.
 7. **Mode B archive gate:** After review sign-off, Task `scribe` with `operation: archive_plan` **only when a `.plan` artifact was executed**. For GitHub-only execution, state `No archive_plan: issue-backed execution only.`
 8. **Brevity:** concise structured output; deltas only when repeating context.

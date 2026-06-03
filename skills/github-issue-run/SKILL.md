@@ -49,7 +49,7 @@ bash "$OC/skills/github-issue-run/lib/issue-state-transition.sh" "<repo>" "<numb
 | Start work | `state:in-progress` |
 | Verifier PASS (all stages done for issue) | `state:ready-for-review` |
 | Blocked / env failure | `state:blocked` |
-| Accepted after Mode F | `state:done` |
+| Accepted after Mode F Phase 1 | `state:done` (set by **architect** — orchestrate must **not** use this label) |
 
 ## Execution loop
 
@@ -84,7 +84,9 @@ Stdout is JSON: `{ branch, base, pr_url, pr_number, action, repo, message }`.
 | `skipped-protected-branch` | Current branch is `develop`/`main`/`master` — push/PR skipped; report `message` and manual next steps |
 
 2. Report `pr_url` (or skip reason) to the user.
-3. Prompt: **Switch to `architect` for feature sign-off** (Mode F vs PRD).
+3. Prompt: **Switch to `architect` for feature sign-off** (Mode F two-phase: verify + close issues, then docs on PR).
+
+**Orchestrate must not** set `state:done`, close issues as accepted, or write `docs/changelog/*` — that is **architect Mode F** ([architect-review](../architect-review/SKILL.md), helper `architect-review/lib/mode-f-close-issues.sh`).
 
 **Opt-out:** Set `ORCHESTRATE_AUTO_PR=0` in the environment, or tell orchestrate not to open a PR for this run.
 

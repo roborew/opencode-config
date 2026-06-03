@@ -228,8 +228,8 @@ tmp/
 
 1. **`architect`** (impl repo) → **option 1** or targeted **to-issues** → planning gates → ends with the canonical handoff, e.g. *Next step: create a new session in orchestrate with the feature slug 'Google Auth' (`google-auth`). First message: `feature:google-auth`.*
 2. **`/new`** → **`orchestrate`** → paste or type the **first message** from that handoff (usually `feature:<slug>`). See [Session handoffs](#session-handoffs-architect--orchestrate).
-3. When orchestrate reports queue exhausted (+ optional PR URL): **new session** → **`architect`** (impl repo) → **option 5** (review / sign-off) or say *ready for review* with `feature:<slug>` and PR link → **Mode F** sign-off vs PRD/tickets → issues → `state:done`.
-4. **Human:** review and merge the impl-repo PR on GitHub (orchestrate may have opened it via `feature-finish-pr.sh`; use **`ship`** only if PR was skipped).
+3. When orchestrate reports queue exhausted (+ PR URL): **new session** → **`architect`** (impl repo) → **option 5** or *ready for review* with `feature:<slug>` and PR link → **Mode F** two-phase sign-off: **Phase 1** verify vs PRD/tickets and close issues (`state:done`); **Phase 2** mandatory changelog (+ optional guides) written and pushed to the feature PR via **developer**.
+4. **Human:** review and **merge** the impl-repo PR on GitHub after Mode F Phase 2 (orchestrate may have opened it via `feature-finish-pr.sh`; use **`ship`** only if PR was skipped).
 5. When **every** impl repo for the feature is signed off: **`architect`** in **spec** → **option 3** (**feature-complete**) → human confirms closing the spec parent PRD issue.
 
 **Legacy path:** architect **option 2** (local `.plan`) → orchestrate on artifact path → architect **option 5** Mode B (review + docs + `*.completed.md` archive).
@@ -256,9 +256,10 @@ Optional same-session path: architect ends with a short **HANDOFF** block → yo
 | `git commit` on feature branch (`Refs:` / `Closes:` issue #) | Implementation subagents (orchestrate requires evidence in completion report) |
 | Issue labels `state:in-progress` → `state:ready-for-review` | **orchestrate** via **`developer`** + `issue-state-transition.sh` |
 | Push branch + open ready-for-review PR when queue empty | **orchestrate** via **`developer`** + `feature-finish-pr.sh` (skip with `ORCHESTRATE_AUTO_PR=0`) |
-| Code/PR review vs tickets + PRD; `state:done` on issues | **architect** **Mode F** (option 5) — not orchestrate |
+| Code/PR review vs tickets + PRD; `state:done` + close issues | **architect** **Mode F Phase 1** (option 5) — not orchestrate |
+| Changelog + sign-off docs on feature PR | **architect** **Mode F Phase 2** (`document` → `scribe` → **developer** push) |
 | Remediation after failed sign-off | **architect** publishes fixes (**to-issues** or review plan) → **new orchestrate session** |
-| Merge PR on GitHub | **You** (human) |
+| Merge PR on GitHub | **You** (human) — after Mode F Phase 2 |
 | Cross-repo rollup + close spec parent issue | **architect** + **feature-complete** in spec (human confirms parent close) |
 
 Orchestrate **does not** run final product sign-off, write changelog/docs for GitHub-only features, or close tickets as done — that is **architect** after you switch back.

@@ -27,16 +27,28 @@ Same-session handoff is optional (`/compact` after a short HANDOFF block); use a
 |---------------|--------|---------|
 | `state:in-progress` | orchestrate | Actively executing issue/stages |
 | `state:ready-for-review` | orchestrate (verifier PASS) | Implementation done; awaiting architect/human |
-| `state:done` | architect Mode F | Accepted after review vs PRD/tickets |
-| Issue **closed** on GitHub | architect Mode F (via **developer** `gh`) | Ticket complete |
+| `state:done` | architect Mode F (Phase 1) | Accepted after review vs PRD/tickets |
+| Issue **closed** on GitHub | architect Mode F Phase 1 (via **developer** + `mode-f-close-issues.sh`) | Ticket complete |
 
-Orchestrate does **not** close issues as done. Per-issue commits happen during execution; one **feature PR** is opened when the queue is empty (`feature-finish-pr.sh`).
+Orchestrate does **not** close issues as done or write sign-off docs. Per-issue commits happen during execution; one **feature PR** is opened when the queue is empty (`feature-finish-pr.sh`).
 
-**Mode F** (GitHub-first): architect compares closed/`state:done` issues and acceptance vs `$SPEC_REPO/docs/prd/<slug>.md` when `SPEC_REPO` is set; runs **review** subagent; may **document** + **scribe**; no `.plan` archive unless a local plan was executed.
+#### Mode F — two-phase sign-off (GitHub-first, default)
 
-**Mode B** (legacy `.plan`): after local plan execution — review, docs, **`archive_plan`** to `*.completed.md`.
+| Phase | What happens |
+|-------|----------------|
+| **1 — Verification** | Collect issues + PR + PRD (`$SPEC_REPO/docs/prd/<slug>.md`); **review** vs acceptance/tests; on Merge-ready → `state:done` + close issues (orchestrate must not do this) |
+| **2 — Documentation** | Human chooses extra docs; **changelog required** (`docs/changelog/<date>-<slug>.md`); optional guide/architecture; **scribe** writes; **developer** commits and pushes docs to the feature PR |
+| **Human** | Merge PR on GitHub after Phase 2 |
 
-**Remediation:** review requests fixes → architect **to-issues** or review sidecar → **orchestrate** again (prefer new session).
+Skill detail: [skills/architect-review/SKILL.md](../skills/architect-review/SKILL.md). No `.plan` **`archive_plan`** unless a local plan was also executed.
+
+#### Mode B — legacy `.plan`
+
+After local plan execution: review → docs → **`archive_plan`** to `*.completed.md`.
+
+#### Remediation
+
+Review requests fixes → architect **to-issues** (GitHub path) or review sidecar → **orchestrate** again (prefer new session). Issues stay open until sign-off passes Phase 1.
 
 ## Two execution modes
 
