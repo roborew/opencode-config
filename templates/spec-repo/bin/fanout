@@ -74,9 +74,14 @@ sys.exit(0 if '${KEY}' in repos else 1)
     TITLE=$(yq -r ".slices[\"${KEY}\"].title // \"\"" "$PRD_PATH")
     BODY=$(yq -r ".slices[\"${KEY}\"].body // \"\"" "$PRD_PATH")
     [[ -n "$TITLE" ]] || { echo "missing title for slice ${KEY}" >&2; exit 4; }
-    EXISTING=$(existing_issue_number "$KEY" "$TITLE")
-    if [[ -n "$EXISTING" ]]; then
-      echo "Skipping existing #${EXISTING} on ${KEY}"
+    mapfile -t EXISTING_NUMS < <(existing_issue_numbers "$KEY" "$TITLE")
+    if [[ ${#EXISTING_NUMS[@]} -gt 1 ]]; then
+      echo "duplicate GitHub issues for legacy slice ${KEY}: #${EXISTING_NUMS[*]}" >&2
+      echo "Close extras, then run bin/fanout-audit ${SLUG}" >&2
+      exit 10
+    fi
+    if [[ ${#EXISTING_NUMS[@]} -eq 1 ]]; then
+      echo "Skipping existing #${EXISTING_NUMS[0]} on ${KEY}"
       continue
     fi
     META_JSON=$(jq -nc \
@@ -162,8 +167,14 @@ fanout_tickets() {
     MODE_LABEL="mode:afk"
     [[ "${MODE}" == "hitl" ]] && MODE_LABEL="mode:hitl"
 
-    EXISTING=$(existing_issue_number "$REPO" "$TITLE" "$TID")
-    if [[ -n "$EXISTING" ]]; then
+    mapfile -t EXISTING_NUMS < <(existing_issue_numbers "$REPO" "$TITLE" "$TID")
+    if [[ ${#EXISTING_NUMS[@]} -gt 1 ]]; then
+      echo "duplicate GitHub issues for ticket ${TID} on ${REPO}: #$(IFS=' #'; echo "${EXISTING_NUMS[*]}")" >&2
+      echo "Close extras, then run bin/fanout-audit ${SLUG}" >&2
+      exit 10
+    fi
+    if [[ ${#EXISTING_NUMS[@]} -eq 1 ]]; then
+      EXISTING="${EXISTING_NUMS[0]}"
       task_map_set "$TID" "$EXISTING"
       echo "Skipping existing #${EXISTING} on $REPO ($TID)"
       continue
@@ -190,6 +201,8 @@ fanout_tickets() {
 TICKET_COUNT=$(python3 "$PRD_IO" tickets_count "$PRD_PATH")
 if [[ "${TICKET_COUNT}" -gt 0 ]]; then
   fanout_tickets
+  echo "==> Auditing ticket ↔ issue mapping..."
+  "${BIN_DIR}/fanout-audit" "$SLUG"
   echo "==> Normalizing child issue bodies (Parent PRD, opencode-task-json, sections)..."
   "${BIN_DIR}/sync-fanout-bodies" "$SLUG"
   echo "==> Validating fanout contract..."

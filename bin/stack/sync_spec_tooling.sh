@@ -69,6 +69,8 @@ sync_bin() {
 }
 
 sync_bin "$TEMPLATE/bin/fanout" "$SPEC/bin/fanout"
+[[ -f "$TEMPLATE/bin/fanout-audit" ]] && sync_bin "$TEMPLATE/bin/fanout-audit" "$SPEC/bin/fanout-audit"
+[[ -f "$TEMPLATE/bin/publish-prd-issue" ]] && sync_bin "$TEMPLATE/bin/publish-prd-issue" "$SPEC/bin/publish-prd-issue"
 for lib in "$TEMPLATE"/bin/lib/*; do
   base=$(basename "$lib")
   dest="$SPEC/bin/lib/$base"

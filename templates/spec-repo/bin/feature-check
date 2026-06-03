@@ -38,24 +38,24 @@ python3 "$VALIDATE_TICKETS" "$REGISTRY" <"$TMP" || exit 6
 
 FAIL=0
 MISSING_ISSUES=0
+DUPLICATE_ISSUES=0
+EXISTING="${BIN_DIR}/lib/existing_issue.py"
 
 find_issue() {
   local repo="$1" title="$2" task_id="$3"
-  gh issue list --repo "$repo" --state all --label "feature:${SLUG}" --limit 200 \
-    --json number,title,body 2>/dev/null \
-    | jq -r --arg title "$title" --arg task_id "$task_id" '
-        .[]
-        | select(
-            .title == $title
-            or (
-              $task_id != ""
-              and (
-                ((.body // "") | test("task_id:\\s*\"" + $task_id + "\""))
-                or ((.body // "") | test("task_id:\\s*" + $task_id + "\\b"))
-              )
-            )
-          )
-        | .number' | sed -n '1p'
+  mapfile -t nums < <(python3 "$EXISTING" find-all "$repo" "$SLUG" "$title" "$task_id")
+  if [[ ${#nums[@]} -gt 1 ]]; then
+    echo "FAIL: duplicate issues for ${task_id} on ${repo}: #$(IFS=' #'; echo "${nums[*]}")"
+    DUPLICATE_ISSUES=$((DUPLICATE_ISSUES + 1))
+    FAIL=1
+    echo "${nums[0]}"
+    return
+  fi
+  if [[ ${#nums[@]} -eq 1 ]]; then
+    echo "${nums[0]}"
+    return
+  fi
+  echo ""
 }
 
 while IFS= read -r row; do
@@ -84,6 +84,9 @@ rm -f "$TMP"
 
 if [[ "$MISSING_ISSUES" -gt 0 ]]; then
   echo "HINT: run bin/fanout ${SLUG} from spec repo to create missing issues" >&2
+fi
+if [[ "$DUPLICATE_ISSUES" -gt 0 ]]; then
+  echo "HINT: run bin/fanout-audit ${SLUG}; close duplicate issues before re-running fanout" >&2
 fi
 
 if [[ "$FAIL" -eq 0 ]]; then

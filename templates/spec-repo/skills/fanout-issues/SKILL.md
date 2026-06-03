@@ -19,7 +19,7 @@ From this repo root, run **exactly once** per slug (unless resuming after a fail
 bin/fanout <slug>
 ```
 
-`bin/fanout` (tickets mode) **ends with** `sync-fanout-bodies` + `feature-check --level fanout` so every matched child gets `Parent PRD:` and the canonical body even when an earlier run skipped “existing” issues. If `feature-check` fails, fix PRD/`parent_issue`/duplicates — **do not** hand-create replacement issues.
+`bin/fanout` (tickets mode) runs **`fanout-audit`**, then **`sync-fanout-bodies`**, then **`feature-check --level fanout`**. If any step fails, **stop** — do not hand-create issues.
 
 After **editing** `docs/prd/<slug>.md` later, run `bin/feature-upgrade <slug>` (same body sync + broader checks).
 
@@ -28,9 +28,20 @@ After **editing** `docs/prd/<slug>.md` later, run `bin/feature-upgrade <slug>` (
 - **Only** `bin/fanout <slug>` creates child issues — **never** hand-roll `gh issue create` for PRD tickets.
 - **Never** run fanout twice in parallel for the same slug (the script holds a lock; a second run exits 8).
 - **Never** fanout in parallel subagents or parallel bash calls.
-- If fanout reports `Skipping existing #N`, that is success — do not create another issue for the same ticket. The closing sync pass upgrades that issue’s body if it was hand-rolled.
+- If fanout reports `Skipping existing #N`, that is success — do not create another issue for the same ticket.
 - Re-run fanout only when resuming after failure or after fixing the PRD; idempotent skips are expected.
-- If duplicate open issues exist for one ticket id (e.g. hand-create + fanout), **close duplicates** before re-running fanout; sync only updates one matched issue per ticket.
+- If duplicate open issues exist for one ticket id, **close duplicates** before re-running fanout; sync only updates one matched issue per ticket.
+
+## When fanout fails or exits non-zero
+
+**Do not assume zero issues were created.** Partial fanout is common.
+
+1. Run **`bin/fanout-audit <slug>`** and read the report (`OK` / `MISSING` / `DUPLICATE` / `ORPHAN` per ticket).
+2. **Never** run `gh issue create` for PRD tickets — not even “just the missing ones.”
+3. If lock error (exit 8): wait, or remove stale `.fanout-lock-<slug>/` only when no fanout process is running, then **`bin/fanout-audit`**, then **`bin/fanout`** again.
+4. If duplicate (exit 10 or audit `DUPLICATE`): close the extra issues (human or delegated cleanup), re-run audit until `PASS`, then **`bin/fanout`** (creates only `MISSING`).
+5. If audit shows only `MISSING`: **`bin/fanout <slug>`** again — it skips existing matches via `existing_issue_number`.
+6. If fanout keeps failing: debug the script error — **do not** bypass with manual creates.
 
 ## Rules
 
@@ -50,3 +61,4 @@ After **editing** `docs/prd/<slug>.md` later, run `bin/feature-upgrade <slug>` (
 
 - Before each create, `bin/fanout` checks existing issues by **exact title** and embedded **task id** (`opencode-task-json`, yaml, or legacy `**Task ID:**` bodies).
 - Duplicate ticket ids or duplicate `(repo, title)` pairs in the PRD cause fanout to exit 7 before creating anything.
+- Multiple GitHub issues matching one ticket cause fanout to exit 10 — close extras first.

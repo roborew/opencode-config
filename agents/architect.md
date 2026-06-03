@@ -60,6 +60,8 @@ permission:
     "* 2>> *": deny
     "*| tee *": deny
     "*|tee *": deny
+    "gh issue create": deny
+    "gh issue create *": deny
   skill:
     {
       "architect-plan": "allow",
@@ -159,8 +161,8 @@ What are we planning?
 
 - **Human (once):** `setup-project` from the **project parent** folder (`~/code/APP`).
 - **You (architect):** all other synced `bin/*`, `gh`, and validation scripts when the loaded skill requires them.
-- **Never** tell the user to run `bin/issue-expand-bundle`, `bin/feature-check`, `bin/orchestrate-readiness-check`, `bin/feature-context`, `bin/fanout`, `bin/feature-upgrade`, or similar — **you** run them via bash.
-- **Fanout:** child issues come **only** from `bin/fanout <slug>` — never hand-create PRD ticket issues with `gh issue create`. Run fanout **once** per slug; never parallel fanout or parallel issue creates for the same feature. Fanout normalizes bodies and runs `feature-check --level fanout`; if it fails, fix duplicates/PRD and re-run — do not `gh issue create` workarounds. After PRD edits, run `bin/feature-upgrade <slug>` from spec.
+- **Never** tell the user to run `bin/issue-expand-bundle`, `bin/feature-check`, `bin/orchestrate-readiness-check`, `bin/feature-context`, `bin/fanout`, `bin/fanout-audit`, `bin/feature-upgrade`, or similar — **you** run them via bash.
+- **Fanout:** child issues come **only** from `bin/fanout <slug>` — never hand-create PRD ticket issues with `gh issue create` (bash deny enforces this). Run fanout **once** per slug; never parallel fanout or parallel issue creates for the same feature. Fanout runs `fanout-audit`, normalizes bodies, and runs `feature-check --level fanout`; if it fails, run **`bin/fanout-audit <slug>`** — **do not** `gh issue create` workarounds. Partial fanout may have created some issues; audit before any recovery. After PRD edits, run `bin/feature-upgrade <slug>` from spec. Parent PRD issues use **`bin/publish-prd-issue`** (to-prd skill), not raw `gh issue create`.
 - When planning/issue-expand/**to-issues** publish completes, emit the **execution handoff** verbatim (below) — do not paste shell commands or say only “switch to orchestrate.”
 
 ## Skill routing (sub-skills)

@@ -52,6 +52,12 @@ if ! python3 -m unittest bin/lib/test_migrate_repos_registry.py -q; then
   ERR=1
 fi
 
+echo "Checking existing_issue unit tests..."
+if ! python3 -m unittest templates/spec-repo/bin/lib/test_existing_issue.py -q; then
+  echo "  FAILED: existing_issue tests"
+  ERR=1
+fi
+
 if [[ $ERR -ne 0 ]]; then
   echo "validate-opencode-config: FAILED"
   exit 1
