@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: "AI-powered code review using CodeRabbit. Default code-review skill. Trigger for any explicit review request AND autonomously when the agent thinks a review is needed (code/PR/quality/security)."
+description: "AI-powered code review using CodeRabbit CLI. Use only on explicit user request or when parent passes execution_mode orchestrate_coderabbit_gate. Do not run during orchestrated stage/issue work."
 metadata:
   version: "0.1.0"
 ---
@@ -17,6 +17,17 @@ AI-powered code review using CodeRabbit. Enables developers to implement feature
 - Uses `--agent` output for agent-readable review results and fix guidance
 
 ## When to Use
+
+**Allowed:**
+
+1. **User explicitly asks** for CodeRabbit / code review (phrases below).
+2. **Orchestrate completion gate only:** parent `review` agent received `execution_mode: orchestrate_coderabbit_gate` from **`orchestrate`** after **all** stages/issues are done — one review per orchestration session.
+
+**Forbidden (do not run `coderabbit review`):**
+
+- During **`orchestrate`** stage loops, GitHub **per-issue** work, or while more backlog issues remain.
+- When parent is **`developer`**, **`frontend-dev`**, **`verifier`**, or **`review`** without `orchestrate_coderabbit_gate` (including post-implementation **`review`** planning / Mode F — those use read-only analysis, not the CLI).
+- “Autonomously” after implementing a task, fixing a bug, or passing verifier — wait for orchestrate’s single final gate.
 
 When user asks to:
 

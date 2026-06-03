@@ -61,7 +61,7 @@ bash "$OC/skills/github-issue-run/lib/issue-state-transition.sh" "<repo>" "<numb
 5. Else **flat mode** → single implement pass (`execution_mode: github_issue`) using root acceptance + test_commands from meta.
 6. Task **verifier** with same contract + completion report.
 7. Grade per **Child Report Grading Gate**; require **`git_commit`** with `Refs: #<n>` when files changed.
-8. On PASS → **`state:ready-for-review`** + optional `gh issue comment` with summary + commit hash.
+8. On PASS → **`state:ready-for-review`** + optional `gh issue comment` with summary + commit hash. **Do not** run CodeRabbit per issue.
 9. On FAIL → **`state:blocked`** or **helper** / **orchestrate-recovery** — do not advance queue.
 10. Repeat from step 2 until discovery fails.
 
@@ -69,7 +69,8 @@ bash "$OC/skills/github-issue-run/lib/issue-state-transition.sh" "<repo>" "<numb
 
 When **next-runnable-issue.sh** exits 1 (no runnable issues left):
 
-1. Task **developer** `load: minimal`:
+1. **CodeRabbit gate (once):** If difficulty is not `easy`, orchestrate runs the **CodeRabbit gate** from **`orchestrate-execution`** on **all** feature changes before PR finish — max 2 CLI runs including remediation re-gate. Per-issue transitions must not invoke CodeRabbit.
+2. Task **developer** `load: minimal`:
 
 ```bash
 bash "$OC/skills/github-issue-run/lib/feature-finish-pr.sh" "<slug>"
@@ -84,8 +85,8 @@ Stdout is JSON: `{ branch, base, pr_url, pr_number, action, repo, message }`.
 | `skipped-opt-out` | `ORCHESTRATE_AUTO_PR=0` or user asked not to open a PR |
 | `skipped-protected-branch` | Current branch is `develop`/`main`/`master` — push/PR skipped; report `message` and manual next steps |
 
-2. Report `pr_url` (or skip reason) to the user.
-3. Prompt: **Switch to `architect` for feature sign-off** (Mode F two-phase: verify + close issues, then docs on PR).
+3. Report `pr_url` (or skip reason) and feature **`### CodeRabbit`** completion fields to the user.
+4. Prompt: **Switch to `architect` for feature sign-off** (Mode F two-phase: verify + close issues, then docs on PR).
 
 **Orchestrate must not** set `state:done`, close issues as accepted, or write `docs/changelog/*` — that is **architect Mode F** ([architect-review](../architect-review/SKILL.md), helper `architect-review/lib/mode-f-close-issues.sh`).
 
