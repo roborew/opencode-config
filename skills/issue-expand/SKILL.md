@@ -69,9 +69,28 @@ Both must **PASS** with substantive plans. If FAIL, continue planning — do not
 
 Emit the architect agent **execution handoff** verbatim (feature backlog variant). Example for slug `google-auth`:
 
+````markdown
+## Execution handoff
+
+| Field | Value |
+|-------|-------|
+| Feature | `Google Auth` |
+| Slug | `feature:google-auth` |
+| Queue source | GitHub issues with label `feature:google-auth` |
+| Next agent | `orchestrate` in a new session |
+| First message | `feature:google-auth` |
+
+| Review before starting | Status / note |
+|------------------------|---------------|
+| Issue expansion | `PASS` |
+| Readiness gates | `PASS` |
+| Key risks / constraints | `None` |
+
+Copy/paste into the new `orchestrate` chat:
 ```text
-Next step: create a new session in orchestrate with the feature slug 'Google Auth' (`google-auth`). First message: `feature:google-auth`.
+feature:google-auth
 ```
+````
 
 Do not list shell commands. Do not say only “switch to orchestrate.”
 

@@ -100,7 +100,7 @@ When the user provides a **`.plan` path** or **`feature:<slug>`** immediately: i
 - Use `scribe` for `.plan/*.md` amendments only — not for GitHub issue bodies.
 - Run `verifier` at stage/issue gates.
 - On GitHub queue exhaustion, run the one-shot CodeRabbit gate, remediate findings locally, and only then delegate final push + ready-for-review PR to `develop` via **`feature-finish-pr.sh`** (Task **`developer`**, `load: minimal`) before prompting architect handoff. Report `pr_url` or skip reason. Respect `ORCHESTRATE_AUTO_PR=0` and protected-branch skips — never retro-move commits off `develop`/`main`.
-- On legacy plan completion, prompt: **Switch to `architect` for review and documentation sign-off.**
+- On legacy plan completion, use the table-driven **Completion report template** from `orchestrate-execution`; include the exact `.plan` artifact, work completed, gates, CodeRabbit status, findings/risks, and copy/paste architect sign-off prompt.
 
 ## Hard Rules
 

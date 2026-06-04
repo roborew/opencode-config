@@ -226,7 +226,7 @@ tmp/
 
 ### Implementation (per repo, dependency order)
 
-1. **`architect`** (impl repo) → **option 1** or targeted **to-issues** → planning gates → ends with the canonical handoff, e.g. *Next step: create a new session in orchestrate with the feature slug 'Google Auth' (`google-auth`). First message: `feature:google-auth`.*
+1. **`architect`** (impl repo) → **option 1** or targeted **to-issues** → planning gates → ends with the canonical table handoff naming the feature, slug, queue source, readiness status, and copy/paste first message (`feature:<slug>`).
 2. **`/new`** → **`orchestrate`** → paste or type the **first message** from that handoff (usually `feature:<slug>`). See [Session handoffs](#session-handoffs-architect--orchestrate).
 3. When orchestrate reports queue exhausted (+ PR URL): **new session** → **`architect`** (impl repo) → **option 5** or *ready for review* with `feature:<slug>` and PR link → **Mode F** two-phase sign-off: **Phase 1** verify vs PRD/tickets and close issues (`state:done`); **Phase 2** mandatory changelog (+ optional guides) written and pushed to the feature PR via **developer**.
 4. **Human:** review and **merge** the impl-repo PR on GitHub after Mode F Phase 2 (orchestrate may have opened it via `feature-finish-pr.sh`; use **`ship`** only if PR was skipped).
@@ -242,10 +242,10 @@ OpenCode can switch agents in one session, but **architect (Qwen) + many tools �
 |------|---------|-------|--------|
 | Plan + expand | A (planning) | **architect** | Option 1, slug, approve issue bodies in chat |
 | Execute backlog | **B (new)** | **orchestrate** | `/new`, then: `feature:<slug>` — start first runnable issue |
-| Sign-off per impl repo | **C (new)** | **architect** | Option 5 or: *Orchestrate done. feature:\<slug\>. PR: \<url\>* |
+| Sign-off per impl repo | **C (new)** | **architect** | Option 5 or paste the orchestrate **Copy/paste sign-off script** for the exact `feature:<slug>` + PR |
 | Close feature (multi-repo) | **D (spec)** | **architect** | Option 3 **feature-complete** after all impl repos |
 
-Optional same-session path: architect ends with a short **HANDOFF** block → you run **`/compact`** → switch to orchestrate → kickoff with `feature:<slug>`. If MiniMax returns duplicate `tool_call` errors, use **`/new`** instead.
+Optional same-session path: architect ends with a short table **HANDOFF** block → you run **`/compact`** → switch to orchestrate → kickoff with `feature:<slug>`. If MiniMax returns duplicate `tool_call` errors, use **`/new`** instead.
 
 ### Who does what at execution time
 

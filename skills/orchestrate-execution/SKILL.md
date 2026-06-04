@@ -140,8 +140,8 @@ When discovery fails (queue exhausted):
 1. **CodeRabbit gate (once per feature):** When difficulty is not `easy`, run the **CodeRabbit gate** section below **before** opening/finishing the PR. Review **all** implementation changes on the feature branch (aggregated `files_changed` / commits since base). **Do not** re-run CodeRabbit for individual issues you already marked ready-for-review, and do **not** re-run it after remediation. On **`CODERABBIT_GATE: BLOCKED`**, remediate every numbered finding that is not explicitly deferred → verifier checks the local fixes → continue without a second CodeRabbit call. On **`CODERABBIT_GATE: PASS`** (or `easy`), continue.
 2. Task **`developer`** `load: minimal`: `bash "$OC/skills/github-issue-run/lib/feature-finish-pr.sh" "<slug>"` — parse JSON (`branch`, `base`, `pr_url`, `action`, `message`).
 3. Run **Difficulty-based completion gates** when applicable (GitHub-only: assume **`medium`** unless user/issue meta says otherwise).
-4. Report `pr_url` or skip reason (`skipped-opt-out`, `skipped-protected-branch`) and the mandatory **`### CodeRabbit`** completion block to the user.
-5. Prompt: **Switch to `architect` for feature sign-off** (Mode F).
+4. Report `pr_url` or skip reason (`skipped-opt-out`, `skipped-protected-branch`) inside the mandatory **Completion report template** below.
+5. Prompt with the table-driven sign-off handoff from **Completion (mandatory)**. Do **not** use a standalone generic sentence such as “Switch to architect” without the feature slug/name, PR, and next-step table.
 
 **Opt-out:** `ORCHESTRATE_AUTO_PR=0` or user instruction not to open a PR. **Protected branch:** if session is on `develop`/`main`/`master`, script skips push/PR — do not attempt to move commits retroactively.
 
@@ -267,31 +267,68 @@ When the user fixes env/worktree issues or asks to rerun checks:
 
 When verifier passes for all stages, any required **CodeRabbit gate** has **`CODERABBIT_GATE: PASS`** or local CodeRabbit remediation has been verified complete after the one-shot run (or was skipped for **`easy`**), and any **Difficulty-based completion gates** for that artifact have finished (see above):
 
-1. Report using the structure below. The **`## CodeRabbit`** section is **mandatory on every completion** — never omit it. If CodeRabbit did not run, state **why** explicitly (`easy`, `SKIPPED`, or user waiver). Do not mark orchestration complete on `medium`/`hard` without **`CodeRabbit ran: yes`** and evidence of a successful CLI review.
-2. **Explicitly prompt the user:** "Implementation complete. Switch to `architect` for review and documentation sign-off."
-3. Architect still owns final review + documentation in Mode B; orchestrate may have run **medium/hard** pre-handoff gates only.
+1. Report using the structure below. The **`### CodeRabbit`** table is **mandatory on every completion** — never omit it. If CodeRabbit did not run, state **why** explicitly (`easy`, `SKIPPED`, or user waiver). Do not mark orchestration complete on `medium`/`hard` without **`CodeRabbit ran: yes`** and evidence of a successful CLI review.
+2. The first table must name the exact sign-off target: `feature:<slug>` or `.plan/<type>.<slug>.md`, display name, repo, PR URL or skip reason, and branch/base when known.
+3. Use tables or short keyed lists only. No essay paragraphs, no stale transcript summaries, no generic “done this, go back to architect” ending.
+4. **Explicit next step:** tell the user exactly what to paste into the next `architect` chat for this feature/sign-off target.
+5. Architect still owns final review + documentation in Mode B; orchestrate may have run **medium/hard** pre-handoff gates only.
 
 ### Completion report template (required)
 
-```markdown
+````markdown
 ## Orchestration complete
 
-### CodeRabbit (required — do not omit)
-- **CodeRabbit ran:** yes | no
-- **Reason if no:** (only `difficulty: easy`, `CODERABBIT_GATE: SKIPPED — <reason>`, or `user waived` — never leave blank)
-- **CLI command:** (exact `coderabbit review ...` from review agent, or `n/a`)
-- **Review runs:** <count of coderabbit CLI invocations>
-- **Remediation fixes applied:** <count of CodeRabbit findings fixed by developer/frontend-dev after the one-shot CodeRabbit run; 0 if none>
-- **Final gate:** PASS | BLOCKED | SKIPPED | not required (easy)
-- **Final findings:** Critical <n> | Major <n> | Minor <n> | Trivial <n> | Info <n> (from the one-shot CodeRabbit run)
-- **Finding resolutions:** fixed <n> | deferred <n> | not applicable <n> | unresolved <n>
+### Sign-off target
+| Field | Value |
+|-------|-------|
+| Feature / artifact | `<Display Name>` (`feature:<slug>` or `.plan/<type>.<slug>.md`) |
+| Repo | `<owner/name or local repo>` |
+| Branch / base | `<branch>` -> `<base>` |
+| PR | `<pr_url>` or `<skip reason>` |
+| Sign-off owner | `architect` Mode F (GitHub feature) or Mode B (`.plan` artifact) |
 
-### Summary
-- Artifact / feature / issue: ...
-- Stages completed: ...
-- Verifier: ...
-- Difficulty gates: ...
+### Work completed
+| Task / stage | Status | Evidence | Notes / follow-up |
+|--------------|--------|----------|-------------------|
+| `<issue # / stage_id / task name>` | PASS | `<commit, verifier PASS, tests>` | `<none or concise note>` |
+
+### Gates and checks
+| Gate | Result | Evidence | Action needed |
+|------|--------|----------|---------------|
+| Verifier | PASS | `<summary>` | None |
+| Difficulty gates | PASS / skipped | `<review/senior/helper evidence or reason>` | `<none or action>` |
+| PR finish | PASS / skipped | `<pr_url/action/message>` | `<none or action>` |
+
+### CodeRabbit (required — do not omit)
+| Field | Value |
+|-------|-------|
+| CodeRabbit ran | yes / no |
+| Reason if no | `difficulty: easy`, `CODERABBIT_GATE: SKIPPED — <reason>`, or `user waived` |
+| CLI command | `<exact coderabbit review ...>` or `n/a` |
+| Review runs | `<count>` |
+| Remediation fixes applied | `<count>` |
+| Final gate | PASS / BLOCKED / SKIPPED / not required (easy) |
+| Final findings | Critical `<n>`; Major `<n>`; Minor `<n>`; Trivial `<n>`; Info `<n>` |
+| Finding resolutions | fixed `<n>`; deferred `<n>`; not applicable `<n>`; unresolved `<n>` |
+
+### Key findings / risks
+| Item | Impact | Required next action |
+|------|--------|----------------------|
+| `<finding, risk, deferral, or "None">` | `<low/medium/high or n/a>` | `<specific action or "None">` |
+
+### Next steps
+| Order | Who | Action | Exact prompt / input |
+|-------|-----|--------|----------------------|
+| 1 | User | Start a new `architect` session for this feature sign-off | `feature:<slug> PR: <pr_url>` |
+| 2 | architect | Run Mode F/Mode B sign-off, close accepted issues, then documentation | Review the table above; do not re-run orchestration unless remediation is required |
+
+### Copy/paste sign-off script
+```text
+Orchestrate complete for <Display Name> (`feature:<slug>`).
+PR: <pr_url or skip reason>
+Please run architect sign-off for this exact feature. Review the Work completed, Gates and checks, CodeRabbit, and Key findings tables above. If accepted, proceed with Mode F/Mode B docs and final sign-off; if not accepted, publish remediation tasks for a new orchestrate session.
 ```
+````
 
 When **`CODERABBIT_GATE: BLOCKED`**, increment **`Remediation fixes applied`** only when the child completion report lists which CodeRabbit finding IDs or numbered items were fixed (orchestrate sums across loops). Do not count deferred or not-applicable findings as fixes.
 

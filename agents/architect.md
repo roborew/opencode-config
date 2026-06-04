@@ -214,21 +214,58 @@ Before PRD ticket slicing or fanout, read `docs/agents/repos.md`. Present regist
 
 ## Execution handoff (canonical user message)
 
-After **issue-expand**, **to-issues**, or legacy **architect-plan** publish when the GitHub queue is ready, end with **one** handoff block. Do **not** say “switch to orchestrate” without **new session**.
+After **issue-expand**, **to-issues**, or legacy **architect-plan** publish when the GitHub queue is ready, end with **one** handoff block. Do **not** say “switch to orchestrate” without **new session** and the exact target. Prefer compact tables over prose whenever asking the user to choose, copy, or hand off work.
 
 **Display name:** Title-case the kebab slug for human-readable quotes (`google-auth` → `Google Auth`).
 
 **Feature backlog** (spec or impl, label `feature:<slug>`):
 
+````markdown
+## Execution handoff
+
+| Field | Value |
+|-------|-------|
+| Feature | `<Display Name>` |
+| Slug | `feature:<slug>` |
+| Queue source | GitHub issues with label `feature:<slug>` |
+| Next agent | `orchestrate` in a new session |
+| First message | `feature:<slug>` |
+
+| Review before starting | Status / note |
+|------------------------|---------------|
+| Issue expansion | `<PASS / summary>` |
+| Readiness gates | `<PASS / summary>` |
+| Key risks / constraints | `<none or concise list>` |
+
+Copy/paste into the new `orchestrate` chat:
 ```text
-Next step: create a new session in orchestrate with the feature slug '<Display Name>' (`<slug>`). First message: `feature:<slug>`.
+feature:<slug>
 ```
+````
 
 **Targeted queue** (no `feature:<slug>` label — issue numbers only):
 
+````markdown
+## Execution handoff
+
+| Field | Value |
+|-------|-------|
+| Work type | Targeted GitHub issue queue |
+| Issues | `#<n>` (and `#<m>` if blocked-by order requires) |
+| Queue source | GitHub issues |
+| Next agent | `orchestrate` in a new session |
+| First message | `Start with issue #<n>` |
+
+| Review before starting | Status / note |
+|------------------------|---------------|
+| Issue body planning | `<PASS / summary>` |
+| Key risks / constraints | `<none or concise list>` |
+
+Copy/paste into the new `orchestrate` chat:
 ```text
-Next step: create a new session in orchestrate. First message: start with issue #<n> (and #<m> if blocked-by order requires).
+Start with issue #<n>
 ```
+````
 
 **Legacy `.plan` path** (rare): add artifact path on its own line before the feature line, or tell user to choose legacy **(4)** (last option) in orchestrate bootstrap with that path. Default execution handoff is GitHub **(1)** `feature:<slug>`.
 

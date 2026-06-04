@@ -42,7 +42,7 @@ You may invoke: `review`, `document`, `scribe`, and **`developer`** (minimal loa
 - After scribe returns **success** with **tool evidence** and no `SCRIBE_FAILED`, trust the write for planning flows. **Mode F / Mode B sign-off docs:** always **verify on disk** (step 8) before Tasking **developer** for git or declaring Phase 2 complete.
 - **Mode B `archive_plan` is blocking** on sign-off (see Mode B step 6). **Mode F:** skip `archive_plan` when execution was GitHub-only; state `No archive_plan: issue-backed execution only.` If a `.plan` was also executed, run `archive_plan` after Phase 2 (same as Mode B step 6).
 
-**Brevity:** Concise headings and bullets; deltas only when repeating status to the user.
+**Brevity / formatting:** Concise headings, tables, and keyed lists only; deltas only when repeating status to the user. When asking the user for a choice or handing work between agents, use a table with the exact target (`feature:<slug>`, PR, artifact path) and the exact prompt/input to paste next.
 
 ---
 
@@ -124,20 +124,30 @@ Fallback per issue: `issue-state-transition.sh <repo> <n> state:done`, then `gh 
 
 **Gate:** Do not start Phase 2 until every accepted issue is **`state:done`** and **closed** (or deferral is explicit in review output).
 
-Report to user: **Phase 1 complete** — verification passed, issues closed. Pause for doc scope (step 6).
+Report to user with a compact **Phase 1 complete** table: feature slug, PR, closed issues, review verdict, deferrals, and the required doc-scope choice from step 6. Pause for doc scope.
 
 ### Phase 2 — Documentation (after human doc-scope gate)
 
 #### 6. Human gate (required)
 
-Ask verbatim pattern:
+Ask with this table-driven pattern:
 
-```text
-Verification passed. Changelog is required (docs/changelog/<YYYY-MM-DD>-<slug>.md).
-Also create?
-[ ] User guide (docs/guides/<slug>.md)
-[ ] Architecture note (docs/architecture/<slug>.md)
-[ ] README / .env.example (specify paths)
+```markdown
+## Documentation scope
+
+| Field | Value |
+|-------|-------|
+| Feature | `<Display Name>` (`feature:<slug>`) |
+| Required | `docs/changelog/<YYYY-MM-DD>-<slug>.md` |
+| PR | `<pr_url>` |
+
+| Option | Include? | Path |
+|--------|----------|------|
+| User guide | yes / no | `docs/guides/<slug>.md` |
+| Architecture note | yes / no | `docs/architecture/<slug>.md` |
+| README / .env.example | yes / no | `<specific paths>` |
+
+Reply with the rows to include, for example: `guide: yes, architecture: no, README: no`.
 ```
 
 - **Changelog: always** — never skip.
@@ -207,7 +217,7 @@ Docs-only commit; no product test re-run. If push fails, report branch and paths
 - If GitHub-only execution: state **`No archive_plan: issue-backed execution only.`**
 - If `.plan` was also executed: run Mode B **step 6** (`archive_plan`) after step 9.
 
-**Phase 2 complete message:** PR URL (with doc commits), closed issue list, doc paths written. **Next: review PR on GitHub and merge** (human only).
+**Phase 2 complete message:** Use a table with PR URL (including doc commit), closed issue list, doc paths written, archive status, and **Next: review PR on GitHub and merge** (human only). Do not use a paragraph recap.
 
 **Mode F is not complete** until Phase 2 push succeeds or push failure is reported with manual next steps.
 
@@ -225,6 +235,6 @@ When user reports orchestrate completed on a **`.plan` artifact** and verifier p
 4. **Write docs:** Scribe each path from document output (changelog, guides, architecture, README, `.env.example`) as needed. If document returns no files, skip to step 6.
 5. **Verify on disk** (same as Mode F step 8): architect `test -f` / `ls` per path; retry scribe once on miss; stop sign-off if files still missing.
 6. **Archive (MANDATORY):** Separate Task `scribe` with `operation: archive_plan`, `source_path`, `target_path` (`.completed.md`). Retry once on failure.
-7. Report: sign-off, docs, **`Archived: <target_path>`** or failure.
+7. Report with a compact table: sign-off verdict, docs written, archive status (**`Archived: <target_path>`** or failure), risks/deferrals, and exact next action.
 
 When Mode F also ran on a hybrid path, run Mode B step 6 after Mode F Phase 2.
