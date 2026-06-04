@@ -255,7 +255,7 @@ Optional same-session path: architect ends with a short **HANDOFF** block → yo
 | Per-stage / per-issue verification | **`verifier`** |
 | `git commit` on feature branch (`Refs:` / `Closes:` issue #) | Implementation subagents (orchestrate requires evidence in completion report) |
 | Issue labels `state:in-progress` → `state:ready-for-review` | **orchestrate** via **`developer`** + `issue-state-transition.sh` |
-| Push branch + open ready-for-review PR when queue empty | **orchestrate** via **`developer`** + `feature-finish-pr.sh` (skip with `ORCHESTRATE_AUTO_PR=0`) |
+| Final push + open ready-for-review PR after queue empty and CodeRabbit fixes are local | **orchestrate** via **`developer`** + `feature-finish-pr.sh` (skip with `ORCHESTRATE_AUTO_PR=0`) |
 | Code/PR review vs tickets + PRD; `state:done` + close issues | **architect** **Mode F Phase 1** (option 5) — not orchestrate |
 | Changelog + sign-off docs on feature PR | **architect** **Mode F Phase 2** (`document` → `scribe` → **developer** push) |
 | Remediation after failed sign-off | **architect** publishes fixes (**to-issues** or review plan) → **new orchestrate session** |

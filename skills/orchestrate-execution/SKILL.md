@@ -137,7 +137,7 @@ When `stages[]` is present, for **each** stage in order:
 
 When discovery fails (queue exhausted):
 
-1. **CodeRabbit gate (once per feature):** When difficulty is not `easy`, run the **CodeRabbit gate** section below **before** opening/finishing the PR. Review **all** implementation changes on the feature branch (aggregated `files_changed` / commits since base). **Do not** re-run CodeRabbit for individual issues you already marked ready-for-review. On **`CODERABBIT_GATE: BLOCKED`**, remediate every numbered finding that is not explicitly deferred → verifier → re-gate (max 3 CLI runs for the feature). On **`CODERABBIT_GATE: PASS`** (or `easy`), continue.
+1. **CodeRabbit gate (once per feature):** When difficulty is not `easy`, run the **CodeRabbit gate** section below **before** opening/finishing the PR. Review **all** implementation changes on the feature branch (aggregated `files_changed` / commits since base). **Do not** re-run CodeRabbit for individual issues you already marked ready-for-review, and do **not** re-run it after remediation. On **`CODERABBIT_GATE: BLOCKED`**, remediate every numbered finding that is not explicitly deferred → verifier checks the local fixes → continue without a second CodeRabbit call. On **`CODERABBIT_GATE: PASS`** (or `easy`), continue.
 2. Task **`developer`** `load: minimal`: `bash "$OC/skills/github-issue-run/lib/feature-finish-pr.sh" "<slug>"` — parse JSON (`branch`, `base`, `pr_url`, `action`, `message`).
 3. Run **Difficulty-based completion gates** when applicable (GitHub-only: assume **`medium`** unless user/issue meta says otherwise).
 4. Report `pr_url` or skip reason (`skipped-opt-out`, `skipped-protected-branch`) and the mandatory **`### CodeRabbit`** completion block to the user.
@@ -223,7 +223,7 @@ Decision policy:
 
 ## CodeRabbit gate (once per orchestration — after final verifier, before difficulty gates / PR / architect)
 
-**Invocation budget:** Exactly **one** CodeRabbit gate per orchestration session (per `.plan` artifact or per `feature:<slug>` GitHub run), plus bounded re-runs after remediation (max **3** CLI invocations total: initial review, verification review, and one final review for newly surfaced findings). **Never** Task `review` with `orchestrate_coderabbit_gate` between stages, between GitHub issues, or after a single issue while more issues remain in the queue.
+**Invocation budget:** Exactly **one** CodeRabbit CLI invocation per orchestration session (per `.plan` artifact or per `feature:<slug>` GitHub run). CodeRabbit is a one-shot recommendation source, not a validation loop. **Never** Task `review` with `orchestrate_coderabbit_gate` between stages, between GitHub issues, after a single issue while more issues remain in the queue, or after CodeRabbit remediation.
 
 When **every** stage is complete and the **final** `verifier` has **APPROVED** (legacy `.plan` stage loop **or** entire GitHub feature queue exhausted with all issues verified):
 
@@ -237,16 +237,16 @@ When **every** stage is complete and the **final** `verifier` has **APPROVED** (
    - Pass aggregated completion summary (stages or issue id, `files_changed`, verifier verdict, commit refs)
    - Instruct: load **`code-review`** skill; verify CLI (`coderabbit --version`, `coderabbit auth status`); run review; parse every `--agent` JSONL `finding` event; return **`CODERABBIT_GATE`**, severity counts, and the full numbered finding inventory with file/line anchors when present
 4. **Outcomes:**
-   - **`CODERABBIT_GATE: PASS`** (latest run has zero unresolved `critical`, `major`, or `minor` findings, and every `trivial`/`info` item from all runs is fixed, not applicable, or explicitly deferred with reason) → continue to **Difficulty-based completion gates**.
-   - **`CODERABBIT_GATE: BLOCKED`** (any unresolved `critical`, `major`, or `minor`, missing full finding inventory, or missing per-item resolution evidence) → Task **`developer`** or **`frontend-dev`** per last stage `Owner` (or last issue `owner` for GitHub) with **`load: full`**: numbered remediation from CodeRabbit only; do **not** use **`autofix`** unattended. Require completion report field **`coderabbit_resolutions`** with one entry per finding id: `fixed`, `deferred`, or `not_applicable`, plus rationale for non-fixed items. Then Task **`verifier`** `load: full` on affected acceptance criteria and changed files. Re-run this **CodeRabbit gate** (same Task contract). **Max 3** CodeRabbit CLI runs per artifact/feature; then invoke **`helper`** + user confirmation without marking the gate PASS.
+   - **`CODERABBIT_GATE: PASS`** (the one-shot CodeRabbit run has zero `critical`, `major`, or `minor` findings, and any `trivial`/`info` findings are fixed, not applicable, or explicitly deferred with reason) → continue to **Difficulty-based completion gates**.
+   - **`CODERABBIT_GATE: BLOCKED`** (any `critical`, `major`, or `minor`, missing full finding inventory, or missing per-item resolution evidence) → Task **`developer`** or **`frontend-dev`** per last stage `Owner` (or last issue `owner` for GitHub) with **`load: full`**: numbered remediation from CodeRabbit only; do **not** use **`autofix`** unattended. Require completion report field **`coderabbit_resolutions`** with one entry per finding id: `fixed`, `deferred`, or `not_applicable`, plus rationale for non-fixed items. Then Task **`verifier`** `load: full` on affected acceptance criteria and changed files. If verifier confirms all non-deferred findings were addressed locally and no blocker remains, mark CodeRabbit remediation complete and continue without re-running CodeRabbit. If verifier cannot confirm, invoke **`helper`** + user confirmation without marking the gate PASS.
    - **`CODERABBIT_GATE: SKIPPED`** (CLI missing, auth failure, or not a git repo) → report reason; do **not** mark orchestration complete; prompt user to fix CLI/auth or waive explicitly.
 5. **GitHub feature mode:** Run this gate only in **Exit when queue empty** (after all issues pass verifier), **not** when transitioning each issue to `state:ready-for-review`. Put **`### CodeRabbit`** fields in the **feature completion** summary (and optional final `gh` comment on the PR), not in per-issue ready-for-review comments.
 
-Orchestrate must **track** across the session: `coderabbit_runs` (CLI invocations), `coderabbit_findings` (full numbered inventory from each run), `coderabbit_resolutions` (per-finding `fixed` / `deferred` / `not_applicable` evidence from developer/frontend-dev), `coderabbit_remediation_fixes` (items fixed across BLOCKED iterations), and final finding counts from the last run. Add newly surfaced findings from re-runs to the queue rather than ignoring them. Pass these into the **Completion (mandatory)** block below — never omit the CodeRabbit section.
+Orchestrate must **track** across the session: `coderabbit_runs` (must be `1` when this gate runs), `coderabbit_findings` (full numbered inventory from the one-shot run), `coderabbit_resolutions` (per-finding `fixed` / `deferred` / `not_applicable` evidence from developer/frontend-dev), `coderabbit_remediation_fixes` (items fixed after the one-shot run), and finding counts from the CodeRabbit run. Pass these into the **Completion (mandatory)** block below — never omit the CodeRabbit section.
 
 ## Difficulty-based completion gates (after CodeRabbit gate when applicable)
 
-When **every** stage is complete, the **final** `verifier` passes, and any required **CodeRabbit gate** has **`CODERABBIT_GATE: PASS`** (or was skipped because **`easy`**):
+When **every** stage is complete, the **final** `verifier` passes, and any required **CodeRabbit gate** has **`CODERABBIT_GATE: PASS`** or local CodeRabbit remediation has been verified complete after the one-shot run (or was skipped because **`easy`**):
 
 1. Read `## Difficulty` from the artifact (`easy` \| `medium` \| `hard`). If the section is missing or unclear, assume **`medium`**.
 2. **`easy`:** Skip extra gates. Go to **Completion (mandatory)** and prompt the user to switch to architect.
@@ -265,7 +265,7 @@ When the user fixes env/worktree issues or asks to rerun checks:
 
 ## Completion (mandatory)
 
-When verifier passes for all stages, any required **CodeRabbit gate** has **`CODERABBIT_GATE: PASS`** (or was skipped for **`easy`**), and any **Difficulty-based completion gates** for that artifact have finished (see above):
+When verifier passes for all stages, any required **CodeRabbit gate** has **`CODERABBIT_GATE: PASS`** or local CodeRabbit remediation has been verified complete after the one-shot run (or was skipped for **`easy`**), and any **Difficulty-based completion gates** for that artifact have finished (see above):
 
 1. Report using the structure below. The **`## CodeRabbit`** section is **mandatory on every completion** — never omit it. If CodeRabbit did not run, state **why** explicitly (`easy`, `SKIPPED`, or user waiver). Do not mark orchestration complete on `medium`/`hard` without **`CodeRabbit ran: yes`** and evidence of a successful CLI review.
 2. **Explicitly prompt the user:** "Implementation complete. Switch to `architect` for review and documentation sign-off."
@@ -281,9 +281,9 @@ When verifier passes for all stages, any required **CodeRabbit gate** has **`COD
 - **Reason if no:** (only `difficulty: easy`, `CODERABBIT_GATE: SKIPPED — <reason>`, or `user waived` — never leave blank)
 - **CLI command:** (exact `coderabbit review ...` from review agent, or `n/a`)
 - **Review runs:** <count of coderabbit CLI invocations>
-- **Remediation fixes applied:** <count of CodeRabbit findings fixed by developer/frontend-dev across CR remediation loops; 0 if none>
+- **Remediation fixes applied:** <count of CodeRabbit findings fixed by developer/frontend-dev after the one-shot CodeRabbit run; 0 if none>
 - **Final gate:** PASS | BLOCKED | SKIPPED | not required (easy)
-- **Final findings:** Critical <n> | Major <n> | Minor <n> | Trivial <n> | Info <n> (from last run)
+- **Final findings:** Critical <n> | Major <n> | Minor <n> | Trivial <n> | Info <n> (from the one-shot CodeRabbit run)
 - **Finding resolutions:** fixed <n> | deferred <n> | not applicable <n> | unresolved <n>
 
 ### Summary

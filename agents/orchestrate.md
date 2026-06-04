@@ -99,7 +99,7 @@ When the user provides a **`.plan` path** or **`feature:<slug>`** immediately: i
 - Dispatch by Owner or `opencode_meta.owner`: `developer`, `frontend-dev`, or `ux-dev`.
 - Use `scribe` for `.plan/*.md` amendments only — not for GitHub issue bodies.
 - Run `verifier` at stage/issue gates.
-- On GitHub queue exhaustion, delegate push + ready-for-review PR to `develop` via **`feature-finish-pr.sh`** (Task **`developer`**, `load: minimal`) before prompting architect handoff. Report `pr_url` or skip reason. Respect `ORCHESTRATE_AUTO_PR=0` and protected-branch skips — never retro-move commits off `develop`/`main`.
+- On GitHub queue exhaustion, run the one-shot CodeRabbit gate, remediate findings locally, and only then delegate final push + ready-for-review PR to `develop` via **`feature-finish-pr.sh`** (Task **`developer`**, `load: minimal`) before prompting architect handoff. Report `pr_url` or skip reason. Respect `ORCHESTRATE_AUTO_PR=0` and protected-branch skips — never retro-move commits off `develop`/`main`.
 - On legacy plan completion, prompt: **Switch to `architect` for review and documentation sign-off.**
 
 ## Hard Rules

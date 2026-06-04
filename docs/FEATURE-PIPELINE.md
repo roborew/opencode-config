@@ -10,7 +10,7 @@ Spec-driven path from PRD to orchestrate-ready GitHub issues. **Agents run `bin/
 | 2 | spec | **architect** (fanout-issues): creates child issues per repo |
 | 3 | impl | User: **architect option 1** + slug → **issue-expand** runs bundle, plans each issue, gates |
 | 4 | impl | User approves issue edits in chat → **architect** runs checks → prompts **orchestrate** |
-| 5 | impl | **orchestrate** exhausts `feature:<slug>` queue → push + ready-for-review PR (unless opted out) → **new session** → **architect** Mode F sign-off → human merge PR |
+| 5 | impl | **orchestrate** exhausts `feature:<slug>` queue locally → runs one CodeRabbit CLI review → fixes the findings locally → final push + ready-for-review PR (unless opted out) → **new session** → **architect** Mode F sign-off → human merge PR |
 | 6 | spec | **feature-complete** after all impl repos signed off (closes PRD parent issue) |
 
 ### Session boundaries (recommended)
@@ -30,7 +30,7 @@ Same-session handoff is optional (`/compact` after a short HANDOFF block); use a
 | `state:done` | architect Mode F (Phase 1) | Accepted after review vs PRD/tickets |
 | Issue **closed** on GitHub | architect Mode F Phase 1 (via **developer** + `mode-f-close-issues.sh`) | Ticket complete |
 
-Orchestrate does **not** close issues as done or write sign-off docs. Per-issue commits happen during execution; one **feature PR** is opened when the queue is empty (`feature-finish-pr.sh`).
+Orchestrate does **not** close issues as done or write sign-off docs. Per-issue commits happen locally during execution; do not push per issue. One **feature PR** is opened only after the queue is empty, the one-shot CodeRabbit CLI review has run, and CodeRabbit findings have been fixed locally (`feature-finish-pr.sh`).
 
 #### Mode F — two-phase sign-off (GitHub-first, default)
 

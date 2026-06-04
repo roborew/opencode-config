@@ -131,8 +131,8 @@ When user requests implementation + review:
 3. Create a numbered task list from every finding, including `trivial` and `info`
 4. Fix `critical`, `major`, and `minor` findings systematically
 5. Fix `trivial` and `info` findings when straightforward; otherwise mark them `deferred` or `not_applicable` with a concise reason for the parent gate
-6. Re-run review to verify fixes within the parent run budget
-7. Repeat until clean, or until all remaining non-blocking findings have explicit resolution state and no `critical`/`major`/`minor` findings remain
+6. Verify the fixes locally with tests, lint, typecheck, and targeted code inspection
+7. Do **not** re-run CodeRabbit to validate the fixes. Treat the one-shot CLI output as the remediation instruction set for this cycle.
 
 ### 5. Review Specific Changes
 

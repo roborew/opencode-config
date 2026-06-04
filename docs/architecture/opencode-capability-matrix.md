@@ -9,7 +9,7 @@
 | Frontend | `frontend-dev` | `frontend-dev` | `auto` | Completion report | `verifier` |
 | HTML prototype | `ux-dev` | `ux-dev` | `auto` | `.prototype/<slug>/` | `verifier` |
 | Review (planning) | `review` | `review` + optional `security-reviewer`, `performance-reviewer`, `doc-reviewer` | `auto` (effective `load: full` for `review`; specialists default `load: full`) | Review markdown to parent | Architect + `scribe` |
-| CodeRabbit gate (completion) | `orchestrate` → `review` | `code-review` (+ `review` on `load: full`) | Parent: `load: full` on CodeRabbit Task; **once** per artifact/feature, bounded re-runs after remediation | `CODERABBIT_GATE` + full finding inventory + per-item resolutions; feature completion summary | After last verifier / queue exhausted; `coderabbit review --agent --base develop` by default; before difficulty gates & architect — **not** per issue |
+| CodeRabbit gate (completion) | `orchestrate` → `review` | `code-review` (+ `review` on `load: full`) | Parent: `load: full` on CodeRabbit Task; **exactly once** per artifact/feature | `CODERABBIT_GATE` + full finding inventory + per-item local resolutions; feature completion summary | After last verifier / queue exhausted; `coderabbit review --agent --base develop` by default; before final push/PR, difficulty gates, and architect — **not** per issue and **not** after remediation |
 | Evidence check | `verifier` | `verifier` | `auto` | Verdict + evidence | Orchestrate |
 | Docs generation | `document` | `document` | `auto` | Content to `scribe` | Architect |
 | Ship / hotfix / TDD | (user-chosen agent with skill allowed) | `ship`, `hotfix`, `debug-fix`, `tdd` | User-chosen | Git / PR | User confirms each step |

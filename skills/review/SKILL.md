@@ -37,7 +37,7 @@ CODERABBIT_GATE: PASS | BLOCKED | SKIPPED
 CodeRabbit ran: yes | no
 CLI command: <exact command executed, e.g. coderabbit review --agent --base develop>
 CLI version: <coderabbit --version one-liner>
-Review run: <1|2|3> (attempt number this session for this gate)
+Review run: 1 (the only CodeRabbit CLI invocation for this orchestration)
 Findings: Critical <n> | Major <n> | Minor <n> | Trivial <n> | Info <n>
 
 ### Critical
@@ -61,11 +61,11 @@ Findings: Critical <n> | Major <n> | Minor <n> | Trivial <n> | Info <n>
 | CR-001 | major | `path/to/file.ts:42` | ... | ... |
 ```
 
-- **`PASS`:** `CodeRabbit ran: yes`; no Critical/Major/Minor blockers in the latest run, full finding inventory present, and parent-supplied resolution state shows every earlier Trivial/Info item as fixed, not applicable, or explicitly deferred.
-- **`BLOCKED`:** `CodeRabbit ran: yes`; one or more Critical/Major/Minor items, missing full finding inventory, or missing resolution evidence for previously reported findings.
+- **`PASS`:** `CodeRabbit ran: yes`; the one-shot run found no Critical/Major/Minor blockers, full finding inventory is present, and any Trivial/Info items are already resolved or explicitly deferred.
+- **`BLOCKED`:** `CodeRabbit ran: yes`; one or more Critical/Major/Minor items, missing full finding inventory, or findings that require local remediation.
 - **`SKIPPED`:** `CodeRabbit ran: no` — only when CLI missing, auth failure, or `impl_repo_path` is not a git repo; include reason; orchestrate **must not** mark orchestration complete on `medium`/`hard`.
 
-Parent **`orchestrate`** uses BLOCKED → `developer`/`frontend-dev` remediation → `verifier` → re-run this gate (max 3 CLI invocations total).
+Parent **`orchestrate`** uses BLOCKED → `developer`/`frontend-dev` remediation → `verifier` local confirmation. Do **not** re-run this gate after remediation.
 
 ### `github_feature_signoff` (Mode F)
 

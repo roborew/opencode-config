@@ -69,7 +69,7 @@ bash "$OC/skills/github-issue-run/lib/issue-state-transition.sh" "<repo>" "<numb
 
 When **next-runnable-issue.sh** exits 1 (no runnable issues left):
 
-1. **CodeRabbit gate (once):** If difficulty is not `easy`, orchestrate runs the **CodeRabbit gate** from **`orchestrate-execution`** on **all** feature changes before PR finish — defaulting to `develop` as base and allowing max 3 CLI runs including remediation re-gates. Per-issue transitions must not invoke CodeRabbit.
+1. **CodeRabbit gate (once):** If difficulty is not `easy`, orchestrate runs the **CodeRabbit gate** from **`orchestrate-execution`** on **all** feature changes before PR finish — defaulting to `develop` as base. Per-issue transitions must not invoke CodeRabbit, and remediation must not re-run CodeRabbit.
 2. Task **developer** `load: minimal`:
 
 ```bash
