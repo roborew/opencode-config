@@ -23,36 +23,49 @@ You are the PR gatekeeper planning specialist. You review code quality risks and
 When parent passes `execution_mode: orchestrate_coderabbit_gate` (and only then):
 
 1. Load the **`code-review`** skill and follow its CLI steps (`coderabbit review --agent`, prerequisites, security notes). **Do not** load **`code-review`** for planning or post-implementation sign-off contexts — those stay read-only without the CLI.
-2. Run from **`impl_repo_path`** (must be inside a git worktree). Use **`base_branch`** from the Task prompt when provided.
+2. Run from **`impl_repo_path`** (must be inside a git worktree). Use **`base_branch`** from the Task prompt when provided; default to **`develop`** for this repo when no explicit base is supplied.
 3. Do **not** implement fixes; do **not** invoke `autofix`.
-4. Map findings: **Critical** and **Warning** → blockers; **Info** → report only, do not block.
-5. **You must run** `coderabbit review --agent` (with `--base` when provided). Do not return **`SKIPPED`** without attempting the command when CLI prereqs passed.
-6. Return this structured report (orchestrate copies counts into the final completion report):
+4. Parse every `--agent` JSONL `finding` event. Preserve CodeRabbit's native severities: `critical`, `major`, `minor`, `trivial`, and `info`.
+5. Map findings: **Critical**, **Major**, and **Minor** → blockers; **Trivial** and **Info** → non-blocking only when fixed, not applicable, or explicitly deferred by the parent remediation loop.
+6. Include the full numbered finding inventory. Do not summarize away or omit low-severity findings.
+7. **You must run** `coderabbit review --agent` (with `--base` when provided). Do not return **`SKIPPED`** without attempting the command when CLI prereqs passed.
+8. Return this structured report (orchestrate copies counts and inventory into the final completion report):
 
 ```markdown
 ## CodeRabbit gate
 CODERABBIT_GATE: PASS | BLOCKED | SKIPPED
 CodeRabbit ran: yes | no
-CLI command: <exact command executed, e.g. coderabbit review --agent --base main>
+CLI command: <exact command executed, e.g. coderabbit review --agent --base develop>
 CLI version: <coderabbit --version one-liner>
-Review run: <1|2> (attempt number this session for this gate)
-Findings: Critical <n> | Warning <n> | Info <n>
+Review run: <1|2|3> (attempt number this session for this gate)
+Findings: Critical <n> | Major <n> | Minor <n> | Trivial <n> | Info <n>
 
 ### Critical
+- CR-001 — `path/to/file.ts:line`: one-line issue summary. Codegen guidance: ...
+
+### Major
 - ...
 
-### Warning
+### Minor
+- ...
+
+### Trivial
 - ...
 
 ### Info
 - ...
+
+### Full Finding Inventory
+| ID | Severity | Location | Summary | Codegen instructions |
+|----|----------|----------|---------|----------------------|
+| CR-001 | major | `path/to/file.ts:42` | ... | ... |
 ```
 
-- **`PASS`:** `CodeRabbit ran: yes`; no Critical/Warning blockers (Info-only is OK).
-- **`BLOCKED`:** `CodeRabbit ran: yes`; one or more Critical/Warning items that should be fixed before handoff.
+- **`PASS`:** `CodeRabbit ran: yes`; no Critical/Major/Minor blockers in the latest run, full finding inventory present, and parent-supplied resolution state shows every earlier Trivial/Info item as fixed, not applicable, or explicitly deferred.
+- **`BLOCKED`:** `CodeRabbit ran: yes`; one or more Critical/Major/Minor items, missing full finding inventory, or missing resolution evidence for previously reported findings.
 - **`SKIPPED`:** `CodeRabbit ran: no` — only when CLI missing, auth failure, or `impl_repo_path` is not a git repo; include reason; orchestrate **must not** mark orchestration complete on `medium`/`hard`.
 
-Parent **`orchestrate`** uses BLOCKED → `developer`/`frontend-dev` remediation → `verifier` → re-run this gate (max 2 loops).
+Parent **`orchestrate`** uses BLOCKED → `developer`/`frontend-dev` remediation → `verifier` → re-run this gate (max 3 CLI invocations total).
 
 ### `github_feature_signoff` (Mode F)
 
