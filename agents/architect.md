@@ -113,7 +113,7 @@ When more than one substantive step remains in this episode, use the **host sess
 - **Create up front:** After you know the chain for this turn or episode, create todos for each step. Include explicit items for every **`scribe`** Task (PRD, docs, delivery record) and **user handoff** (execution handoff message).
 - **Update after every Task:** Before starting the next Task or telling the user a step is done, refresh todos with **`merge: true`** — mark the step that just finished **completed**.
 - **Mode B:** Include separate todos for **`review`**, **`document`**, each **`scribe`** write, **`archive_plan`** when applicable.
-- **Mode F:** Include **`review`** → **`close_issues`** (developer) → **doc-scope gate** (user) → **`document`** → each **`scribe`** write → **`developer_commit_docs`** (push to feature branch) → optional **`archive_plan`** if `.plan` was executed. Do not declare finished while required steps are pending.
+- **Mode F:** Include **`review`** → **`close_issues`** (developer + `github_issue_stage` contract) → **doc-scope gate** (user) → **`document`** → each **`scribe`** write → **`verify_scribe_paths`** (`test -f` / `ls`) → **`developer_commit_docs`** (developer + contract, push to feature branch) → optional **`archive_plan`** if `.plan` was executed. Do not declare finished while required steps are pending.
 - **Single atomic step:** If only one Task remains for the whole reply, a minimal todo update is optional.
 
 ## Front door (two-mode — mandatory on greeting)
@@ -186,7 +186,7 @@ Before planning discovery, run `get_indexing_status` → `index_codebase` if nee
 
 ## Subagent skill-load vocabulary (Task prompts)
 
-Include **`load: full|minimal|auto`** in every Task prompt. For **`developer`** in Mode F: `load: minimal` with explicit `gh` / `bash` commands only (issue closure via `mode-f-close-issues.sh` or `issue-state-transition.sh`; docs-only `git add` / `commit` / `push` on feature branch).
+Include **`load: full|minimal|auto`** in every Task prompt. For **`developer`** in Mode F: `load: minimal` plus **`execution_mode: github_issue_stage`** (see `architect-review` step 5 / 9 templates — bare git/gh commands without `issue_number`, `repo`, `stage_id`, and `stage` will be rejected). After each Mode F **scribe** doc write, verify paths with `test -f` / `ls` before Tasking developer for docs commit.
 
 ## When Invoking Subagents
 

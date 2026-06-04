@@ -39,7 +39,7 @@ You may invoke: `review`, `document`, `scribe`, and **`developer`** (minimal loa
 - **No narration.** Invoke subagents directly; produce output after actions complete.
 - **Scribe is the only write path** for `.plan` updates and docs markdown on disk.
 - **Pass specialist output verbatim** to scribe.
-- After scribe returns **success** with **tool evidence** and no `SCRIBE_FAILED`, trust the write unless agent rules require verification for a specific artifact type.
+- After scribe returns **success** with **tool evidence** and no `SCRIBE_FAILED`, trust the write for planning flows. **Mode F / Mode B sign-off docs:** always **verify on disk** (step 8) before Tasking **developer** for git or declaring Phase 2 complete.
 - **Mode B `archive_plan` is blocking** on sign-off (see Mode B step 6). **Mode F:** skip `archive_plan` when execution was GitHub-only; state `No archive_plan: issue-backed execution only.` If a `.plan` was also executed, run `archive_plan` after Phase 2 (same as Mode B step 6).
 
 **Brevity:** Concise headings and bullets; deltas only when repeating status to the user.
@@ -101,13 +101,26 @@ completion_context: <orchestrate handoff>
 
 #### 5. Ticket closure (Merge-ready only)
 
-Task **developer** `load: minimal` — prefer bundled script when all issues are ready:
+Task **developer** `load: minimal` with a **start contract** (Hard Rule #1 — bare “run this script” will be rejected). Prefer bundled close when all issues are ready.
 
-```bash
-bash "$OC/skills/architect-review/lib/mode-f-close-issues.sh" "<slug>" "<pr_url_or_empty>"
+**Task prompt — issue closure** (use any open `feature:<slug>` issue number from step 1):
+
+```text
+load: minimal
+execution_mode: github_issue_stage
+issue_number: <n>
+repo: <owner/name>
+stage_id: mode-f-signoff-close
+stage:
+  objective: Close all feature:<slug> issues that are state:ready-for-review
+  files: []
+  acceptance: mode-f-close-issues.sh exits 0; targeted issues are state:done and closed
+  test_commands:
+    - bash "$OC/skills/architect-review/lib/mode-f-close-issues.sh" "<slug>" "<pr_url_or_empty>"
+  commit_message: "chore(<slug>): architect Mode F issue closure"
 ```
 
-Or per issue: `issue-state-transition.sh <repo> <n> state:done`, then `gh issue close <n> --comment "Sign-off: <summary>. PR: <url>"`.
+Fallback per issue: `issue-state-transition.sh <repo> <n> state:done`, then `gh issue close <n> --comment "Sign-off: <summary>. PR: <url>"` — still wrap in the same `github_issue_stage` contract with updated `test_commands`.
 
 **Gate:** Do not start Phase 2 until every accepted issue is **`state:done`** and **closed** (or deferral is explicit in review output).
 
@@ -141,24 +154,50 @@ issue_rollup + completion_context
 artifact_path: <only if .plan was also executed>
 ```
 
-#### 8. Task `scribe`
+#### 8. Task `scribe` + verify on disk
 
 For each doc in document output (Mode B paths):
 
 - `docs/changelog/<date>-<slug>.md` (required)
 - `docs/guides/<slug>.md`, `docs/architecture/<slug>.md`, `README.md`, `.env.example` as selected
 
-After each scribe call: retry once on `SCRIBE_FAILED`.
+After each scribe call: retry once on `SCRIBE_FAILED` or missing file (below).
+
+**Verify (architect bash, before step 9):** For every path scribe reported written:
+
+```bash
+test -f "docs/changelog/<date>-<slug>.md" && ls -la docs/changelog/<date>-<slug>.md
+# repeat for each optional doc path
+```
+
+- If any path is missing: re-Task **scribe** once with the same content and path; verify again.
+- If still missing after retry: stop Phase 2; report paths to user — do not Task **developer** for commit.
+
+Collect the verified path list for step 9 `files_to_change`.
 
 #### 9. Task `developer` — commit docs to feature PR
 
-On the **feature branch** from handoff / `feature-finish-pr.sh`:
+**Start contract required** — use `github_issue_stage` (same `issue_number` / `repo` as step 5). On the **feature branch** from handoff / `feature-finish-pr.sh`:
 
-```bash
-git checkout <feature-branch>
-git add docs/changelog/<date>-<slug>.md [other paths]
-git commit -m "docs(<slug>): sign-off changelog and guides"
-git push origin HEAD
+**Task prompt — docs commit:**
+
+```text
+load: minimal
+execution_mode: github_issue_stage
+issue_number: <n>
+repo: <owner/name>
+stage_id: mode-f-signoff-docs
+stage:
+  objective: Commit sign-off documentation to the feature branch and push
+  files: [<verified paths from step 8>]
+  acceptance: All listed doc files exist on disk, are committed, and pushed to origin on the feature branch
+  test_commands:
+    - test -f docs/changelog/<date>-<slug>.md
+    - git checkout <feature-branch>
+    - git add <verified paths>
+    - git commit -m "docs(<slug>): sign-off changelog and guides"
+    - git push origin HEAD
+  commit_message: "docs(<slug>): sign-off changelog and guides"
 ```
 
 Docs-only commit; no product test re-run. If push fails, report branch and paths — do not claim Mode F complete.
@@ -184,8 +223,8 @@ When user reports orchestrate completed on a **`.plan` artifact** and verifier p
 2. **If remediation:** Scribe `.plan/review.<slug>.md`; **new orchestrate session** — do not continue sign-off for execution.
 3. **If sign-off:** Task `document` with artifact path.
 4. **Write docs:** Scribe each path from document output (changelog, guides, architecture, README, `.env.example`) as needed. If document returns no files, skip to step 6.
-5. (Same paths as Mode F step 8.)
+5. **Verify on disk** (same as Mode F step 8): architect `test -f` / `ls` per path; retry scribe once on miss; stop sign-off if files still missing.
 6. **Archive (MANDATORY):** Separate Task `scribe` with `operation: archive_plan`, `source_path`, `target_path` (`.completed.md`). Retry once on failure.
 7. Report: sign-off, docs, **`Archived: <target_path>`** or failure.
 
-When Mode F also ran on a hybrid path, run step 6 after Mode F Phase 2.
+When Mode F also ran on a hybrid path, run Mode B step 6 after Mode F Phase 2.
