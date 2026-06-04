@@ -31,7 +31,7 @@ Phase 4 of the feature pipeline: turn spec fanout tickets into **developer-revie
 ### 1. Bootstrap — you run
 
 `bin/issue-expand-bundle <slug>`  
-Read `tmp/issue-expand-bundle.md`. Optional per ticket: `bin/feature-context <n>`.
+Read `tmp/issue-expand-bundle.md`. PRD file is loaded from the **local spec sibling checkout**, else `SPEC_PRD_REF` in `docs/agents/issue-tracker.md` (e.g. `develop`), else `develop`/`main` — **not** spec default branch only. If the file is missing, the bundle still lists **GitHub child issues** and the parent PRD issue from `Parent PRD:` lines. Optional per ticket: `bin/feature-context <n>`.
 
 ### 2. Claude Context (mandatory)
 
@@ -67,7 +67,32 @@ Both must **PASS** with substantive plans. If FAIL, continue planning — do not
 
 ### 5. Handoff (user action only)
 
-Tell the user: **Switch to `orchestrate`** with slug `<slug>`. Do not list shell commands.
+Emit the architect agent **execution handoff** verbatim (feature backlog variant). Example for slug `google-auth`:
+
+````markdown
+## Execution handoff
+
+| Field | Value |
+|-------|-------|
+| Feature | `Google Auth` |
+| Slug | `feature:google-auth` |
+| Queue source | GitHub issues with label `feature:google-auth` |
+| Next agent | `orchestrate` in a new session |
+| First message | `feature:google-auth` |
+
+| Review before starting | Status / note |
+|------------------------|---------------|
+| Issue expansion | `PASS` |
+| Readiness gates | `PASS` |
+| Key risks / constraints | `None` |
+
+Copy/paste into the new `orchestrate` chat:
+```text
+feature:google-auth
+```
+````
+
+Do not list shell commands. Do not say only “switch to orchestrate.”
 
 ## Issue body (target)
 

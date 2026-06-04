@@ -14,7 +14,13 @@ permission:
     "~/.ssh/**": deny
     "~/.gnupg/**": deny
     "~/.aws/**": deny
-    "*": ask
+    "~/.kube/**": deny
+    "~/.docker/**": deny
+    "~/.password-store/**": deny
+    "~/.npmrc": deny
+    "~/.pypirc": deny
+    "~/.netrc": deny
+    "*": allow
   bash:
     "*": allow
     "rm -rf /*": deny

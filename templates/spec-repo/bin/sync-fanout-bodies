@@ -9,6 +9,8 @@ ROOT="$(cd "$BIN_DIR/.." && pwd)"
 source "${BIN_DIR}/lib/build_issue_body.sh"
 # shellcheck source=lib/task_map.sh
 source "${BIN_DIR}/lib/task_map.sh"
+# shellcheck source=lib/existing_issue.sh
+source "${BIN_DIR}/lib/existing_issue.sh"
 EXTRACT="${BIN_DIR}/lib/extract_issue_sections.py"
 PRD_PATH="${ROOT}/docs/prd/${SLUG}.md"
 VALIDATE_PRD="${BIN_DIR}/lib/validate_prd_frontmatter.py"
@@ -35,12 +37,7 @@ trap 'task_map_cleanup; rm -f "$TMP"' EXIT
 
 find_issue_number() {
   local repo="$1" title="$2" task_id="$3"
-  gh issue list --repo "$repo" --state all --label "feature:${SLUG}" --limit 200 \
-    --json number,title,body 2>/dev/null \
-    | jq -r --arg title "$title" --arg task_id "$task_id" '
-        .[]
-        | select(.title == $title or ((.body // "") | contains("\"task_id\":\"" + $task_id + "\"")))
-        | .number' | sed -n '1p'
+  existing_issue_number "$repo" "$title" "$task_id"
 }
 
 while IFS= read -r TID; do

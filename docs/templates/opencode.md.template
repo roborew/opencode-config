@@ -32,6 +32,18 @@ Copy this file to your **project root** as `opencode.md` and fill in. For **pers
 - Branch/PR conventions.
 - What to run before pushing.
 
+## Database / schema
+
+Fill this in so **developer** agents do not guess commands or hand-edit migrations.
+
+- **ORM / tool:** (e.g. Drizzle, Prisma, Rails ActiveRecord)
+- **Schema source (edit here):** (e.g. `src/lib/db/schema/`)
+- **Generated migrations (do not hand-edit):** (e.g. `drizzle/`)
+- **Generate command:** (e.g. `pnpm db:generate`)
+- **Apply locally (optional):** (e.g. `pnpm db:migrate`)
+- **Commit rule:** After schema source changes, run generate and commit source + generated migration files together.
+
 ## Don'ts
 
 - Generated paths, secrets, or files agents must not edit.
+- Hand-written SQL in generated migration folders (use generate instead).

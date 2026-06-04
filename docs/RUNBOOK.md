@@ -26,15 +26,16 @@ Shell bootstrap syncs `bin/*` and templates; registry **INCOMPLETE** until the O
 
 ## Push cadence (issue-backed execution)
 
-- **Commit** after each passing stage using the stage `commit_message` from `opencode-task-yaml` (append `Refs: #<issue_number>`).
-- **Push** the feature branch after each issue’s stages complete (or when the user asks for remote/CI visibility mid-feature). Do not force-push protected branches; use `ship` / user confirmation for PR creation.
+- **Commit locally** after each passing stage using the stage `commit_message` from `opencode-task-yaml` (append `Refs: #<issue_number>`). Local commits are fine; remote pushes are not part of the per-issue loop.
+- **Do not push** the feature branch after each issue or stage. Avoid triggering GitHub Actions, hosted CodeRabbit, and other remote checks mid-feature unless the user explicitly requests remote visibility.
+- **Push/open PR only once** after the full feature queue is complete, the one-shot local CodeRabbit CLI review has run, and all CodeRabbit findings have been fixed or explicitly resolved locally.
 - **Do not** treat “code already exists in the tree” as “ticket done” — map acceptance to tests and yaml `stages[]`.
 
 ## Overview
 
-- **Built-in agents:** `plan` uses Qwen3.7 Max; `build` uses MiniMax M3 in `opencode.json` for generic/quick tasks.
-- **Primary planning mode** (`architect`) — read-only: exploration, reporting, drafting plans; also owns review and documentation after implementation. Invokes: `debugger`, `refactor`, `review`, `document`, `designer`, `scribe`. Never invokes `frontend-dev`, `developer`, or `orchestrate`. Prompts user to switch to orchestrate when done; receives user back for review + docs after orchestrate completes. **Skills:** `architect-plan` (new planning, features, specialists, Mode A); `architect-review` (post-implementation Mode B only). The monolithic `architect` skill package is removed.
-- **Primary execution mode** (`orchestrate`) runs delegated stage execution and recovery flow. Reads `## Difficulty` from the artifact (`easy` \| `medium` \| `hard`; default `medium` if missing). After all stages pass the final verifier: **easy** — no extra gates; **medium** — invokes `review` for a post-execution check; **hard** — invokes `senior-dev` (scheduled review, no user confirmation) then `helper` (strategy conformance). On completion, prompts user to switch to architect for review and documentation. **Skills:** `orchestrate-execution` (bootstrap: optional `worktree-env` then `developer` preflight, plan selection, stage loop, grading, completion gates); `orchestrate-recovery` (helper triggers, loops, env, escalation, manual paste). The monolithic `orchestrate` skill package is removed.
+- **Built-in agents:** `plan` uses DeepSeek V4 Flash; `build` uses MiniMax M3 in `opencode.json` for generic/quick tasks.
+- **Primary planning mode** (`architect`) — read-only with **allow-by-default bash** (explicit deny for destructive/mutating shell): exploration, `gh`, `bin/*`, `setup-project --check-only`; artifact writes via **scribe** / **stack-bootstrap** Tasks only. Invokes: `debugger`, `refactor`, `review`, `document`, `designer`, `scribe`. Never invokes `frontend-dev`, `developer`, or `orchestrate`. Prompts user to switch to orchestrate when done; receives user back for review + docs after orchestrate completes. **Skills:** `architect-plan` (new planning, features, specialists, Mode A); `architect-review` (post-implementation Mode B only). The monolithic `architect` skill package is removed.
+- **Primary execution mode** (`orchestrate`) runs delegated stage execution and recovery flow. Reads `## Difficulty` from the artifact (`easy` \| `medium` \| `hard`; default `medium` if missing). After **all** stages/issues pass the final verifier (one gate per artifact or `feature:<slug>`): **medium/hard** — **CodeRabbit gate** via `review` + `code-review` skill (single CLI review of accumulated changes against `develop` by default; no CodeRabbit validation reruns); **easy** — skips CodeRabbit. **Never** runs CodeRabbit per GitHub issue, mid-stage, or after CodeRabbit remediation. Then: **easy** — no further gates; **medium** — `review` post-execution check; **hard** — `senior-dev` (scheduled review, no user confirmation) then `helper` (strategy conformance). On completion, prints a table-based sign-off handoff naming the exact feature/artifact, PR, work completed, gates, CodeRabbit, findings/risks, and the copy/paste prompt for architect. **Skills:** `orchestrate-execution` (bootstrap: preflight yes/no, optional env gate, work selection, stage loop, grading, completion gates); `orchestrate-recovery` (helper triggers, loops, env, escalation, manual paste). The monolithic `orchestrate` skill package is removed.
 - **Planning specialists** (`debugger`, `refactor`, `review`, `designer`) — read-only subagents of architect; return plan drafts, never write code. `designer` synthesizes design briefs for Prototype Design. The **`review`** agent may Task **`security-reviewer`**, **`performance-reviewer`**, and **`doc-reviewer`** when change scope warrants (see `skills/review/SKILL.md`).
 - **Documentation generator** (`document`) — read-only; generates changelog/guides/architecture content; architect invokes, then scribe writes.
 - **Execution subagents** (`developer`, `frontend-dev`, `ux-dev`) — coding agents invoked by orchestrate only; architect never invokes them. `ux-dev` generates HTML-only framework-agnostic prototypes from design briefs into `.prototype/<slug>/`.
@@ -49,7 +50,7 @@ Shell bootstrap syncs `bin/*` and templates; registry **INCOMPLETE** until the O
 | Role                    | Agents                                       | Model Tier | Responsibility                                                                                                                                                       |
 | ----------------------- | -------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Primary (planning)      | `architect`                                  | smart      | Read-only: explore, report, draft. Plan mode: scribe writes artifact → switch to orchestrate. Post-implementation: review → sign-off → document → scribe writes docs → scribe archives plan to `.plan/<type>.<slug>.completed.md` |
-| Coordinator             | `orchestrate`                                | smart      | Execute stages, grade children, helper recovery, optional `review` (medium) / `senior-dev`+`helper` (hard) after final verifier, dispatch scribe. Plan picker lists **active** `.plan/*.md` only (excludes `*.completed.md`). Optional startup: **`worktree-env`** (linked worktree `.env` symlink) then **`developer`** + `preflight`.                       |
+| Coordinator             | `orchestrate`                                | smart      | Execute stages, grade children, helper recovery, optional `review` (medium) / `senior-dev`+`helper` (hard) after final verifier, dispatch scribe. Plan picker lists **active** `.plan/*.md` only (excludes `*.completed.md`). Startup: optional preflight prompt → **`worktree-env`** + **`developer`** preflight if **yes**, then work menu.                       |
 | Planning specialists    | `debugger`, `refactor`, `review`, `designer` | smart      | Return type-specific plan drafts to architect. `designer` uses Gemini 3 Flash. `review` may also be invoked by orchestrate on **medium** Difficulty after execution.    |
 | Documentation generator | `document`                                   | fast       | Generate changelog/guides/architecture content; architect invokes, scribe writes                                                                                     |
 | Artifact writer         | `scribe`                                     | fast       | Write/update plan artifacts, docs, `README.md`, `.env.example` from architect/orchestrate content                                                                     |
@@ -93,17 +94,18 @@ OpenCode does not define an in-repo model allowlist beyond [`opencode.json`](../
 3. `architect` invokes `scribe` to write the artifact to `.plan/<type>.<slug>.md` (mandatory step).
 4. User switches to `orchestrate`.
 5. `orchestrate` ensures artifact exists; if missing, dispatches `scribe` to write it.
-6. `orchestrate` starts by asking whether to run full startup preflight checks now (`yes/no`).
-7. If yes: `orchestrate` invokes **`worktree-env`** first (linked worktree `.env` symlink when applicable), then **`developer`** for preflight (`developer` loads `preflight` skill); reports combined results and pauses for remediation if either step is blocked.
-8. Regardless of the full-preflight choice, `orchestrate` runs a lightweight Claude Context readiness check (`get_indexing_status` → `index_codebase` if needed) before fresh-context plan listing or discovery-heavy delegation.
-9. If no (or preflight/readiness is complete): `orchestrate` **reads `.plan/` via a filesystem tool** (glob or list), then lists **active** plans (omit `*.completed.md`) from that output only—never from memory—and asks the user to select one or switch to `architect` to create a new plan.
+6. `orchestrate` asks **“Run preflight now? (yes/no)”** unless preflight already passed or was declined this session; does not show work options until answered. **yes** → **`worktree-env`** then **`developer`** preflight; **no** → skip preflight for the session.
+7. `orchestrate` runs Claude Context readiness (`get_indexing_status` → `index_codebase` if needed).
+8. `orchestrate` shows the **work-selection menu** verbatim (**(1)** GitHub backlog first; **(4)** legacy `.plan` last; numbers match display order). On **(1)**, run the GitHub `feature:<slug>` backlog. On **(4)** only, **read `.plan/` via a filesystem tool** (glob or list), list **active** plans (omit `*.completed.md`) from that output only—never from memory—and ask the user to select one. **(2)** / **(3)** route to `architect` or clarified scope as in the orchestrate agent.
+9. Preflight may be re-run only when the user asks or after `ENV_BLOCKED` remediation.
 10. `orchestrate` dispatches one stage at a time to `developer`, `frontend-dev`, or `ux-dev` (by stage Owner). Design artifacts use `Owner: ux-dev`; `ux-dev` outputs HTML-only files to `.prototype/<slug>/`.
 11. Execution subagent returns completion report (`stage_id`, files, tests, checks, blockers, risks, next input).
 12. `orchestrate` dispatches next stage only after successful handoff.
 13. For final completion, run `verifier` per stage; run final verifier when all stages complete.
-14. **Difficulty completion gates** (after final verifier passes): **easy** — none. **medium** — orchestrate invokes **`review`** with artifact + completion summary. **hard** — orchestrate invokes **`senior-dev`** (scheduled review), then **`helper`** (strategy conformance). Remediation from these gates may update review artifact via scribe before handoff.
-15. When gates complete: **"Implementation complete. Switch to architect for review and documentation sign-off."** Architect still runs Mode B review + docs (authoritative sign-off).
-16. Architect (post-implementation): invokes `review` for sign-off. If remediation: scribe writes review artifact → user switches to orchestrate → developer applies fixes → verifier. If sign-off: architect invokes `document` → scribe writes docs → scribe **archives** the primary implementation artifact to `.plan/<type>.<slug>.completed.md` via `operation: archive_plan` so future orchestrate sessions do not offer it as a runnable plan.
+14. **CodeRabbit gate** (once per orchestration, after final verifier / entire GitHub queue, before difficulty gates and architect): **medium/hard** — orchestrate Tasks **`review`** with `execution_mode: orchestrate_coderabbit_gate` and **`code-review`** skill on **all** changed files against `develop` by default; **never** per stage, per issue, or after remediation. BLOCKED → developer/frontend-dev fixes every non-deferred numbered finding → verifier confirms local fixes. **easy** — skip.
+15. **Difficulty completion gates** (after CodeRabbit PASS when applicable): **easy** — none. **medium** — orchestrate invokes **`review`** with artifact + completion summary (+ CodeRabbit findings). **hard** — orchestrate invokes **`senior-dev`** (scheduled review), then **`helper`** (strategy conformance). Remediation from these gates may update review artifact via scribe before handoff.
+16. When gates complete: orchestrate prints the mandatory table-based completion handoff: **Sign-off target**, **Work completed**, **Gates and checks**, **CodeRabbit**, **Key findings / risks**, **Next steps**, and **Copy/paste sign-off script**. The handoff must name the exact `feature:<slug>` or `.plan` artifact and PR/skip reason; architect still runs Mode B/Mode F review + docs (authoritative sign-off).
+17. Architect (post-implementation): invokes `review` for sign-off. If remediation: scribe writes review artifact → user switches to orchestrate → developer applies fixes → verifier. If sign-off: architect invokes `document` → scribe writes docs → scribe **archives** the primary implementation artifact to `.plan/<type>.<slug>.completed.md` via `operation: archive_plan` so future orchestrate sessions do not offer it as a runnable plan.
 
 At each stage handoff, orchestrate grades child output:
 
@@ -128,7 +130,7 @@ Recovery loop:
 
 Do not advance stages until helper amendment is applied.
 Do not allow repeated test-command retries under unresolved environment mismatch.
-Use startup preflight as an optional full environment gate; do not require artifact writes for preflight output. Claude Context readiness now also runs as a lightweight fresh-context gate even when full preflight is skipped.
+Preflight is user-opt-in at session start (`yes` / `no`); work selection follows. Do not require artifact writes for preflight output. Claude Context readiness runs after the preflight choice on fresh sessions.
 
 **Senior-dev escalation (operator-triggered, user confirmation required):** When developer reports `STAGE_STUCK` and the operator asks to escalate, orchestrate stops, asks the user to confirm, then invokes `senior-dev`. **Exception:** for **`Difficulty: hard`**, after all stages pass the final verifier, orchestrate invokes `senior-dev` for **scheduled post-implementation review** without that confirmation (not the same as mid-stage escalation).
 
@@ -149,12 +151,14 @@ Provider-level `timeout` (e.g. 300000ms) and per-model **`temperature` / `top_p`
 
 | Layer | Agents | Model |
 | --- | --- | --- |
-| Planning / architecture | `architect`, `plan`, `strategist` | Qwen3.7 Max |
+| Planning (primary) | `architect`, `plan` | DeepSeek V4 Flash |
+| Scoped planning | `strategist` | DeepSeek V4 Pro |
 | Orchestration | `orchestrate` | MiniMax M3 |
 | Primary implementation | `developer`, `frontend-dev`, `build` | MiniMax M3 |
 | Design / prototypes | `designer`, `ux-dev` | Gemini 3 Flash |
-| Senior / second opinion | `senior-dev` | DeepSeek V4 Pro |
-| Fast utility | `debugger`, `helper`, `refactor`, `verifier`, `review`, reviewers, `mentor` | DeepSeek V4 Flash |
+| Senior / security depth | `senior-dev`, `security-reviewer` | DeepSeek V4 Pro |
+| Fast utility | `debugger`, `helper`, `refactor`, `verifier`, `review`, `performance-reviewer` | DeepSeek V4 Flash |
+| Teaching | `mentor` | Qwen3.7 Max |
 | Vision | `vision` | Qwen3 VL |
 | Writing / docs | `scribe`, `document`, `doc-reviewer`, `stack-bootstrap`, `worktree-env` | GPT-5 Nano |
 
@@ -257,7 +261,7 @@ Config-repo CI runs `scripts/check-crlf.sh` on `bin/`, `scripts/`, `templates/`,
 - UI work routes to `frontend-dev`; non-UI work routes to `developer`; prototype generation from design briefs routes to `ux-dev` (outputs to `.prototype/<slug>/`).
 - Senior-dev: user confirmation for mid-stage **escalation**; **no** confirmation for **hard** Difficulty scheduled post-verifier review.
 - Orchestrate may invoke **`review`** after execution for **medium** Difficulty.
-- Orchestrator prompts "Switch to architect for review and documentation" on completion.
+- Orchestrator completion is table-driven and names the exact feature/artifact to sign off; it must include the copy/paste architect prompt, not a generic "Switch to architect" sentence.
 - Verifier receives original feature artifact and review artifact (if present).
 - Verifier report includes criterion-level evidence.
 - Verifier failure updates the existing review artifact (no fragmented review files).

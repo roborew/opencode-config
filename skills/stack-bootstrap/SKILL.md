@@ -28,6 +28,8 @@ Copy when missing or when parent says `force: true` for that file:
 | `templates/.github/ISSUE_TEMPLATE/child-feature.yml` | `.github/ISSUE_TEMPLATE/child-feature.yml` |
 | `docs/templates/opencode.md.template` | `opencode.md` (only if missing) |
 
+Do **not** create a `.opencode/` directory or `opencode.json` under the repo. Agents, MCP, and permissions live in **`$OPENCODE_CONFIG_DIR`** (default `~/.config/opencode`). Spec repos never carry project-level OpenCode config.
+
 Ensure `.gitignore` contains:
 
 ```gitignore
@@ -35,6 +37,7 @@ tmp/
 .research/
 .qa/
 .plan/*.completed.md
+.opencode/
 ```
 
 ## archive_legacy_plan

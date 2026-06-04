@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Publish the parent [PRD] GitHub issue (to-prd skill). Child tickets use bin/fanout only.
+set -euo pipefail
+SLUG="${1:?slug required}"
+TITLE="${2:?title required}"
+BODY_FILE="${3:?body file required}"
+
+[[ -f "$BODY_FILE" ]] || { echo "missing body file: $BODY_FILE" >&2; exit 2; }
+
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+for label in "prd" "state:ready-for-agent" "category:feature" "feature:${SLUG}"; do
+  gh label create "$label" --repo "$REPO" 2>/dev/null || true
+done
+
+gh issue create \
+  --repo "$REPO" \
+  --title "$TITLE" \
+  --body-file "$BODY_FILE" \
+  --label "prd,state:ready-for-agent,category:feature,feature:${SLUG}"
+
+echo "Published parent PRD issue for ${SLUG} on ${REPO}"

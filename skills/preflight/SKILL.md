@@ -21,10 +21,10 @@ You run environment readiness checks when requested at startup (or after environ
 
 ## Checks (run in order)
 1. **Project README** — Read the project README (`README.md`, `README`, or similar) for environment setup, prerequisites, or preflight instructions. Incorporate any documented requirements into the checks below.
-2. **Worktree `.env` symlink (read-only)** — Only when the repo is a **linked git worktree** (`git rev-parse --path-format=absolute --git-dir` path contains `/.git/worktrees/`):
-   - Resolve expected source the same way as **`worktree-env`**: if `PREFLIGHT_MAIN_REPO_ROOT` is set, expect `"${PREFLIGHT_MAIN_REPO_ROOT%/}/.env"`; else `main_root=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")` and expect `"${main_root}/.env"`.
-   - At `git rev-parse --show-toplevel`, verify `.env` exists, is a **symlink** (`test -L .env`), and its target matches the expected source path (compare with `readlink` / absolute normalization appropriate to the OS).
-   - If any check fails: **Blocked** — `recommended_env_fix`: have orchestrate re-run **`worktree-env`** (or run the `ln -sfn` documented in `skills/worktree-env/SKILL.md` manually), then re-run preflight.
+2. **Worktree env symlinks (read-only)** — Only when the repo is a **linked git worktree** (`git rev-parse --path-format=absolute --git-dir` path contains `/.git/worktrees/`):
+   - Resolve `main_root` the same way as **`worktree-env`** (`PREFLIGHT_MAIN_REPO_ROOT` or `dirname` of `git-common-dir`).
+   - For each basename in `${WORKTREE_ENV_FILES:-.env .env.local}`: if `"${main_root}/${f}"` exists, verify at worktree root that `f` exists, is a **symlink** (`test -L`), and target matches the expected source (compare with `readlink` / absolute normalization appropriate to the OS). If main has no `f`, skip verification for that file.
+   - If any required symlink check fails: **Blocked** — `recommended_env_fix`: have orchestrate re-run **`worktree-env`** (or run the `ln -sfn` pairs documented in `skills/worktree-env/SKILL.md` manually), then re-run preflight.
    - If not a linked worktree: **skip** this item; note `worktree_env: skipped_not_linked_worktree` in output.
 3. **Runtime versions** — From project files (package.json, Gemfile, etc.), confirm required runtimes exist and report versions:
    - e.g. `node -v`, `ruby -v`, `bundle -v`, `pnpm -v`
@@ -36,7 +36,7 @@ You run environment readiness checks when requested at startup (or after environ
 Produce structured readiness content:
 - `Status`: `Ready` or `Blocked`
 - `preflight_checks` / `Runtime checks`: exact commands run and their output (or failure details)
-- `worktree_env`: `ok` | `skipped_not_linked_worktree` | `skipped_not_git` | `failed` — linked-worktree `.env` symlink verification only (no `ln` here; orchestrate runs **`worktree-env`** before this preflight when the user opts in)
+- `worktree_env`: `ok` | `skipped_not_linked_worktree` | `skipped_not_git` | `failed` — linked-worktree env symlink verification only (no `ln` here; orchestrate runs **`worktree-env`** before this preflight)
 - `claude_context_index`: `indexed` | `skipped` (MCP unavailable) | `failed` — include indexing status or error if applicable
 - `stderr summaries`: for any failures
 - `Notes`: version manager assumptions, required shell initialization, remediation steps if Blocked

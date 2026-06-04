@@ -41,6 +41,9 @@ if [[ "$CHECK_ONLY" == "true" ]]; then
       yq -o=json '.tickets' "$prd" | python3 "$VALIDATE" "$REGISTRY" || exit 6
     done
   fi
+  if [[ -d "$SPEC/.opencode" ]]; then
+    echo "WARN: $SPEC/.opencode should not exist in a spec repo (remove it; use OPENCODE_CONFIG_DIR only)" >&2
+  fi
   echo "==> check-only: ok"
   exit 0
 fi
@@ -66,15 +69,25 @@ sync_bin() {
 }
 
 sync_bin "$TEMPLATE/bin/fanout" "$SPEC/bin/fanout"
-install -m0755 "$TEMPLATE/bin/lib/validate_tickets.py" "$SPEC/bin/lib/validate_tickets.py"
-strip_crlf "$SPEC/bin/lib/validate_tickets.py"
-install -m0755 "$TEMPLATE/bin/lib/toposort_tickets.py" "$SPEC/bin/lib/toposort_tickets.py"
-strip_crlf "$SPEC/bin/lib/toposort_tickets.py"
+[[ -f "$TEMPLATE/bin/fanout-audit" ]] && sync_bin "$TEMPLATE/bin/fanout-audit" "$SPEC/bin/fanout-audit"
+[[ -f "$TEMPLATE/bin/publish-prd-issue" ]] && sync_bin "$TEMPLATE/bin/publish-prd-issue" "$SPEC/bin/publish-prd-issue"
+for lib in "$TEMPLATE"/bin/lib/*; do
+  base=$(basename "$lib")
+  dest="$SPEC/bin/lib/$base"
+  if [[ -f "$lib" ]]; then
+    install -m0755 "$lib" "$dest"
+    strip_crlf "$dest"
+  fi
+done
 [[ -f "$TEMPLATE/bin/status" ]] && sync_bin "$TEMPLATE/bin/status" "$SPEC/bin/status"
 [[ -f "$TEMPLATE/bin/new-prd" ]] && sync_bin "$TEMPLATE/bin/new-prd" "$SPEC/bin/new-prd"
 cp "$TEMPLATE/docs/prd/_template.md" "$SPEC/docs/prd/_template.md"
 cp "$TEMPLATE/skills/fanout-issues/SKILL.md" "$SPEC/skills/fanout-issues/SKILL.md"
 [[ -f "$TEMPLATE/.gitattributes" ]] && cp "$TEMPLATE/.gitattributes" "$SPEC/.gitattributes"
+if [[ -d "$SPEC/.opencode" ]]; then
+  echo "WARN: removing stray $SPEC/.opencode (spec repos use OPENCODE_CONFIG_DIR, not project OpenCode config)" >&2
+  rm -rf "$SPEC/.opencode"
+fi
 
 REGISTRY="$SPEC/docs/agents/repos.md"
 if [[ ! -f "$REGISTRY" ]]; then

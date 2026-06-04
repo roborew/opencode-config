@@ -8,7 +8,8 @@ OC="$(cd "$(dirname "$0")/../.." && pwd)"
 TEMPLATE="${OC}/templates/bin"
 
 IMPL="$(cd "$IMPL" && pwd)"
-mkdir -p "$IMPL/bin"
+mkdir -p "$IMPL/bin" "$IMPL/bin/lib"
+OC_LIB="${OC}/bin/lib"
 
 strip_crlf() {
   python3 -c "
@@ -24,6 +25,16 @@ if data != raw:
 if [[ "${OPENCODE_SETUP_QUIET:-}" != "1" ]]; then
   echo "==> Syncing impl tooling into $(basename "$IMPL")..."
 fi
+
+for lib in read_spec_repo.sh fetch_spec_prd.sh; do
+  src="${OC_LIB}/${lib}"
+  [[ -f "$src" ]] || continue
+  install -m0644 "$src" "$IMPL/bin/lib/${lib}"
+  strip_crlf "$IMPL/bin/lib/${lib}"
+  if [[ "${OPENCODE_SETUP_QUIET:-}" != "1" ]]; then
+    echo "Synced bin/lib/${lib}"
+  fi
+done
 
 for script in feature-context issue-expand-bundle orchestrate-readiness-check feature-check; do
   src="${TEMPLATE}/${script}"

@@ -132,6 +132,6 @@ When the parent is **architect** on a debug/targeted-change path, **do not** wri
 
 1. Complete diagnosis through Phase 6 (root cause + proposed fix + regression test plan).
 2. Return structured slice content to architect for **`to-issues`** — one or more GitHub issues with acceptance criteria and test commands.
-3. Prompt user to **switch to orchestrate** after issues are published and labelled `state:ready-for-agent`.
+3. After issues are published and labelled `state:ready-for-agent`, parent architect emits the **execution handoff** (feature or queue variant).
 
 Execution happens from the GitHub queue, not a local plan file.

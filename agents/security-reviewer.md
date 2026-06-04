@@ -1,7 +1,7 @@
 ---
 description: Security-focused review subagent. High-confidence findings only.
 mode: subagent
-model: openrouter/deepseek/deepseek-v4-flash
+model: openrouter/deepseek/deepseek-v4-pro
 tools:
   write: false
   edit: false

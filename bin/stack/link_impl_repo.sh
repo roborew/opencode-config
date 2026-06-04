@@ -19,8 +19,9 @@ Issues for this repository are tracked on **GitHub**.
 ## Spec repository (parent PRDs)
 
 - **SPEC_REPO:** __SPEC_REPO__
+- **SPEC_PRD_REF:** (optional — Git branch for `docs/prd/` when fetching via API, e.g. `develop`; if omitted, uses local spec checkout branch or tries develop/main)
 
-`bin/feature-context` reads **SPEC_REPO** from this file.
+`bin/feature-context` and `bin/issue-expand-bundle` read **SPEC_REPO** / **SPEC_PRD_REF** from this file.
 EOF
 if [[ "$(uname -s)" == "Darwin" ]]; then
   sed -i '' "s|__SPEC_REPO__|${SPEC_REPO}|g" docs/agents/issue-tracker.md
