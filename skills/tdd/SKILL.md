@@ -18,3 +18,5 @@ Degenerate → happy path → variations → edge cases → errors.
 
 - One logical behavior change per red test when possible.
 - Never “fix” by deleting the failing test without user agreement.
+- Editing an existing assertion to match new code is **not** a green. Add or adjust a test that is RED first, or list and justify the assertion change explicitly (`assertion_delta`). A replaced positive assertion in the same commit is a smell, not a green.
+- Keep the same test identifier across RED and GREEN so the failing-then-passing transition is verifiable by the parent/verifier.

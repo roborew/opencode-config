@@ -172,7 +172,7 @@ After a stage is **COMPLETE** and **verifier** has **APPROVED**, keep a **runnin
 Before any stage status update, confirm these Task calls occurred:
 
 - Artifact write/update: `scribe` (when needed). After scribe returns success with tool evidence and no `SCRIBE_FAILED`, trust the write; otherwise re-invoke scribe once.
-- Execution: `developer`, `frontend-dev`, or `ux-dev` — **must match the stage's Owner**. **TDD required:** Execution subagents must run StageAcceptanceChecks and report test outcomes. Do not advance stage if completion report lacks tests_run with pass/fail evidence.
+- Execution: `developer`, `frontend-dev`, or `ux-dev` — **must match the stage's Owner**. **Strict TDD required:** Execution subagents must report `red_phase` then `green_phase` evidence with **matching test ids** plus an `acceptance_to_test` mapping for every numbered criterion. Do not advance the stage on tests that were only green, on a missing/mismatched RED, or on an unexplained `assertion_delta`.
 - Verification: `verifier`
 - Recovery: `helper` on trigger conditions
 - Image review: `vision` when child reports `IMAGE_REVIEW_NEEDED` (see Image Review Gate)
@@ -201,13 +201,18 @@ Use this rubric:
 - **PASS** only if all are present:
   - expected `stage_id`
   - files changed list (including test files when stage adds/changes behavior)
-  - **tests/commands run with outcomes** — must show actual test execution and pass/fail; no stage may pass without running its StageAcceptanceChecks
-  - acceptance check status mapped to stage criteria
+  - **`red_phase` evidence** — failing test output from **before** the code change, demonstrating the bug or the desired-but-unimplemented behavior. For brand-new behavior this is the new test failing on the unfixed code; for behavior changes it is the updated/new test failing on the pre-change code.
+  - **`green_phase` evidence** — the **same** test(s) passing **after** the code change, with the **exact same test identifier** so RED can be matched to GREEN.
+  - **`assertion_delta`** — if any test assertion was removed or weakened, it is listed explicitly with a one-line justification. Surface this for verifier scrutiny. (Empty list is fine; a missing field is not.)
+  - **`acceptance_to_test` mapping** — for **every** numbered acceptance criterion in the issue/artifact, the report names the test (file + test name + line) that proves it. Criteria without a test are listed separately under `uncovered`.
   - no unresolved blockers
 - **NEEDS_RETRY** if output is low quality/incomplete:
   - missing evidence fields
+  - **missing `red_phase` evidence** — tests were only ever green (no failing-before-change proof); treat as NEEDS_RETRY
+  - **`red_phase` and `green_phase` test identifiers do not match** — cannot confirm the same test went RED then GREEN
+  - **unexplained `assertion_delta`** — an existing assertion was removed or weakened without justification (a replaced positive assertion is a smell, not a green)
   - **no tests run, or weak/non-specific test results** — treat as NEEDS_RETRY; require child to run StageAcceptanceChecks and report outcomes
-  - acceptance status not traceable to artifact criteria
+  - acceptance status not traceable to artifact criteria, or numbered criteria missing from `acceptance_to_test`
 - **BLOCKED** if child reports blocker code (for example `ENV_BLOCKED`) or cannot proceed safely
 
 Decision policy:
