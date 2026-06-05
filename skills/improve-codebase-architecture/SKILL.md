@@ -15,7 +15,7 @@ Surface architectural friction and propose **deepening opportunities**: changes 
 - Use `CONTEXT.md`, `CONTEXT-MAP.md`, and `docs/adr/` as background vocabulary and constraints, not as an interview script.
 - Stop after producing the audit report and candidate summary. Parent `architect` decides whether to ask the user about remediation tickets.
 - Do not invoke `to-issues`, `to-prd`, `fanout-issues`, `issue-expand`, or implementation agents.
-- If the model is not `anthropic/claude-opus-4.7` or an explicitly approved fallback, report `MODEL_UNAVAILABLE: anthropic/claude-opus-4.7` to the parent before doing heavy synthesis.
+- If the model is not `anthropic/claude-opus-4.8` or an explicitly approved fallback, report `MODEL_UNAVAILABLE: anthropic/claude-opus-4.8` to the parent before doing heavy synthesis.
 
 ## Glossary
 

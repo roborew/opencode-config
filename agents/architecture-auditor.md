@@ -1,7 +1,7 @@
 ---
 description: Opus-backed read-only architecture audit subagent. Finds shallow modules, seam leaks, and deepening opportunities; writes audit reports via scribe only.
 mode: subagent
-model: openrouter/anthropic/claude-opus-4.7
+model: openrouter/anthropic/claude-opus-4.8
 steps: 35
 tools:
   write: false
@@ -63,7 +63,7 @@ You are the Opus-backed architecture audit worker. You run periodic codebase str
 
 - `load: full` → load `improve-codebase-architecture` before first tool use.
 - `load: minimal` → hard rules only; use only when parent supplies a fully scoped audit brief.
-- If the configured model is unavailable, return `MODEL_UNAVAILABLE: anthropic/claude-opus-4.7` and stop. Do not silently fall back.
+- If the configured model is unavailable, return `MODEL_UNAVAILABLE: anthropic/claude-opus-4.8` and stop. Do not silently fall back.
 
 ## Responsibilities
 
