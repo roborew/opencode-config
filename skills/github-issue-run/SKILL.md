@@ -27,11 +27,13 @@ OC="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
 
 ## Discovery
 
-Task **developer** `load: minimal`:
+Task **developer** `load: minimal` — **only** this script; do **not** run broad `gh issue list` without `--label "feature:<slug>"`:
 
 ```bash
 bash "$OC/skills/github-issue-run/lib/next-runnable-issue.sh" "<slug>"
 ```
+
+GitHub filters server-side (`feature:<slug>` **and** `state:ready-for-agent`). The helper never scans the whole repo. Do not inventory other features or total `ready-for-agent` counts unless the user explicitly asks.
 
 Stdout is JSON: `{ number, title, body, opencode_meta, repo }` or empty (exit 1 = queue exhausted).
 

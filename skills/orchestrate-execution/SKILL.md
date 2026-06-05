@@ -105,7 +105,7 @@ Load **`github-issue-run`** together with this skill when the user chooses GitHu
 ### Loop
 
 1. Obtain kebab-case **feature slug** from the user if missing.
-2. Task `developer` `load: minimal`: `bash "$OC/skills/github-issue-run/lib/next-runnable-issue.sh" "<slug>"` — capture stdout JSON.
+2. Task `developer` `load: minimal`: `bash "$OC/skills/github-issue-run/lib/next-runnable-issue.sh" "<slug>"` — capture stdout JSON. **Do not** run unscoped `gh issue list`; discovery is label-filtered server-side by the helper only.
 3. Task `developer` `load: minimal`: `issue-state-transition.sh "<repo>" "<number>" state:in-progress`
 4. **Stages vs flat issue:** Parse `opencode_meta` from the discovery JSON.
    - If **`stages`** is a non-empty array (from **issue-expand**): run **GitHub issue stage loop** below for this issue only — do not advance to the next issue until all stages pass verifier.

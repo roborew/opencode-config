@@ -71,6 +71,20 @@ fi
 
 [[ -f "$body_file" ]] || { echo "body file not found: $body_file" >&2; exit 2; }
 
+OC="${OPENCODE_CONFIG:-$(cd "$(dirname "$0")/.." && pwd)}"
+EMBED_META="${OC}/templates/spec-repo/bin/lib/extract_task_meta.py"
+if [[ -f "$EMBED_META" ]] && ! grep -qE 'opencode-task-(yaml|json)' "$body_file"; then
+  enriched_body="$(mktemp)"
+  python3 "$EMBED_META" --embed --title "$title" ${feature_slug:+--feature-slug "$feature_slug"} --in "$body_file" --out "$enriched_body"
+  if [[ -n "${cleanup_body:-}" ]]; then
+    mv "$enriched_body" "$cleanup_body"
+    enriched_body=""
+  else
+    body_file="$enriched_body"
+    trap '[[ -n "${enriched_body:-}" ]] && rm -f "$enriched_body"' EXIT
+  fi
+fi
+
 if grep -Eiq '(^|[^a-z])(prd|fanout)[_-]?(ticket|issue|parent)|parent_prd|prd_ticket_id' "$body_file"; then
   echo "refusing PRD/fanout-looking issue body; use bin/fanout or bin/publish-prd-issue" >&2
   exit 2
@@ -80,6 +94,7 @@ if [[ -n "$feature_slug" ]]; then
   labels+=("feature:$feature_slug")
 fi
 
+# task_id read after optional yaml embed above
 task_id="$(python3 - "$body_file" <<'PY'
 import pathlib
 import re
