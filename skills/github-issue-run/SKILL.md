@@ -35,7 +35,9 @@ bash "$OC/skills/github-issue-run/lib/next-runnable-issue.sh" "<slug>"
 
 GitHub filters server-side (`feature:<slug>` **and** `state:ready-for-agent`). The helper never scans the whole repo. Do not inventory other features or total `ready-for-agent` counts unless the user explicitly asks.
 
-Stdout is JSON: `{ number, title, body, opencode_meta, repo }` or empty (exit 1 = queue exhausted).
+Stdout is JSON: `{ queue_remaining, number, title, body, opencode_meta, repo }` or empty (exit 1 = queue exhausted).
+
+**One issue per call** — `queue_remaining` is how many issues still have `state:ready-for-agent` for this feature (GitHub label filter). The orchestrator loops: discover → implement → verify → transition → discover again until exit 1. "Found 1" on a single call does **not** mean the queue has only one ticket.
 
 Parse **`opencode_meta`** from **`opencode-task-yaml`** (primary) or legacy **`opencode-task-json`**.
 

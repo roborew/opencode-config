@@ -64,9 +64,16 @@ extract_meta() {
 
 # Phase 1: GitHub returns only issues matching feature:<slug> AND state:ready-for-agent (number + title).
 # Phase 2: fetch full body per candidate until the first runnable issue is found.
-found=0
+# Returns ONE issue per call (orchestrator loops until exit 1). queue_remaining = label-matched count.
+STUBS_FILE=$(mktemp)
+trap 'rm -f "$STUBS_FILE"' EXIT
+gh issue list --repo "$REPO" -L 200 --label "$FEAT" --label state:ready-for-agent --state open \
+  --json number,title 2>/dev/null | jq -c 'sort_by(.number) | .[]' >"$STUBS_FILE" || true
+QUEUE_REMAINING=$(wc -l <"$STUBS_FILE" | tr -d ' ')
+[[ "$QUEUE_REMAINING" -gt 0 ]] || exit 1
+
 while IFS= read -r stub; do
-  found=1
+  [[ -n "$stub" ]] || continue
   number=$(printf '%s' "$stub" | jq -r .number)
   title=$(printf '%s' "$stub" | jq -r .title)
   row=$(gh issue view "$number" --repo "$REPO" --json number,title,body 2>/dev/null || true)
@@ -76,10 +83,9 @@ while IFS= read -r stub; do
     continue
   fi
   meta=$(extract_meta "$body" "$title")
-  printf '%s' "$row" | jq -c --argjson meta "${meta}" --arg rep "$REPO" \
-    '{number: .number, title: .title, body: .body, opencode_meta: $meta, repo: $rep}'
+  printf '%s' "$row" | jq -c --argjson meta "${meta}" --arg rep "$REPO" --argjson queue "$QUEUE_REMAINING" \
+    '{queue_remaining: $queue, number: .number, title: .title, body: .body, opencode_meta: $meta, repo: $rep}'
   exit 0
-done < <(gh issue list --repo "$REPO" -L 200 --label "$FEAT" --label state:ready-for-agent --state open --json number,title 2>/dev/null | jq -c 'sort_by(.number) | .[]')
+done <"$STUBS_FILE"
 
-[[ "$found" -eq 1 ]] || exit 1
 exit 1
