@@ -49,7 +49,13 @@ Iterate until the user approves.
 
 Publish in **dependency order** (blockers first) so "Blocked by" can cite real issue numbers.
 
-**Duplicate guard (required before every `gh issue create`):**
+**Targeted issue publisher (required):**
+
+- Use `bin/publish-targeted-issue` for targeted/ad-hoc issues.
+- Do **not** call raw `gh issue create`; architect permissions deny it to preserve PRD/fanout guardrails.
+- Use `bin/fanout` for PRD child issues and `bin/publish-prd-issue` for PRD parent issues.
+
+**Duplicate guard (handled by `bin/publish-targeted-issue`, still required conceptually):**
 
 - List existing issues for the feature slug: `gh issue list --repo <owner/name> --state all --label "feature:<slug>" --limit 200 --json number,title,body` (caps at 200 per `gh issue list`; for exhaustive duplicate checks on very large features, use `gh api repos/<owner>/<name>/issues --paginate` with the same label filter instead)
 - **Do not create** if an open or closed issue already has the same exact **title** or the same **`task_id`** in an `opencode-task-yaml` / `opencode-task-json` fence.
@@ -60,7 +66,12 @@ Publish in **dependency order** (blockers first) so "Blocked by" can cite real i
 For each approved slice:
 
 ```bash
-gh issue create --title "..." --body-file - <<'EOF'
+bin/publish-targeted-issue \
+  --title "..." \
+  --body-file - \
+  --feature-slug "<slug>" \
+  --label "state:ready-for-agent" \
+  --label "category:chore" <<'EOF'
 ## What to build
 ...
 

@@ -84,6 +84,7 @@ permission:
     }
   task:
     "*": deny
+    architecture-auditor: allow
     strategist: allow
     debugger: allow
     refactor: allow
@@ -146,6 +147,7 @@ What are we planning?
 5. Review / sign-off — post-orchestrate review, remediation issues via to-issues, or Mode F GitHub feature:<slug> sign-off vs PRD.
 6. Explore / understand repo — read-only map before deciding what to change.
 7. Setup skills — bootstrap this repo's agent context (single orphan repo only; stacks use setup-project in spec).
+8. Codebase audit — periodic structure/organization review (improve-codebase-architecture); optional security pass; optional remediation tickets for orchestrate.
 ```
 
 **Routing:**
@@ -156,6 +158,7 @@ What are we planning?
 - **Impl option 1** → ask **feature slug** if missing → **`issue-expand`** immediately (not `architect-plan`).
 - **Impl options 2–4** → **`to-issues`** to publish GitHub issues; prompt **orchestrate** when queue is ready — **never** scribe `.plan/*` on these paths.
 - **Impl option 5** → **`architect-review`** (Mode B or Mode F).
+- **Impl option 8** → ask audit scope: (1) Architecture / structure only, (2) Security only, (3) Both. For architecture, Task **`architecture-auditor`** with `load: full`. For security, Task **`review`** with `load: full` and require delegation to Opus-backed **`security-reviewer`**. After reports, ask whether to publish remediation tickets; on yes, load **`to-issues`**, publish through targeted issue path, then emit the **feature backlog** execution handoff with `feature:<audit-slug>`.
 
 ## Human vs agent shell commands
 
@@ -176,6 +179,7 @@ What are we planning?
 - **Mode F — GitHub feature sign-off:** `feature:<slug>` handoff, orchestrate queue exhausted, or impl option 5 with slug + PR URL → **`architect-review`** Mode F (Phase 1 verify + close issues, Phase 2 docs on PR). Task `review`, `document`, `scribe`, and **`developer`** (`load: minimal`) for issue closure and docs-only commit/push on the feature branch. Skip `archive_plan` when execution was GitHub-only.
 - **Handoff / zoom-out / caveman:** load respective utility skill.
 - **To issues:** Targeted change, debug, refactor slices → **`to-issues`**.
+- **Codebase audit:** Impl option 8 → Task **`architecture-auditor`** for phase 1 architecture audit; optional security via **`review`** → **`security-reviewer`**; optional phase 2 remediation tickets via **`to-issues`** after user confirmation.
 - **To PRD / fanout / issue-expand / feature-complete / setup-project / research / triage:** load namesake skill.
 
 If the skill tool fails, output `SKILL_UNAVAILABLE: <skill-name>` and report to the user.
@@ -194,6 +198,7 @@ Include **`load: full|minimal|auto`** in every Task prompt. For **`developer`** 
 - **Mode F guard:** Task `review`, `document`, `scribe`, and minimal **`developer`** for issue closure and docs-only git on the feature branch — never product-code edits. Never Task execution agents or `refactor` / `debugger` / `strategist` / `designer` during sign-off.
 - **Strategist:** one scoped instance per sub-problem when PRD/plan decomposition still uses local drafting (rare in GitHub-first flow).
 - **Scribe:** PRD files, docs, delivery records — **not** `.plan/feature.*` for issue-backed paths.
+- **Architecture auditor:** use only for impl option 8 architecture audits. It is read-only, Opus-backed, and may Task `scribe` for `docs/architecture/reviews/*` reports.
 
 ## Spec repo architecture gate
 

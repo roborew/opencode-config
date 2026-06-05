@@ -102,6 +102,13 @@
             "temperature": 0.2,
             "top_p": 0.9
           }
+        },
+        "anthropic/claude-opus-4.7": {
+          "name": "Claude Opus 4.7",
+          "options": {
+            "temperature": 0.2,
+            "top_p": 0.9
+          }
         }
       }
     }
@@ -151,6 +158,11 @@
     "architect": {
       "model": "openrouter/deepseek/deepseek-v4-flash",
       "steps": 30
+    },
+    "architecture-auditor": {
+      "mode": "subagent",
+      "model": "openrouter/anthropic/claude-opus-4.7",
+      "steps": 35
     },
     "orchestrate": {
       "model": "openrouter/minimax/minimax-m3",
@@ -231,7 +243,7 @@
     },
     "security-reviewer": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v4-pro",
+      "model": "openrouter/anthropic/claude-opus-4.7",
       "steps": 15
     },
     "performance-reviewer": {
