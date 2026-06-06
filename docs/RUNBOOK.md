@@ -94,7 +94,7 @@ OpenCode does not define an in-repo model allowlist beyond [`opencode.json`](../
 3. `architect` invokes `scribe` to write the artifact to `.plan/<type>.<slug>.md` (mandatory step).
 4. User switches to `orchestrate`.
 5. `orchestrate` ensures artifact exists; if missing, dispatches `scribe` to write it.
-6. `orchestrate` asks **“Run preflight now? (yes/no)”** unless preflight already passed or was declined this session; does not show work options until answered. **yes** → **`worktree-env`** then **`developer`** preflight; **no** → skip preflight for the session.
+6. `orchestrate` asks **“Run preflight now? (yes/no)”** unless preflight already passed or was declined this session; does not show work options until answered. **yes** → repair-first bootstrap: **`worktree-env`** (once, with completion trust) then **`developer`** preflight (auto-repair deps/runtime/indexing once); **no** → skip preflight for the session.
 7. `orchestrate` runs Claude Context readiness (`get_indexing_status` → `index_codebase` if needed).
 8. `orchestrate` shows the **work-selection menu** verbatim (**(1)** GitHub backlog first; **(4)** legacy `.plan` last; numbers match display order). On **(1)**, run the GitHub `feature:<slug>` backlog. On **(4)** only, **read `.plan/` via a filesystem tool** (glob or list), list **active** plans (omit `*.completed.md`) from that output only—never from memory—and ask the user to select one. **(2)** / **(3)** route to `architect` or clarified scope as in the orchestrate agent.
 9. Preflight may be re-run only when the user asks or after `ENV_BLOCKED` remediation.
@@ -130,7 +130,7 @@ Recovery loop:
 
 Do not advance stages until helper amendment is applied.
 Do not allow repeated test-command retries under unresolved environment mismatch.
-Preflight is user-opt-in at session start (`yes` / `no`); work selection follows. Do not require artifact writes for preflight output. Claude Context readiness runs after the preflight choice on fresh sessions.
+Preflight is user-opt-in at session start (`yes` / `no`); work selection follows. Preflight is **repair-first** (symlinks, `mise exec --`, `pnpm install`, indexing) with one auto-retry before a single hard-block message — no multi-option menus. Trust **`worktree-env`** completion evidence; do not re-run the same setup task without canonical contradiction. Do not require artifact writes for preflight output. Claude Context readiness runs after the preflight choice on fresh sessions. Smoke harness: `docs/smoke/preflight-bootstrap-validation.md`.
 
 **Senior-dev escalation (operator-triggered, user confirmation required):** When developer reports `STAGE_STUCK` and the operator asks to escalate, orchestrate stops, asks the user to confirm, then invokes `senior-dev`. **Exception:** for **`Difficulty: hard`**, after all stages pass the final verifier, orchestrate invokes `senior-dev` for **scheduled post-implementation review** without that confirmation (not the same as mid-stage escalation).
 

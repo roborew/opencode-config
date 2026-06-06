@@ -58,11 +58,13 @@ You do not plan; you execute assigned stages. You execute **only** stages where 
 
 ## Environment Preflight Gate (on orchestrate request)
 
-When the parent (**`orchestrate`**) requests preflight-only or preflight-rerun (user opted in at bootstrap or asked to rerun), load the `preflight` skill and run it. The preflight skill defines the checks (README, **read-only** linked-worktree env symlink verification, runtime versions, command resolution, smoke check, claude-context). **`worktree-env`** must run **before** you so symlink creation is not part of preflight.
+When the parent (**`orchestrate`**) requests preflight-only or preflight-rerun (user opted in at bootstrap or asked to rerun), load the `preflight` skill and run it. The preflight skill defines repair-first checks (README, linked-worktree env symlink verification with canonical evidence, runtime versions via `mise exec --` when applicable, dependency install, command resolution, smoke check, claude-context). **`worktree-env`** must run **before** you so symlink creation is not part of preflight.
 
-If preflight fails:
+When the parent requests a **repair pass** (or `preflight_repair_attempted` is false and checks fail repairably), run the preflight skill's **Repair pass** once, then re-run failing checks.
+
+If preflight fails after repair:
 - return blocker code `ENV_BLOCKED`
-- include `preflight_checks` (from preflight skill output)
+- include `preflight_checks` (from preflight skill output) and `worktree_env_evidence` when linked worktree
 - include exact failing command + stderr summary
 - include one concrete `recommended_env_fix` for parent/orchestrate
 - stop execution for that stage (no repeated trial loop)

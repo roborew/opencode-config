@@ -7,9 +7,22 @@ if [ -f "$HOME/.opencode-agent-env" ]; then
 fi
 
 # Ensure mise activation is available even in non-interactive contexts.
-if [ -x "$HOME/.local/bin/mise" ]; then
+mise_bin=""
+for candidate in \
+  "$HOME/.local/bin/mise" \
+  "/opt/homebrew/bin/mise" \
+  "/usr/local/bin/mise"; do
+  if [ -x "$candidate" ]; then
+    mise_bin="$candidate"
+    break
+  fi
+done
+if [ -z "$mise_bin" ] && command -v mise >/dev/null 2>&1; then
+  mise_bin="$(command -v mise)"
+fi
+if [ -n "$mise_bin" ]; then
   unset __MISE_ORIG_PATH MISE_SHELL __MISE_WATCH
-  eval "$("$HOME/.local/bin/mise" env -s zsh)"
+  eval "$("$mise_bin" env -s zsh)"
 fi
 
 if [ "$#" -lt 1 ]; then

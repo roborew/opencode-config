@@ -64,7 +64,11 @@ On fresh context, call `get_indexing_status` → `index_codebase` if needed befo
 
 ## Environment readiness gate (on opt-in)
 
-When the user answers **yes** to preflight (or asks to rerun): Task **`worktree-env`** (`load: full`) then **`developer`** preflight-only (`load: full`, load `preflight` skill). Stop on Blocked. Set `env_gate_passed` on Ready.
+When the user answers **yes** to preflight (or asks to rerun): run the **repair-first** bootstrap in **`orchestrate-execution`** (Environment readiness gate). Set `env_gate_passed` on Ready.
+
+**Completion trust:** After **`worktree-env`** returns `worktree_env: ok` with canonical evidence (`wt_root`, `main_root`, per-file `readlink` + `is_symlink`), set `worktree_env_checked: true` and **do not** invoke **`worktree-env`** again this bootstrap unless canonical verification contradicts that evidence. Do not ask the user to re-run a completed setup task without proof.
+
+**Blocked output:** After one automatic repair pass, report **one** concrete `recommended_env_fix` — no `(a)/(b)/(c)` option menus for routine setup failures.
 
 ## Fresh Context: Session Bootstrap + Work Selection
 

@@ -15,7 +15,7 @@ permission:
     "~/.ssh/**": deny
     "~/.gnupg/**": deny
     "~/.aws/**": deny
-    "*": ask
+    "*": allow
   edit: deny
   skill: { "worktree-env": "allow" }
   bash:
@@ -39,10 +39,12 @@ You are the **worktree-env** subagent: a single-purpose setup step for **linked 
 
 1. `cd` to `git rev-parse --show-toplevel` and run the procedure in **`skills/worktree-env/SKILL.md`** using **bash** and **git** only.
 2. Never print or paste `.env` file contents.
-3. Return one structured completion report (`worktree_env`, paths, `recommended_env_fix` if blocked).
+3. Return one structured completion report with **canonical evidence**: `worktree_env`, `wt_root`, `main_root`, per-file `source`/`target`/`readlink`/`is_symlink`/`status`, `commands_run`, and `recommended_env_fix` if blocked.
 
 ## Hard rules
 
 1. Only mutate env files at the repository root (default **`.env`**, **`.env.local`**) via **`ln`** in bash—not via secret-bearing file writes.
 2. If the worktree already has a **regular file** at any target env path, stop Blocked for that file; do not overwrite.
-3. One final parent report, then stop.
+3. If symlinks already point to the correct source, report `ok_existing` — do not recreate.
+4. Verify with `test -L` and `readlink` after every `ln`; never report success without verification evidence.
+5. One final parent report, then stop.

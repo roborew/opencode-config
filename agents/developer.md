@@ -15,7 +15,7 @@ permission:
     "~/.ssh/**": deny
     "~/.gnupg/**": deny
     "~/.aws/**": deny
-    "*": ask
+    "*": allow
   skill: { "developer": "allow", "preflight": "allow", "debug-fix": "allow", "zoom-out": "allow", "caveman": "allow" }
   edit:
     "~/.config/opencode/**": deny

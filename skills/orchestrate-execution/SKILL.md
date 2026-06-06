@@ -42,10 +42,31 @@ You have the **Task** tool to invoke subagents (`scribe`, `worktree-env`, `devel
 
 Run only when the user answers **yes** to the preflight prompt, requests a **preflight rerun**, or remediation requires it after Blocked / `ENV_BLOCKED`.
 
-1. Invoke **`worktree-env`** via Task with **`load: full`** (instruct: run `worktree-env` skill—symlink `.env` and `.env.local` for linked git worktrees when applicable). If **worktree-env** reports Blocked, stop and request user remediation **before** calling `developer`.
-2. Invoke **`developer`** with an explicit preflight-only task (instruct: load `preflight` skill; run README, env symlinks, runtimes, command resolution, smoke check, claude-context). Return a concise preflight report to the user.
-3. If **developer** preflight reports `Status: Blocked`, stop and request remediation—do not start stages or issues until fixed.
-4. On success, set `env_gate_passed: true` for this session.
+### Bootstrap state (session)
+
+Track during bootstrap:
+- `worktree_env_checked`: true after **`worktree-env`** completes with canonical evidence (or a skip status)
+- `worktree_env_evidence`: `{ wt_root, main_root, files[] }` from the child report
+- `preflight_repair_attempted`: true after one automatic preflight repair pass
+
+### Repair-first flow (one pass before blocking)
+
+1. **Worktree env (once per bootstrap unless canonical contradiction):**
+   - Invoke **`worktree-env`** via Task with **`load: full`** unless `worktree_env_checked: true` and the prior report had `worktree_env: ok` | `skipped_not_linked_worktree` | `skipped_not_git` with canonical evidence.
+   - Grade the report: require `wt_root`, `main_root`, `files[]` with per-file `source`, `target`, `readlink`, `is_symlink`, and `status` (`ok` | `ok_existing` | …).
+   - On `worktree_env: ok` with evidence: set `worktree_env_checked: true`, store `worktree_env_evidence`, **do not** invoke **`worktree-env`** again this bootstrap unless a later canonical verification contradicts it.
+   - **Hard stop (no auto-retry):** `blocked_regular_file` or `ENV_BLOCKED` from a regular-file rule — report one concrete `recommended_env_fix`; do not offer multi-option menus.
+   - On `failed_ln`: retry **`worktree-env`** **once**; if still failing, stop with one remediation line.
+
+2. **Preflight (repair pass):**
+   - Invoke **`developer`** preflight-only (`load: full`, load **`preflight`** skill). Instruct: repair-first — run documented setup/repair commands once when checks fail (mise-prefixed runtime, dependency install, indexing); include canonical env symlink evidence on worktree checks.
+   - If **`developer`** reports env symlink `failed` while **`worktree-env`** reported `ok`: do **not** immediately re-run **`worktree-env`**. Require contradictory canonical evidence from preflight (`wt_root`, `main_root`, per-file `test -L` + `readlink`). If contradiction is proven, run **one** canonical verification via **`developer`** `load: minimal` (bash only: `test -L` / `readlink` for each file) **or** retry **`worktree-env`** once — not both.
+   - If `Status: Blocked` with a **repairable** cause (missing `node_modules`, wrong PATH node vs `.mise.toml`, not indexed): when `preflight_repair_attempted` is false, instruct **`developer`** to run the repair pass once, set `preflight_repair_attempted: true`, then re-run preflight-only **once**. If still Blocked, stop with **one** `recommended_env_fix` — no `(a)/(b)/(c)` menus.
+   - If `Status: Blocked` with an **unsafe** cause (regular env file, runtime missing entirely, install failed after repair): stop with one remediation line.
+
+3. **On success:** set `env_gate_passed: true`. Return a brief structured report (deltas only).
+
+**Loop guard:** If **`worktree-env`** or preflight returns the same success/blocker report twice with identical canonical evidence, treat as `LOOP_DETECTED` — do not re-invoke that subagent; report the contradiction or blocker once.
 
 Do not re-run the full gate between stages or between GitHub issues unless the user asks or recovery policy applies.
 
@@ -54,7 +75,7 @@ Do not re-run the full gate between stages or between GitHub issues unless the u
 When no artifact path or `feature:<slug>` is provided (new session, greeting, unspecified task):
 
 1. **Preflight choice** — unless `env_gate_passed` or `env_gate_declined` is already set this session, ask: **“Run preflight now? (yes/no)”** and wait for the answer. Do not list work options yet.
-   - **`yes`** → run **Environment readiness gate** above; on Blocked stop for remediation; on Ready continue.
+   - **`yes`** → run **Environment readiness gate** above (repair-first, one auto-retry); on hard Blocked report one fix; on Ready continue.
    - **`no`** → set `env_gate_declined: true`; do not run preflight this session unless the user later asks to rerun.
    - **Already `env_gate_passed` or `env_gate_declined`** → do not ask again; continue.
 2. **Claude Context readiness gate** (below).
@@ -260,7 +281,8 @@ When **every** stage is complete, the **final** `verifier` passes, and any requi
 
 When the user fixes env/worktree issues or asks to rerun checks:
 
-- Run **`worktree-env`** then **`developer`** preflight-only again; reset `env_gate_passed` only after `Status: Ready`.
+- Clear `worktree_env_checked`, `worktree_env_evidence`, and `preflight_repair_attempted` for this rerun.
+- Run **`worktree-env`** then **`developer`** preflight-only again using the repair-first flow above; reset `env_gate_passed` only after `Status: Ready`.
 - Do not write preflight output into plan artifacts.
 
 ## Completion (mandatory)
