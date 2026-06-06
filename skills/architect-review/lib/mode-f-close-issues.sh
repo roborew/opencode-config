@@ -27,10 +27,10 @@ COMMENT="Architect Mode F sign-off."
 
 owner="${REPO%%/*}"
 name="${REPO##*/}"
-if ! issues_json="$(gh api "repos/${owner}/${name}/issues" \
+# gh api -f on GET /issues is interpreted as POST body (422); use query string.
+label_q="$(printf '%s' "$LABEL" | jq -sRr @uri)"
+if ! issues_json="$(gh api "repos/${owner}/${name}/issues?labels=${label_q}&state=open" \
   --paginate \
-  -f labels="${LABEL}" \
-  -f state=open \
   --jq '[.[] | select(has("pull_request") | not) | {number, labels}]')"; then
   issues_json='[]'
 fi
