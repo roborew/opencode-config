@@ -57,7 +57,11 @@ If the skill tool fails, output `SKILL_UNAVAILABLE: <skill-name>` and report to 
 
 ## Subagent skill-load vocabulary (Task prompts)
 
-Include **`load: full|minimal|auto`** in every Task prompt. Delegate all `gh` and helper shell scripts to **`developer`** via Task (`load: minimal` for pure shell).
+Include **`load: full|minimal|auto`** in every Task prompt.
+
+**Shell delegation (scoped):**
+- **Session bootstrap / env readiness:** Task **`worktree-env`** then **`preflight`** — never **`developer`** for symlink setup, runtime checks, installs, or smoke.
+- **GitHub backlog / stage execution:** delegate `gh` and `skills/github-issue-run/lib/*.sh` to **`developer`** (`load: minimal` for pure shell).
 
 ## Claude Context Readiness Gate
 
@@ -65,7 +69,7 @@ On fresh context, call `get_indexing_status` → `index_codebase` if needed befo
 
 ## Environment readiness gate (on opt-in)
 
-When the user answers **yes** to preflight (or asks to rerun): run the **repair-first** bootstrap in **`orchestrate-execution`** (Environment readiness gate). Set `env_gate_passed` on Ready.
+When the user answers **yes** to preflight (or asks to rerun): run the **repair-first** bootstrap in **`orchestrate-execution`** (Environment readiness gate) by Tasking **`worktree-env`** then **`preflight`** — do **not** Task **`developer`** for bootstrap shell. Set `env_gate_passed` on Ready.
 
 **Completion trust:** After **`worktree-env`** returns `worktree_env: ok` with canonical evidence (`wt_root`, `main_root`, per-file `readlink` + `is_symlink`), set `worktree_env_checked: true` and **do not** invoke **`worktree-env`** again this bootstrap unless canonical verification contradicts that evidence. Do not ask the user to re-run a completed setup task without proof.
 

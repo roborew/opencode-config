@@ -2,7 +2,7 @@
 name: github-issue-run
 description: "Orchestrate GitHub feature:<slug> backlog — next-runnable discovery, state transitions, flat or stage execution loop. Delegate gh and lib scripts to developer."
 modelTier: fast
-roleReminder: "Load with orchestrate-execution for GitHub backlog mode. You have no bash — delegate all shell to developer."
+roleReminder: "Load with orchestrate-execution for GitHub backlog mode. You have no bash — delegate gh/lib shell to developer (bootstrap env uses worktree-env + preflight)."
 ---
 
 # GitHub issue run
