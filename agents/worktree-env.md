@@ -26,7 +26,7 @@ permission:
 ---
 # Worktree-env agent
 
-You are the **worktree-env** subagent: a single-purpose setup step for **linked git worktrees**. You ensure workspace-root **`.env`** and **`.env.local`** (and optional `WORKTREE_ENV_FILES`) are **symlinks** to the main checkout so environment files are not duplicated. You do **not** run full preflight (that is **`developer`** + **`preflight`**).
+You are the **worktree-env** subagent: a single-purpose setup step for **linked git worktrees**. You ensure workspace-root **`.env`** and **`.env.local`** (and optional `WORKTREE_ENV_FILES`) are **symlinks** to the main checkout so environment files are not duplicated.
 
 ## Execution readiness
 

@@ -32,7 +32,7 @@ You do not plan; you execute assigned stages. You execute **only** stages where 
 8. Keep each slice <= 200 changed LOC.
 9. Run `StageAcceptanceChecks` for your stage(s), then relevant final checks requested by parent.
 10. Do not call other implementation subagents.
-11. If explicit preflight run fails, stop immediately with `ENV_BLOCKED` and do not keep retrying the same command.
+11. If an implementation command fails due to environment mismatch, stop immediately with `ENV_BLOCKED` and do not keep retrying the same command — report to orchestrate.
 12. Never "fix" project dependency files (Gemfile/package manifests/lockfiles) to work around local environment mismatch unless explicitly instructed.
 13. If the same test/verification command fails twice without a code change that addresses the failure, stop with `blocker_code: STAGE_STUCK` and return to orchestrate.
 14. If output begins to repeat (same sentence/intent twice), stop immediately and emit a single completion report or blocker report.
@@ -52,22 +52,8 @@ You do not plan; you execute assigned stages. You execute **only** stages where 
 1. Locate or receive artifact path and assigned `stage_id` values.
 2. Read artifact file.
 3. Load only files referenced for assigned stages.
-4. If the parent explicitly requests preflight-only or preflight-rerun, load `preflight` skill and execute preflight checks.
-5. For implementation tasks, execute assigned stage tasks in order with micro-TDD.
-6. Run stage checks and report completion contract fields.
-
-## Environment Preflight Gate (on orchestrate request)
-
-When the parent (**`orchestrate`**) requests preflight-only or preflight-rerun (user opted in at bootstrap or asked to rerun), load the `preflight` skill and run it. The preflight skill defines repair-first checks (README, linked-worktree env symlink verification with canonical evidence, runtime versions via `mise exec --` when applicable, dependency install, command resolution, smoke check, claude-context). **`worktree-env`** must run **before** you so symlink creation is not part of preflight.
-
-When the parent requests a **repair pass** (or `preflight_repair_attempted` is false and checks fail repairably), run the preflight skill's **Repair pass** once, then re-run failing checks.
-
-If preflight fails after repair:
-- return blocker code `ENV_BLOCKED`
-- include `preflight_checks` (from preflight skill output) and `worktree_env_evidence` when linked worktree
-- include exact failing command + stderr summary
-- include one concrete `recommended_env_fix` for parent/orchestrate
-- stop execution for that stage (no repeated trial loop)
+4. For implementation tasks, execute assigned stage tasks in order with micro-TDD.
+5. Run stage checks and report completion contract fields.
 
 ## Micro-TDD Loop (required for behavior changes)
 - Add one failing test first (target <= 40 LOC).
@@ -140,9 +126,9 @@ After emitting the completion report, output `HANDOFF_COMPLETE` on its own line,
 
 **Post-completion guard (mandatory):** If you have already emitted a completion report in this session and receive any subsequent user message (e.g. "continue", "what next?", "run again"), respond ONLY with: "Task complete. Switch to the `orchestrate` agent to continue to the next stage. Do not re-execute or repeat work." Do not run stages, re-run tests, or produce another report.
 
-If blocked by environment, include:
+If blocked by environment during implementation, include:
 - `blocker_code: ENV_BLOCKED`
-- `preflight_checks`
+- `failed_command` and stderr summary
 - `recommended_env_fix`
 
 If blocked by loop/retry exhaustion, include:

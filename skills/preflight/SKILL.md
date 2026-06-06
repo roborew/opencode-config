@@ -11,7 +11,7 @@ Checklist order for environment readiness. Load only when the parent requests pr
 
 ## Preflight
 
-You run environment readiness checks when requested at startup (or after environment changes). Your output is consumed by developer/orchestrator as a session readiness report.
+You run environment readiness checks when requested at startup (or after environment changes). Your output is consumed by the **`preflight`** agent parent (orchestrate) as a session readiness report.
 
 ## Hard Rules
 1. Do not implement application code or amend plan artifacts.

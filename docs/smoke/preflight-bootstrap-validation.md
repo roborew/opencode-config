@@ -27,7 +27,7 @@ rm -rf node_modules
 
 **Pass criteria (first run):**
 1. **`worktree-env`** runs once; report includes `wt_root`, `main_root`, per-file `readlink` + `is_symlink`; `worktree_env: ok`.
-2. **`developer`** preflight runs repair pass if needed (`mise exec -- pnpm install`, indexing).
+2. **`preflight`** agent runs repair pass if needed (`mise exec -- pnpm install`, indexing).
 3. `Status: Ready`; `env_gate_passed`; work menu **(1)–(4)** appears.
 4. No `(a)/(b)/(c)` option menu for routine setup.
 

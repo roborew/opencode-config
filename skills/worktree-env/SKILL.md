@@ -68,4 +68,4 @@ Return to parent:
 
 ## On success
 
-Status ready for **`developer`** preflight: worktree `.env` symlink is in place or not required. Parent should set `worktree_env_checked: true` and store this report as `worktree_env_evidence` — do not expect a second **`worktree-env`** invocation in the same bootstrap unless canonical verification later contradicts this evidence.
+Status ready for **`preflight`** agent: worktree `.env` symlink is in place or not required. Parent should set `worktree_env_checked: true` and store this report as `worktree_env_evidence` — do not expect a second **`worktree-env`** invocation in the same bootstrap unless canonical verification later contradicts this evidence.

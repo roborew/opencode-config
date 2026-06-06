@@ -50,7 +50,7 @@ Shell bootstrap syncs `bin/*` and templates; registry **INCOMPLETE** until the O
 | Role                    | Agents                                       | Model Tier | Responsibility                                                                                                                                                       |
 | ----------------------- | -------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Primary (planning)      | `architect`                                  | smart      | Read-only: explore, report, draft. Plan mode: scribe writes artifact → switch to orchestrate. Post-implementation: review → sign-off → document → scribe writes docs → scribe archives plan to `.plan/<type>.<slug>.completed.md` |
-| Coordinator             | `orchestrate`                                | smart      | Execute stages, grade children, helper recovery, optional `review` (medium) / `senior-dev`+`helper` (hard) after final verifier, dispatch scribe. Plan picker lists **active** `.plan/*.md` only (excludes `*.completed.md`). Startup: optional preflight prompt → **`worktree-env`** + **`developer`** preflight if **yes**, then work menu.                       |
+| Coordinator             | `orchestrate`                                | smart      | Execute stages, grade children, helper recovery, optional `review` (medium) / `senior-dev`+`helper` (hard) after final verifier, dispatch scribe. Plan picker lists **active** `.plan/*.md` only (excludes `*.completed.md`). Startup: optional preflight prompt → **`worktree-env`** + **`preflight`** if **yes**, then work menu.                       |
 | Planning specialists    | `debugger`, `refactor`, `review`, `designer` | smart      | Return type-specific plan drafts to architect. `designer` uses Gemini 3 Flash. `review` may also be invoked by orchestrate on **medium** Difficulty after execution.    |
 | Documentation generator | `document`                                   | fast       | Generate changelog/guides/architecture content; architect invokes, scribe writes                                                                                     |
 | Artifact writer         | `scribe`                                     | fast       | Write/update plan artifacts, docs, `README.md`, `.env.example` from architect/orchestrate content                                                                     |
@@ -77,7 +77,7 @@ Rules:
 
 ## Permission Conventions (skill creep prevention)
 
-- **Skill:** Each agent may load only its core skill(s). No `skill: { "*": "allow" }`. Explicit allow per skill (e.g. `architect-plan` + `architect-review` for architect; `orchestrate-execution` + `orchestrate-recovery` for orchestrate; `developer`, `preflight` for developer; `worktree-env` for **`worktree-env`**).
+- **Skill:** Each agent may load only its core skill(s). No `skill: { "*": "allow" }`. Explicit allow per skill (e.g. `architect-plan` + `architect-review` for architect; `orchestrate-execution` + `orchestrate-recovery` for orchestrate; `developer` for developer; `preflight` for **`preflight`**; `worktree-env` for **`worktree-env`**).
 - **Architect subagents** (`debugger`, `refactor`, `review`, `document`, `designer`): `task: { "*": deny }` — they cannot invoke scribe or any other agent. Return content only to parent; architect handles scribe handoff.
 
 ## OpenRouter preset (limit “Others” model spend)
@@ -94,7 +94,7 @@ OpenCode does not define an in-repo model allowlist beyond [`opencode.json`](../
 3. `architect` invokes `scribe` to write the artifact to `.plan/<type>.<slug>.md` (mandatory step).
 4. User switches to `orchestrate`.
 5. `orchestrate` ensures artifact exists; if missing, dispatches `scribe` to write it.
-6. `orchestrate` asks **“Run preflight now? (yes/no)”** unless preflight already passed or was declined this session; does not show work options until answered. **yes** → repair-first bootstrap: **`worktree-env`** (once, with completion trust) then **`developer`** preflight (auto-repair deps/runtime/indexing once); **no** → skip preflight for the session.
+6. `orchestrate` asks **“Run preflight now? (yes/no)”** unless preflight already passed or was declined this session; does not show work options until answered. **yes** → repair-first bootstrap: **`worktree-env`** (once, with completion trust) then **`preflight`** agent (auto-repair deps/runtime/indexing once); **no** → skip preflight for the session.
 7. `orchestrate` runs Claude Context readiness (`get_indexing_status` → `index_codebase` if needed).
 8. `orchestrate` shows the **work-selection menu** verbatim (**(1)** GitHub backlog first; **(4)** legacy `.plan` last; numbers match display order). On **(1)**, run the GitHub `feature:<slug>` backlog. On **(4)** only, **read `.plan/` via a filesystem tool** (glob or list), list **active** plans (omit `*.completed.md`) from that output only—never from memory—and ask the user to select one. **(2)** / **(3)** route to `architect` or clarified scope as in the orchestrate agent.
 9. Preflight may be re-run only when the user asks or after `ENV_BLOCKED` remediation.
@@ -160,7 +160,7 @@ Provider-level `timeout` (e.g. 300000ms) and per-model **`temperature` / `top_p`
 | Fast utility | `debugger`, `helper`, `refactor`, `verifier`, `review`, `performance-reviewer` | DeepSeek V4 Flash |
 | Teaching | `mentor` | Qwen3.7 Max |
 | Vision | `vision` | Qwen3 VL |
-| Writing / docs | `scribe`, `document`, `doc-reviewer`, `stack-bootstrap`, `worktree-env` | GPT-5 Nano |
+| Writing / docs | `scribe`, `document`, `doc-reviewer`, `stack-bootstrap`, `worktree-env`, `preflight` | GPT-5 Nano |
 
 Runtime authority: `opencode.json`. Agent frontmatter `model:` should match for changed agents.
 
