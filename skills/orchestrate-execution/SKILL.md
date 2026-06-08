@@ -16,7 +16,7 @@ You execute an existing plan artifact by coordinating subagents. You do not edit
 You have the **Task** tool to invoke subagents (`scribe`, `worktree-env`, `preflight`, `developer`, `frontend-dev`, `ux-dev`, `verifier`, `helper`, `vision`, `senior-dev`, `review`). You do **not** have write or edit tools—by design. **Never ask the user to enable write/edit.**
 
 **No bash tool:** You cannot run shell yourself. Route by task type:
-- **Bootstrap / env readiness** → Task **`worktree-env`** (symlinks), then Task **`preflight`** (runtime, deps, smoke, indexing). **Never** route bootstrap shell to **`developer`**.
+- **Bootstrap / env readiness** → Task **`worktree-env`** (env copies), then Task **`preflight`** (runtime, deps, smoke, indexing). **Never** route bootstrap shell to **`developer`**.
 - **Implementation** → `developer`, `frontend-dev`, or `ux-dev`.
 - **GitHub / helper scripts** → **`developer`** (`load: minimal`).
 
@@ -62,16 +62,15 @@ Track during bootstrap:
 
 1. **Worktree env (once per bootstrap unless canonical contradiction):**
    - Invoke **`worktree-env`** via Task with **`load: full`** unless `worktree_env_checked: true` and the prior report had `worktree_env: ok` | `skipped_not_linked_worktree` | `skipped_not_git` with canonical evidence.
-   - Grade the report: require `wt_root`, `main_root`, `files[]` with per-file `source`, `target`, `readlink`, `is_symlink`, and `status` (`ok` | `ok_existing` | …).
+   - Grade the report: require `wt_root`, `main_root`, `files[]` with per-file `source`, `target`, `is_regular_file`, and `status` (`ok` | `ok_existing` | …).
    - On `worktree_env: ok` with evidence: set `worktree_env_checked: true`, store `worktree_env_evidence`, **do not** invoke **`worktree-env`** again this bootstrap unless a later canonical verification contradicts it.
-   - **Hard stop (no auto-retry):** `blocked_regular_file` or `ENV_BLOCKED` from a regular-file rule — report one concrete `recommended_env_fix`; do not offer multi-option menus.
-   - On `failed_ln`: retry **`worktree-env`** **once**; if still failing, stop with one remediation line.
+   - On `failed_cp` or `ENV_BLOCKED`: retry **`worktree-env`** **once**; if still failing, stop with one `recommended_env_fix` — no multi-option menus.
 
 2. **Preflight (repair pass):**
-   - Invoke **`preflight`** via Task with **`load: full`**. Instruct: repair-first — run documented setup/repair commands once when checks fail (mise-prefixed runtime, dependency install, indexing); include canonical env symlink evidence on worktree checks.
-   - If **`preflight`** reports env symlink `failed` while **`worktree-env`** reported `ok`: do **not** immediately re-run **`worktree-env`**. Require contradictory canonical evidence from **`preflight`** (`wt_root`, `main_root`, per-file `test -L` + `readlink`). If contradiction is proven, run **one** canonical verification via **`preflight`** `load: minimal` (bash only: `test -L` / `readlink` for each file) **or** retry **`worktree-env`** once — not both.
+   - Invoke **`preflight`** via Task with **`load: full`**. Instruct: repair-first — run documented setup/repair commands once when checks fail (mise-prefixed runtime, dependency install, indexing); include canonical env copy evidence on worktree checks.
+   - If **`preflight`** reports env copy `failed` while **`worktree-env`** reported `ok`: do **not** immediately re-run **`worktree-env`**. Require contradictory canonical evidence from **`preflight`** (`wt_root`, `main_root`, per-file `test -f` + `test ! -L`). If contradiction is proven, run **one** canonical verification via **`preflight`** `load: minimal` (bash only: `test -f` / `test ! -L` for each file) **or** retry **`worktree-env`** once — not both.
    - If `Status: Blocked` with a **repairable** cause (missing `node_modules`, wrong PATH node vs `.mise.toml`, not indexed): when `preflight_repair_attempted` is false, instruct **`preflight`** to run the repair pass once, set `preflight_repair_attempted: true`, then re-Task **`preflight`** **once**. If still Blocked, stop with **one** `recommended_env_fix` — no `(a)/(b)/(c)` menus.
-   - If `Status: Blocked` with an **unsafe** cause (regular env file, runtime missing entirely, install failed after repair): stop with one remediation line.
+   - If `Status: Blocked` with an **unsafe** cause (missing env copy, runtime missing entirely, install failed after repair): stop with one remediation line.
 
 3. **On success:** set `env_gate_passed: true`. Return a brief structured report (deltas only).
 

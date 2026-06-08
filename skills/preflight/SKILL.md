@@ -26,12 +26,12 @@ When **`.mise.toml`** (or `.tool-versions`) is present at the repo root, prefix 
 
 ## Checks (run in order)
 1. **Project README** — Read the project README (`README.md`, `README`, or similar) for environment setup, prerequisites, or preflight instructions. Incorporate any documented requirements into the checks and repair pass below.
-2. **Worktree env symlinks (read-only verification)** — Only when the repo is a **linked git worktree** (`git rev-parse --path-format=absolute --git-dir` path contains `/.git/worktrees/`):
+2. **Worktree env copies (read-only verification)** — Only when the repo is a **linked git worktree** (`git rev-parse --path-format=absolute --git-dir` path contains `/.git/worktrees/`):
    - Resolve `main_root` the same way as **`worktree-env`** (`PREFLIGHT_MAIN_REPO_ROOT` or `dirname` of `git-common-dir`).
    - Set `wt_root=$(git rev-parse --show-toplevel)`.
-   - For each basename in `${WORKTREE_ENV_FILES:-.env .env.local}`: if `"${main_root}/${f}"` exists, verify at worktree root that `f` exists, is a **symlink** (`test -L`), and target matches the expected source (compare with `readlink` / absolute normalization appropriate to the OS). If main has no `f`, skip verification for that file.
-   - Record **canonical evidence** per file: `{ name, source, target, readlink, is_symlink, status: ok | ok_existing | failed }`.
-   - If any required symlink check fails: set `worktree_env: failed` and include evidence. Do **not** run `ln` here — orchestrate runs **`worktree-env`** before this preflight. If parent already has `worktree_env_checked: true`, include the same `wt_root`/`main_root`/file evidence so the parent can detect contradiction vs **`worktree-env`** report.
+   - For each basename in `${WORKTREE_ENV_FILES:-.env .env.local}`: if `"${main_root}/${f}"` exists, verify at worktree root that `f` exists as a **regular file** (`test -f` and not `test -L`). If main has no `f`, skip verification for that file.
+   - Record **canonical evidence** per file: `{ name, source, target, is_regular_file, status: ok | ok_existing | failed }`.
+   - If any required copy check fails: set `worktree_env: failed` and include evidence. Do **not** run `cp` here — orchestrate runs **`worktree-env`** before this preflight. If parent already has `worktree_env_checked: true`, include the same `wt_root`/`main_root`/file evidence so the parent can detect contradiction vs **`worktree-env`** report.
    - If not a linked worktree: **skip** this item; note `worktree_env: skipped_not_linked_worktree` in output.
 3. **Runtime versions** — From project files (package.json, Gemfile, `.mise.toml`, etc.), confirm required runtimes exist and report versions:
    - e.g. `mise exec -- node -v`, `ruby -v`, `bundle -v`, `mise exec -- pnpm -v`
@@ -60,8 +60,8 @@ Produce structured readiness content:
 - `Status`: `Ready` or `Blocked`
 - `preflight_checks` / `Runtime checks`: exact commands run and their output (or failure details)
 - `repair_applied`: true | false — whether an automatic repair ran this invocation
-- `worktree_env`: `ok` | `ok_existing` | `skipped_not_linked_worktree` | `skipped_not_git` | `failed` — linked-worktree env symlink verification only (no `ln` here; orchestrate runs **`worktree-env`** before this preflight)
-- `worktree_env_evidence`: `{ wt_root, main_root, files: [{ name, source, target, readlink, is_symlink, status }] }` when linked worktree
+- `worktree_env`: `ok` | `ok_existing` | `skipped_not_linked_worktree` | `skipped_not_git` | `failed` — linked-worktree env copy verification only (no `cp` here; orchestrate runs **`worktree-env`** before this preflight)
+- `worktree_env_evidence`: `{ wt_root, main_root, files: [{ name, source, target, is_regular_file, status }] }` when linked worktree
 - `claude_context_index`: `indexed` | `skipped` (MCP unavailable) | `failed` — include indexing status or error if applicable
 - `stderr summaries`: for any failures
 - `Notes`: version manager assumptions, required shell initialization, remediation steps if Blocked
@@ -70,7 +70,7 @@ Produce structured readiness content:
 If any check fails after the repair pass (or on an unsafe blocker):
 - Set `Status: Blocked`
 - Include `preflight_checks` with exact failing command + stderr
-- Include likely cause (version manager not loaded, wrong runtime, missing toolchain, regular env file in worktree)
+- Include likely cause (version manager not loaded, wrong runtime, missing toolchain, missing env copy in worktree)
 - Include **one** concrete `recommended_env_fix` for the parent — no multi-option menus
 
-Unsafe blockers (no further auto-repair): regular `.env` file in worktree (`blocked_regular_file`), runtime/toolchain entirely missing, install command failed after one attempt.
+Unsafe blockers (no further auto-repair): missing env copy in worktree after **`worktree-env`** (`failed`), runtime/toolchain entirely missing, install command failed after one attempt.

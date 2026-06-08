@@ -32,7 +32,7 @@ bash scripts/validate-opencode-config.sh
 
 ## Manual smoke — repairable linked worktree (fidget-web example)
 
-**Setup:** Open a **linked git worktree** for an impl repo (e.g. `fidget-web` on branch `opencode/*`). Ensure main checkout has `.env` / `.env.local` at repo root. In the worktree, remove symlinks if present (do not delete main-checkout files):
+**Setup:** Open a **linked git worktree** for an impl repo (e.g. `fidget-web` on branch `opencode/*`). Ensure main checkout has `.env` / `.env.local` at repo root. In the worktree, remove env files if present (do not delete main-checkout files):
 
 ```bash
 cd /path/to/fidget-web-worktree
@@ -44,28 +44,43 @@ rm -rf node_modules
 **Run:** New OpenCode session in the worktree → **`orchestrate`** → answer **yes** to preflight.
 
 **Pass criteria (first run):**
-1. **`worktree-env`** runs once; report includes `wt_root`, `main_root`, per-file `readlink` + `is_symlink`; `worktree_env: ok`.
+1. **`worktree-env`** runs once; report includes `wt_root`, `main_root`, per-file `is_regular_file`; `worktree_env: ok`.
 2. **`preflight`** agent runs repair pass if needed (`mise exec -- pnpm install`, indexing).
 3. `Status: Ready`; `env_gate_passed`; work menu **(1)–(4)** appears.
 4. No `(a)/(b)/(c)` option menu for routine setup.
 
-**Pass criteria (second run — idempotency):** Same session or new session with symlinks and `node_modules` already present → preflight reports `ok_existing` / skips repair; **`worktree-env` not invoked again** when `worktree_env_checked` is set from prior success in same bootstrap (or on rerun after user requests, symlinks show `ok_existing`).
+**Pass criteria (second run — idempotency):** Same session or new session with env copies and `node_modules` already present → preflight reports `ok_existing` / skips repair; **`worktree-env` not invoked again** when `worktree_env_checked` is set from prior success in same bootstrap (or on rerun after user requests, copies show `ok_existing`).
 
-## Manual smoke — hard block (regular env file)
+## Manual smoke — customized env copy preserved
 
-In a linked worktree, create a real file (not symlink):
+In a linked worktree with an existing env copy, customize a setting (e.g. a separate database name):
 
 ```bash
 cd /path/to/worktree
-echo "test=1" > .env
+# After first preflight bootstrap created .env from main checkout:
+echo "DATABASE_URL=postgres://localhost/my_worktree_db" >> .env
+```
+
+**Run:** Preflight bootstrap again (new session or rerun).
+
+**Pass criteria:**
+- **`worktree-env`** reports `ok_existing` for `.env` — does **not** overwrite the customized file.
+- Preflight verifies `.env` is a regular file (`is_regular_file: true`).
+
+## Manual smoke — legacy symlink migration
+
+In a linked worktree with old symlink layout:
+
+```bash
+cd /path/to/worktree
+ln -sf /path/to/main-checkout/.env .env
 ```
 
 **Run:** Preflight bootstrap.
 
 **Pass criteria:**
-- **`worktree-env`** reports `blocked_regular_file` / `ENV_BLOCKED`.
-- Orchestrate stops with **one** remediation line (move/remove real `.env` in worktree).
-- No automatic overwrite of the file.
+- **`worktree-env`** replaces symlink with a regular-file copy from main checkout (`worktree_env: ok`).
+- Post-check: `test -f .env && test ! -L .env`.
 
 ## Canonical verification commands (operator)
 
@@ -78,8 +93,7 @@ main_root="$(dirname "$common")"
 for f in .env .env.local; do
   [ -e "$main_root/$f" ] || continue
   echo "=== $f ==="
-  test -L "$wt_root/$f" && echo "symlink: yes" || echo "symlink: NO"
-  [ -L "$wt_root/$f" ] && readlink "$wt_root/$f"
+  test -f "$wt_root/$f" && test ! -L "$wt_root/$f" && echo "regular file: yes" || echo "regular file: NO"
 done
 mise exec -- node -v 2>/dev/null || node -v
 test -d node_modules && echo "node_modules: present" || echo "node_modules: MISSING"

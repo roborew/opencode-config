@@ -4,7 +4,7 @@
 |------------|-------------|----------|-------------------|-------------------|------|
 | Feature / plan | `architect` | `architect-plan`, `architect-review` | Parent: sub-skills by mode; **Task** children: `load: full`, `minimal`, or `auto` per [`agents/architect.md`](../../agents/architect.md) | `.plan/<type>.<slug>.md` via `scribe` | User → `orchestrate` |
 | Stage execution | `orchestrate` | `orchestrate-execution`, `orchestrate-recovery` | Parent: sub-skills by situation; **Task** children: `load: full`, `minimal`, or `auto` per [`agents/orchestrate.md`](../../agents/orchestrate.md) | Graded stages, completion prompt | `verifier` |
-| Worktree env symlinks (opt-in) | `worktree-env` | `worktree-env` | Parent: `load: full` once per bootstrap; trust canonical evidence | Symlink report with `wt_root`, `main_root`, per-file `readlink` | `preflight` (verify only) |
+| Worktree env copies (opt-in) | `worktree-env` | `worktree-env` | Parent: `load: full` once per bootstrap; trust canonical evidence | Copy report with `wt_root`, `main_root`, per-file `is_regular_file` | `preflight` (verify only) |
 | Env bootstrap / repair (opt-in) | `preflight` | `preflight` | Parent: `load: full` on preflight Task | `Ready` or one `recommended_env_fix`; repair pass for deps/runtime/indexing | `orchestrate` sets `env_gate_passed` |
 | Backend / generic code | `developer` | `developer` | `auto` (tiered triggers in agent; parent overrides) | Completion report | `verifier` |
 | Frontend | `frontend-dev` | `frontend-dev` | `auto` | Completion report | `verifier` |

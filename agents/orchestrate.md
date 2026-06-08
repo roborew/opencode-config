@@ -61,7 +61,7 @@ Include **`load: full|minimal|auto`** in every Task prompt.
 
 **Shell delegation (scoped):**
 - **Checkout identity (always):** Task **`developer`** `load: minimal` to run `skills/github-issue-run/lib/checkout-contract.sh` — before work selection, GitHub loops, or implementation dispatch. Store `checkout_contract` for the session.
-- **Session bootstrap / env readiness (opt-in):** Task **`worktree-env`** then **`preflight`** when user answers **yes** to preflight — never **`developer`** for symlink setup, runtime checks, installs, or smoke.
+- **Session bootstrap / env readiness (opt-in):** Task **`worktree-env`** then **`preflight`** when user answers **yes** to preflight — never **`developer`** for env copy setup, runtime checks, installs, or smoke.
 - **GitHub backlog / stage execution:** delegate `gh` and `skills/github-issue-run/lib/*.sh` to **`developer`** (`load: minimal` for pure shell). Export `OPENCODE_EXPECT_REPO_ROOT` and `OPENCODE_EXPECT_BRANCH` from `checkout_contract` for helper scripts.
 
 ## Claude Context Readiness Gate
@@ -78,13 +78,13 @@ On fresh context, call `get_indexing_status` → `index_codebase` if needed befo
 4. If status is not `ok`, stop with one remediation line.
 5. Pass `checkout_contract` fields into **every** implementation Task (`impl_repo_path`, `expected_branch`, `branch_policy`). Subagents must **not** create, switch, checkout, or rename branches.
 
-**Preflight does not choose where work happens.** It only prepares the environment (symlinks, deps, smoke) for the checkout already selected.
+**Preflight does not choose where work happens.** It only prepares the environment (env copies, deps, smoke) for the checkout already selected.
 
 ## Environment readiness gate (on opt-in)
 
 When the user answers **yes** to preflight (or asks to rerun): run the **repair-first** bootstrap in **`orchestrate-execution`** (Environment readiness gate) by Tasking **`worktree-env`** then **`preflight`** — do **not** Task **`developer`** for bootstrap shell. Set `env_gate_passed` on Ready.
 
-**Completion trust:** After **`worktree-env`** returns `worktree_env: ok` with canonical evidence (`wt_root`, `main_root`, per-file `readlink` + `is_symlink`), set `worktree_env_checked: true` and **do not** invoke **`worktree-env`** again this bootstrap unless canonical verification contradicts that evidence. Do not ask the user to re-run a completed setup task without proof.
+**Completion trust:** After **`worktree-env`** returns `worktree_env: ok` with canonical evidence (`wt_root`, `main_root`, per-file `is_regular_file`), set `worktree_env_checked: true` and **do not** invoke **`worktree-env`** again this bootstrap unless canonical verification contradicts that evidence. Do not ask the user to re-run a completed setup task without proof.
 
 **Blocked output:** After one automatic repair pass, report **one** concrete `recommended_env_fix` — no `(a)/(b)/(c)` option menus for routine setup failures.
 
