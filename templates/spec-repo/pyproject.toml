@@ -1,0 +1,5 @@
+[project]
+name = "spec-repo-tooling"
+version = "0.0.0"
+requires-python = ">=3.10"
+description = "Spec-repo bin/lib helpers (issue meta, PRD validation, fanout)"

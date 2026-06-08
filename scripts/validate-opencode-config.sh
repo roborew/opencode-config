@@ -84,8 +84,7 @@ for needle in "Checkout identity gate" "CHECKOUT_CONTRACT_FAILED" "checkout-cont
   fi
 done
 
-if ! grep -q 'git\[\\[:space:\]\]\+switch' scripts/block-dangerous-git.sh 2>/dev/null && \
-   ! grep -q "git switch" scripts/block-dangerous-git.sh 2>/dev/null; then
+if ! grep -qE 'git[[:space:]]+switch' scripts/block-dangerous-git.sh 2>/dev/null; then
   echo "  MISSING: git switch block in block-dangerous-git.sh"
   ERR=1
 fi
