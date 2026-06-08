@@ -11,6 +11,26 @@ FEAT="feature:${SLUG}"
 REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
+OC="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
+CONTRACT_SH="$OC/skills/github-issue-run/lib/checkout-contract.sh"
+if [[ -n "${OPENCODE_EXPECT_REPO_ROOT:-}" && -n "${OPENCODE_EXPECT_BRANCH:-}" ]]; then
+  if [[ -f "$CONTRACT_SH" ]]; then
+    bash "$CONTRACT_SH" --verify || {
+      ACTION="skipped-contract-mismatch"
+      BASE="${PR_BASE:-${ARG_BASE:-develop}}"
+      MESSAGE="Current checkout/branch does not match session contract. Expected ${OPENCODE_EXPECT_BRANCH} at ${OPENCODE_EXPECT_REPO_ROOT}."
+      jq -nc \
+        --arg branch "$BRANCH" \
+        --arg base "$BASE" \
+        --arg action "$ACTION" \
+        --arg repo "$REPO" \
+        --arg message "$MESSAGE" \
+        '{branch: $branch, base: $base, pr_url: "", pr_number: null, action: $action, repo: $repo, message: $message}'
+      exit 0
+    }
+  fi
+fi
+
 emit() {
   jq -nc \
     --arg branch "$BRANCH" \

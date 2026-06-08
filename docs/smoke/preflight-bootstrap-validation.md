@@ -12,6 +12,24 @@ bash scripts/validate-opencode-config.sh
 
 **Pass criteria:** exit 0 from both scripts.
 
+## Manual smoke — preflight declined, checkout identity still captured
+
+**Setup:** Open a session on a **feature/topic branch** (primary checkout or linked worktree). Ensure env is already usable (or accept that skipped preflight means no auto-repair).
+
+**Run:** New OpenCode session → **`orchestrate`** → answer **no** to preflight → choose GitHub backlog or provide `feature:<slug>`.
+
+**Pass criteria:**
+1. Orchestrate still runs **`checkout-contract.sh`** (via **`developer`** `load: minimal`) before work selection or issue transition.
+2. Report includes `impl_repo_path`, `branch`, `is_linked_worktree`, `protected_branch`.
+3. No subagent creates or switches branches; implementation Tasks include `expected_branch` and `branch_policy`.
+4. If `protected_branch: true`, orchestrate stops before `state:in-progress` unless user confirms.
+
+## Manual smoke — branch mutation blocked
+
+**Run:** Attempt `git switch other-branch` or `git checkout -b new-feature` from an execution subagent context (or via `scripts/preflight-git.sh`).
+
+**Pass criteria:** Command blocked by `block-dangerous-git.sh` / agent bash denies; subagent reports refusal or `CHECKOUT_CONTRACT_FAILED` rather than silently switching.
+
 ## Manual smoke — repairable linked worktree (fidget-web example)
 
 **Setup:** Open a **linked git worktree** for an impl repo (e.g. `fidget-web` on branch `opencode/*`). Ensure main checkout has `.env` / `.env.local` at repo root. In the worktree, remove symlinks if present (do not delete main-checkout files):

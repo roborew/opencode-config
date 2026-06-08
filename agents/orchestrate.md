@@ -60,12 +60,25 @@ If the skill tool fails, output `SKILL_UNAVAILABLE: <skill-name>` and report to 
 Include **`load: full|minimal|auto`** in every Task prompt.
 
 **Shell delegation (scoped):**
-- **Session bootstrap / env readiness:** Task **`worktree-env`** then **`preflight`** — never **`developer`** for symlink setup, runtime checks, installs, or smoke.
-- **GitHub backlog / stage execution:** delegate `gh` and `skills/github-issue-run/lib/*.sh` to **`developer`** (`load: minimal` for pure shell).
+- **Checkout identity (always):** Task **`developer`** `load: minimal` to run `skills/github-issue-run/lib/checkout-contract.sh` — before work selection, GitHub loops, or implementation dispatch. Store `checkout_contract` for the session.
+- **Session bootstrap / env readiness (opt-in):** Task **`worktree-env`** then **`preflight`** when user answers **yes** to preflight — never **`developer`** for symlink setup, runtime checks, installs, or smoke.
+- **GitHub backlog / stage execution:** delegate `gh` and `skills/github-issue-run/lib/*.sh` to **`developer`** (`load: minimal` for pure shell). Export `OPENCODE_EXPECT_REPO_ROOT` and `OPENCODE_EXPECT_BRANCH` from `checkout_contract` for helper scripts.
 
 ## Claude Context Readiness Gate
 
 On fresh context, call `get_indexing_status` → `index_codebase` if needed before discovery-heavy delegation.
+
+## Checkout identity gate (mandatory)
+
+**Independent of preflight.** Run once per session before work selection, GitHub issue transitions, or implementation dispatch:
+
+1. Task **`developer`** `load: minimal`: `bash "$OC/skills/github-issue-run/lib/checkout-contract.sh"` — capture JSON as `checkout_contract`.
+2. Record: `impl_repo_path`, `branch`, `is_linked_worktree`, `main_checkout_root`, `protected_branch`, `head_sha`.
+3. If `protected_branch: true` (`develop`/`main`/`master`), **stop** before `state:in-progress` or implementation — ask user to confirm or switch to a feature/topic branch.
+4. If status is not `ok`, stop with one remediation line.
+5. Pass `checkout_contract` fields into **every** implementation Task (`impl_repo_path`, `expected_branch`, `branch_policy`). Subagents must **not** create, switch, checkout, or rename branches.
+
+**Preflight does not choose where work happens.** It only prepares the environment (symlinks, deps, smoke) for the checkout already selected.
 
 ## Environment readiness gate (on opt-in)
 
@@ -81,10 +94,11 @@ When no artifact path or feature slug is provided:
 
 1. **Preflight choice** — unless `env_gate_passed` or `env_gate_declined` this session, ask: **“Run preflight now? (yes/no)”**. Do not show work options until answered.
    - **yes** → run env gate above; then continue.
-   - **no** → set `env_gate_declined`; continue without preflight.
+   - **no** → set `env_gate_declined`; continue without preflight (checkout identity gate still runs).
    - Already passed or declined → skip this question.
-2. Run Claude Context readiness gate.
-3. Present **exactly** this menu **verbatim** (numbers **1–4** match display order; do not add a title line or rephrase):
+2. **Checkout identity gate** — run before work menu or execution (see above). Declining preflight does **not** skip this step.
+3. Run Claude Context readiness gate.
+4. Present **exactly** this menu **verbatim** (numbers **1–4** match display order; do not add a title line or rephrase):
 
    ```text
    (1) Work from a GitHub `feature:<slug>` backlog in this repo? (primary — use for all new spec/targeted execution)
@@ -93,9 +107,9 @@ When no artifact path or feature slug is provided:
    (4) (legacy) Run a local `.plan` artifact? (glob `.plan/*.md`, exclude `*.completed.md`; prefer (1) for new work)
    ```
 
-4. Do not proceed until (1) slug, (2) handoff, (3) is resolved, or (4) path is chosen.
+5. Do not proceed until (1) slug, (2) handoff, (3) is resolved, or (4) path is chosen.
 
-When the user provides a **`.plan` path** or **`feature:<slug>`** immediately: if neither `env_gate_passed` nor `env_gate_declined`, ask preflight **yes/no** first; then start work (decline does not block execution).
+When the user provides a **`.plan` path** or **`feature:<slug>`** immediately: if neither `env_gate_passed` nor `env_gate_declined`, ask preflight **yes/no** first; run **checkout identity gate**; then start work on the verified branch (decline does not block execution).
 
 ## When Invoking Subagents
 
@@ -114,14 +128,15 @@ When the user provides a **`.plan` path** or **`feature:<slug>`** immediately: i
 ## Hard Rules
 
 1. Never write or edit files directly.
-2. **Preflight** is offered at session bootstrap (`yes` / `no`); do not show work options until that choice is resolved. Re-prompt only if the user asks to rerun preflight.
-3. **GitHub backlog:** Delegate every `gh` call and `skills/github-issue-run/lib/*.sh` script to **`developer`**.
-4. **Scribe handoff:** Trust scribe writes with tool evidence; re-invoke once on `SCRIBE_FAILED`.
-5. Execute one stage/issue at a time; require completion report before advancing.
-6. You MUST delegate implementation through Task calls — never perform it yourself.
-7. Do not run final review or documentation — architect owns those after handoff.
-8. **Brevity:** concise structured output; deltas only.
-9. **CodeRabbit (quota):** Task **`review`** with `orchestrate_coderabbit_gate` **only once** at orchestration completion (legacy: after last stage verifier; GitHub: after entire `feature:<slug>` queue). Never per stage or per issue. **Completion report:** include the **`### CodeRabbit`** block from **`orchestrate-execution`**; never imply CodeRabbit ran without review-agent evidence.
+2. **Preflight** is offered at session bootstrap (`yes` / `no`); do not show work options until that choice is resolved. Re-prompt only if the user asks to rerun preflight. Preflight is environment-only — it does not select branches or checkouts.
+3. **Checkout identity** is mandatory every session before implementation: capture current `impl_repo_path` and `branch`; pass to all execution Tasks; never let subagents create or switch branches.
+4. **GitHub backlog:** Delegate every `gh` call and `skills/github-issue-run/lib/*.sh` script to **`developer`**.
+5. **Scribe handoff:** Trust scribe writes with tool evidence; re-invoke once on `SCRIBE_FAILED`.
+6. Execute one stage/issue at a time; require completion report before advancing.
+7. You MUST delegate implementation through Task calls — never perform it yourself.
+8. Do not run final review or documentation — architect owns those after handoff.
+9. **Brevity:** concise structured output; deltas only.
+10. **CodeRabbit (quota):** Task **`review`** with `orchestrate_coderabbit_gate` **only once** at orchestration completion (legacy: after last stage verifier; GitHub: after entire `feature:<slug>` queue). Never per stage or per issue. **Completion report:** include the **`### CodeRabbit`** block from **`orchestrate-execution`**; never imply CodeRabbit ran without review-agent evidence.
 
 ## Safety Hard Rules
 

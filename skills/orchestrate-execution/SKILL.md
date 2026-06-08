@@ -79,6 +79,46 @@ Track during bootstrap:
 
 Do not re-run the full gate between stages or between GitHub issues unless the user asks or recovery policy applies.
 
+## Checkout identity gate (mandatory — independent of preflight)
+
+**Preflight is optional; current checkout and branch identity are not.**
+
+Run before work selection, before any GitHub issue transition to `state:in-progress`, and before any implementation dispatch (GitHub or legacy `.plan`). Declining preflight (`env_gate_declined`) does **not** skip this gate.
+
+### Session state
+
+Track:
+- `checkout_contract`: JSON from `checkout-contract.sh` with `impl_repo_path`, `branch`, `is_linked_worktree`, `main_checkout_root`, `protected_branch`, `head_sha`, `branch_policy`
+- `checkout_identity_verified`: true after successful capture
+
+### Procedure
+
+1. Task **`developer`** `load: minimal`:
+   ```bash
+   OC="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
+   bash "$OC/skills/github-issue-run/lib/checkout-contract.sh"
+   ```
+2. Grade: require `status: ok`, non-empty `impl_repo_path` and `branch`.
+3. If `protected_branch: true` (`develop`/`main`/`master`): **stop** before implementation or `state:in-progress`; ask user to confirm working on a protected branch or switch to a feature/topic branch.
+4. Set `checkout_identity_verified: true`; store `checkout_contract` for the session.
+5. Export for helper scripts when delegating shell:
+   - `OPENCODE_EXPECT_REPO_ROOT=<impl_repo_path>`
+   - `OPENCODE_EXPECT_BRANCH=<branch>`
+
+### Execution dispatch contract (required on every implement/verify Task)
+
+Include in every Task to `developer`, `frontend-dev`, `ux-dev`, and `verifier` for implementation work:
+
+```text
+impl_repo_path: <absolute verified git root>
+expected_branch: <current verified branch>
+is_linked_worktree: true|false
+main_checkout_root: <absolute root when detectable>
+branch_policy: do not create, switch, checkout, or rename branches unless user explicitly requests in this turn
+```
+
+Subagents must `cd` to `impl_repo_path`, verify branch matches, and report `CHECKOUT_CONTRACT_FAILED` on mismatch. They must **never** create branches or run `git switch`/`git checkout <branch>`/`git branch` on their own.
+
 ## Session Bootstrap (mandatory, first in fresh context)
 
 When no artifact path or `feature:<slug>` is provided (new session, greeting, unspecified task):
@@ -87,10 +127,11 @@ When no artifact path or `feature:<slug>` is provided (new session, greeting, un
    - **`yes`** → run **Environment readiness gate** above (repair-first, one auto-retry); on hard Blocked report one fix; on Ready continue.
    - **`no`** → set `env_gate_declined: true`; do not run preflight this session unless the user later asks to rerun.
    - **Already `env_gate_passed` or `env_gate_declined`** → do not ask again; continue.
-2. **Claude Context readiness gate** (below).
-3. **Fresh Context: Work selection** — present the **(1)/(2)/(3)/(4)** menu only after step 1 is resolved.
+2. **Checkout identity gate** (above) — mandatory even when preflight was declined.
+3. **Claude Context readiness gate** (below).
+4. **Fresh Context: Work selection** — present the **(1)/(2)/(3)/(4)** menu only after steps 1–2 are resolved.
 
-When the user provides a **`.plan` path** or **`feature:<slug>`** before bootstrap completed: if neither `env_gate_passed` nor `env_gate_declined`, ask the preflight **yes/no** first; then enter the stage or GitHub loop (preflight not required if they declined).
+When the user provides a **`.plan` path** or **`feature:<slug>`** before bootstrap completed: if neither `env_gate_passed` nor `env_gate_declined`, ask the preflight **yes/no** first; run **checkout identity gate**; then enter the stage or GitHub loop.
 
 ## Claude Context Readiness Gate (mandatory)
 
@@ -135,20 +176,22 @@ Load **`github-issue-run`** together with this skill when the user chooses GitHu
 ### Loop
 
 1. Obtain kebab-case **feature slug** from the user if missing.
-2. Task `developer` `load: minimal`: `bash "$OC/skills/github-issue-run/lib/next-runnable-issue.sh" "<slug>"` — capture stdout JSON. **Do not** run unscoped `gh issue list`; discovery is label-filtered server-side by the helper only.
-3. Task `developer` `load: minimal`: `issue-state-transition.sh "<repo>" "<number>" state:in-progress`
-4. **Stages vs flat issue:** Parse `opencode_meta` from the discovery JSON.
+2. Ensure **checkout identity gate** has run (`checkout_identity_verified: true`). If not, run it before step 3.
+3. Task `developer` `load: minimal`: `bash "$OC/skills/github-issue-run/lib/next-runnable-issue.sh" "<slug>"` — capture stdout JSON. **Do not** run unscoped `gh issue list`; discovery is label-filtered server-side by the helper only.
+4. Task `developer` `load: minimal` with `OPENCODE_EXPECT_REPO_ROOT` and `OPENCODE_EXPECT_BRANCH` set from `checkout_contract`: `issue-state-transition.sh "<repo>" "<number>" state:in-progress`
+5. **Stages vs flat issue:** Parse `opencode_meta` from the discovery JSON.
    - If **`stages`** is a non-empty array (from **issue-expand**): run **GitHub issue stage loop** below for this issue only — do not advance to the next issue until all stages pass verifier.
    - Else **flat mode:** single implement pass using root `acceptance` and `test_commands` (fanout default).
-5. **Implement (flat mode):** Task `developer` or `frontend-dev` per `opencode_meta.owner` with **`load: full`**. **GitHub issue contract:**
+6. **Implement (flat mode):** Task `developer` or `frontend-dev` per `opencode_meta.owner` with **`load: full`**. **GitHub issue contract:**
    - `execution_mode: github_issue`
    - `issue_number`, `repo`, `title`
    - `opencode_meta` verbatim
+   - `impl_repo_path`, `expected_branch`, `is_linked_worktree`, `main_checkout_root`, `branch_policy` from `checkout_contract`
 6. **Verify (flat or per-stage):** Task `verifier` with `load: full` and the same contract plus completion report.
 7. **Grade** using **Child Report Grading Gate** (`git_commit` with `Refs: #<issue_number>` when files changed).
 8. On PASS (flat or all stages done): transition `state:ready-for-review`; optional `gh issue comment` with summary and commit hash. **Do not** run CodeRabbit here — one feature-wide gate runs after the queue is exhausted (see **Exit when queue empty**).
 9. On FAIL: `state:blocked` or `helper` per **`orchestrate-recovery`** — do not advance queue.
-10. **Repeat** from step 2 for the same slug until discovery fails.
+10. **Repeat** from step 3 for the same slug until discovery fails.
 
 ### GitHub issue stage loop (`opencode_meta.stages`)
 
@@ -158,6 +201,7 @@ When `stages[]` is present, for **each** stage in order:
    - `execution_mode: github_issue_stage`
    - `issue_number`, `repo`, `stage_id`, `stage` object (objective, files, acceptance, test_commands, commit_message)
    - `issue_ref: #<n>` for commits
+   - `impl_repo_path`, `expected_branch`, `is_linked_worktree`, `main_checkout_root`, `branch_policy` from `checkout_contract`
 2. Task `verifier` with same stage contract + completion report.
 3. Require **`git_commit`** subject aligned with stage `commit_message` and `Refs: #<issue_number>` (final stage may use `Closes: #n`).
 4. On stage FAIL: retry or `helper`; do not advance stage index.
@@ -168,7 +212,7 @@ When `stages[]` is present, for **each** stage in order:
 When discovery fails (queue exhausted):
 
 1. **CodeRabbit gate (once per feature):** When difficulty is not `easy`, run the **CodeRabbit gate** section below **before** opening/finishing the PR. Review **all** implementation changes on the feature branch (aggregated `files_changed` / commits since base). **Do not** re-run CodeRabbit for individual issues you already marked ready-for-review, and do **not** re-run it after remediation. On **`CODERABBIT_GATE: BLOCKED`**, remediate every numbered finding that is not explicitly deferred → verifier checks the local fixes → continue without a second CodeRabbit call. On **`CODERABBIT_GATE: PASS`** (or `easy`), continue.
-2. Task **`developer`** `load: minimal`: `bash "$OC/skills/github-issue-run/lib/feature-finish-pr.sh" "<slug>"` — parse JSON (`branch`, `base`, `pr_url`, `action`, `message`).
+2. Task **`developer`** `load: minimal` with `OPENCODE_EXPECT_*` from `checkout_contract`: `bash "$OC/skills/github-issue-run/lib/feature-finish-pr.sh" "<slug>"` — parse JSON (`branch`, `base`, `pr_url`, `action`, `message`).
 3. Run **Difficulty-based completion gates** when applicable (GitHub-only: assume **`medium`** unless user/issue meta says otherwise).
 4. Report `pr_url` or skip reason (`skipped-opt-out`, `skipped-protected-branch`) inside the mandatory **Completion report template** below.
 5. Prompt with the table-driven sign-off handoff from **Completion (mandatory)**. Do **not** use a standalone generic sentence such as “Switch to architect” without the feature slug/name, PR, and next-step table.
@@ -188,6 +232,7 @@ When discovery fails (queue exhausted):
    - `Owner: developer` → invoke `developer` (logic/backend specialist)
    - `Owner: ux-dev` → invoke `ux-dev` (prototype generation from design artifacts; outputs to `.prototype/<slug>/`)
      Do not dispatch to the wrong subagent for a stage.
+   - Include `impl_repo_path`, `expected_branch`, `branch_policy` from `checkout_contract` on every execution Task.
 4. Collect completion report.
 5. Run `verifier`.
 6. If verifier passes, continue to next stage.

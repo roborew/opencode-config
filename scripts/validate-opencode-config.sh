@@ -75,6 +75,26 @@ if ! python3 -m unittest templates/spec-repo/bin/lib/test_existing_issue.py -q; 
   ERR=1
 fi
 
+echo "Checking checkout guardrails in orchestrate and execution agents..."
+GUARDRAIL_FILES="agents/orchestrate.md skills/orchestrate-execution/SKILL.md agents/developer.md agents/frontend-dev.md"
+for needle in "Checkout identity gate" "CHECKOUT_CONTRACT_FAILED" "checkout-contract.sh"; do
+  if ! grep -q "$needle" $GUARDRAIL_FILES 2>/dev/null; then
+    echo "  MISSING guardrail reference: $needle"
+    ERR=1
+  fi
+done
+
+if ! grep -q 'git\[\\[:space:\]\]\+switch' scripts/block-dangerous-git.sh 2>/dev/null && \
+   ! grep -q "git switch" scripts/block-dangerous-git.sh 2>/dev/null; then
+  echo "  MISSING: git switch block in block-dangerous-git.sh"
+  ERR=1
+fi
+
+if [[ ! -f skills/github-issue-run/lib/checkout-contract.sh ]]; then
+  echo "  MISSING: skills/github-issue-run/lib/checkout-contract.sh"
+  ERR=1
+fi
+
 if [[ $ERR -ne 0 ]]; then
   echo "validate-opencode-config: FAILED"
   exit 1

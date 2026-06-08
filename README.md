@@ -253,7 +253,7 @@ Optional same-session path: architect ends with a short table **HANDOFF** block 
 |--------|-----|
 | Implement stages, edit code, run tests | **`developer`** / **`frontend-dev`** (Task from **orchestrate**) |
 | Per-stage / per-issue verification | **`verifier`** |
-| `git commit` on feature branch (`Refs:` / `Closes:` issue #) | Implementation subagents (orchestrate requires evidence in completion report) |
+| `git commit` on current feature branch (`Refs:` / `Closes:` issue #) | Implementation subagents on **`expected_branch`** from checkout contract (orchestrate requires evidence in completion report) |
 | Issue labels `state:in-progress` → `state:ready-for-review` | **orchestrate** via **`developer`** + `issue-state-transition.sh` |
 | Final push + open ready-for-review PR after queue empty and CodeRabbit fixes are local | **orchestrate** via **`developer`** + `feature-finish-pr.sh` (skip with `ORCHESTRATE_AUTO_PR=0`) |
 | Code/PR review vs tickets + PRD; `state:done` + close issues | **architect** **Mode F Phase 1** (option 5) — not orchestrate |
@@ -307,7 +307,7 @@ Global **`instructions`** pull in [rules/](rules/). Global **`permission`** in `
 
 **CodeRabbit** (`skills/code-review`, from [coderabbitai/skills](https://github.com/coderabbitai/skills)): orchestrate runs **one** **CodeRabbit gate** via `review` after **all** stages/issues pass final verifier (`medium`/`hard`) — before difficulty gates and architect handoff (GitHub: after the full `feature:<slug>` queue, not per issue). Requires CodeRabbit CLI + auth.
 
-**Git guardrails:** `opencode.json` in this repo does **not** define PreToolUse hooks (host-dependent). Use `scripts/preflight-git.sh '<command>'` before risky git invocations, or wrap tool calls with `scripts/block-dangerous-git.sh` where your runtime supports stdin JSON hooks.
+**Git guardrails:** `opencode.json` denies branch mutation commands (`git switch`, `git checkout -b`, protected-branch checkouts) for execution agents. `scripts/block-dangerous-git.sh` blocks the same patterns for hook-style validation. Orchestrate runs **`checkout-contract.sh`** every session to capture the current branch; subagents must not create or switch branches. Use `scripts/preflight-git.sh '<command>'` before risky git invocations, or wrap tool calls with `scripts/block-dangerous-git.sh` where your runtime supports stdin JSON hooks.
 
 ## Desktop / shell environment
 

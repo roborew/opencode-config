@@ -13,6 +13,14 @@ if [[ "${1:-}" == "--self-test" ]]; then
     echo "self-test: expected exit 2 on force push, got $ec" >&2
     exit 1
   fi
+  set +e
+  echo '{"tool_input":{"command":"git switch feature/foo"}}' | "$0"
+  ec=$?
+  set -e
+  if [[ "$ec" -ne 2 ]]; then
+    echo "self-test: expected exit 2 on git switch, got $ec" >&2
+    exit 1
+  fi
   echo '{"tool_input":{"command":"git status"}}' | "$0"
   echo "OK"
   exit 0
@@ -45,6 +53,13 @@ DANGEROUS_PATTERNS=(
   'git[[:space:]]+branch[[:space:]]+-D'
   'git[[:space:]]+checkout[[:space:]]+\.'
   'git[[:space:]]+restore[[:space:]]+\.'
+  'git[[:space:]]+switch([[:space:]]|$)'
+  'git[[:space:]]+switch[[:space:]]+-c'
+  'git[[:space:]]+switch[[:space:]]+-C'
+  'git[[:space:]]+checkout[[:space:]]+-b'
+  'git[[:space:]]+checkout[[:space:]]+-B'
+  'git[[:space:]]+branch[[:space:]]+(-m|-M|-d|-D|-c|-C)'
+  'git[[:space:]]+checkout[[:space:]]+(develop|main|master)([[:space:]]|$)'
   'rm[[:space:]]+-rf[[:space:]]+/'
   'rm[[:space:]]+-rf[[:space:]]+~(/|$)'
   'DROP[[:space:]]+TABLE'

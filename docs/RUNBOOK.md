@@ -50,7 +50,7 @@ Shell bootstrap syncs `bin/*` and templates; registry **INCOMPLETE** until the O
 | Role                    | Agents                                       | Model Tier | Responsibility                                                                                                                                                       |
 | ----------------------- | -------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Primary (planning)      | `architect`                                  | smart      | Read-only: explore, report, draft. Plan mode: scribe writes artifact → switch to orchestrate. Post-implementation: review → sign-off → document → scribe writes docs → scribe archives plan to `.plan/<type>.<slug>.completed.md` |
-| Coordinator             | `orchestrate`                                | smart      | Execute stages, grade children, helper recovery, optional `review` (medium) / `senior-dev`+`helper` (hard) after final verifier, dispatch scribe. Plan picker lists **active** `.plan/*.md` only (excludes `*.completed.md`). Startup: optional preflight prompt → **`worktree-env`** + **`preflight`** if **yes**, then work menu.                       |
+| Coordinator             | `orchestrate`                                | smart      | Execute stages, grade children, helper recovery, optional `review` (medium) / `senior-dev`+`helper` (hard) after final verifier, dispatch scribe. Plan picker lists **active** `.plan/*.md` only (excludes `*.completed.md`). Startup: optional preflight prompt; **checkout identity gate always**; **`worktree-env`** + **`preflight`** only when user opts in.                       |
 | Planning specialists    | `debugger`, `refactor`, `review`, `designer` | smart      | Return type-specific plan drafts to architect. `designer` uses Gemini 3 Flash. `review` may also be invoked by orchestrate on **medium** Difficulty after execution.    |
 | Documentation generator | `document`                                   | fast       | Generate changelog/guides/architecture content; architect invokes, scribe writes                                                                                     |
 | Artifact writer         | `scribe`                                     | fast       | Write/update plan artifacts, docs, `README.md`, `.env.example` from architect/orchestrate content                                                                     |
@@ -94,11 +94,11 @@ OpenCode does not define an in-repo model allowlist beyond [`opencode.json`](../
 3. `architect` invokes `scribe` to write the artifact to `.plan/<type>.<slug>.md` (mandatory step).
 4. User switches to `orchestrate`.
 5. `orchestrate` ensures artifact exists; if missing, dispatches `scribe` to write it.
-6. `orchestrate` asks **“Run preflight now? (yes/no)”** unless preflight already passed or was declined this session; does not show work options until answered. **yes** → repair-first bootstrap: **`worktree-env`** (once, with completion trust) then **`preflight`** agent (auto-repair deps/runtime/indexing once); **no** → skip preflight for the session.
+6. `orchestrate` asks **“Run preflight now? (yes/no)”** unless preflight already passed or was declined this session; does not show work options until answered. **yes** → repair-first bootstrap: **`worktree-env`** (once, with completion trust) then **`preflight`** agent (auto-repair deps/runtime/indexing once); **no** → skip preflight for the session. **Either way:** run **checkout identity gate** (`checkout-contract.sh`) to capture current `impl_repo_path` and `branch` before work selection or implementation. Subagents must not create or switch branches.
 7. `orchestrate` runs Claude Context readiness (`get_indexing_status` → `index_codebase` if needed).
 8. `orchestrate` shows the **work-selection menu** verbatim (**(1)** GitHub backlog first; **(4)** legacy `.plan` last; numbers match display order). On **(1)**, run the GitHub `feature:<slug>` backlog. On **(4)** only, **read `.plan/` via a filesystem tool** (glob or list), list **active** plans (omit `*.completed.md`) from that output only—never from memory—and ask the user to select one. **(2)** / **(3)** route to `architect` or clarified scope as in the orchestrate agent.
 9. Preflight may be re-run only when the user asks or after `ENV_BLOCKED` remediation.
-10. `orchestrate` dispatches one stage at a time to `developer`, `frontend-dev`, or `ux-dev` (by stage Owner). Design artifacts use `Owner: ux-dev`; `ux-dev` outputs HTML-only files to `.prototype/<slug>/`.
+10. `orchestrate` dispatches one stage at a time to `developer`, `frontend-dev`, or `ux-dev` (by stage Owner). Pass `impl_repo_path`, `expected_branch`, and `branch_policy` on every implementation Task. Design artifacts use `Owner: ux-dev`; `ux-dev` outputs HTML-only files to `.prototype/<slug>/`.
 11. Execution subagent returns completion report (`stage_id`, files, tests, checks, blockers, risks, next input).
 12. `orchestrate` dispatches next stage only after successful handoff.
 13. For final completion, run `verifier` per stage; run final verifier when all stages complete.
@@ -130,7 +130,7 @@ Recovery loop:
 
 Do not advance stages until helper amendment is applied.
 Do not allow repeated test-command retries under unresolved environment mismatch.
-Preflight is user-opt-in at session start (`yes` / `no`); work selection follows. Preflight is **repair-first** (symlinks, `mise exec --`, `pnpm install`, indexing) with one auto-retry before a single hard-block message — no multi-option menus. Trust **`worktree-env`** completion evidence; do not re-run the same setup task without canonical contradiction. Do not require artifact writes for preflight output. Claude Context readiness runs after the preflight choice on fresh sessions. Smoke harness: `docs/smoke/preflight-bootstrap-validation.md`.
+Preflight is user-opt-in at session start (`yes` / `no`); work selection follows. **Checkout identity is mandatory** even when preflight is declined — orchestrate captures current branch and repo root via `checkout-contract.sh` and passes them to every execution Task. Preflight is **environment-only** (symlinks, `mise exec --`, `pnpm install`, indexing); it does not choose branches or checkouts. Preflight is **repair-first** with one auto-retry before a single hard-block message — no multi-option menus. Trust **`worktree-env`** completion evidence; do not re-run the same setup task without canonical contradiction. Do not require artifact writes for preflight output. Claude Context readiness runs after the preflight choice on fresh sessions. Smoke harness: `docs/smoke/preflight-bootstrap-validation.md`.
 
 **Senior-dev escalation (operator-triggered, user confirmation required):** When developer reports `STAGE_STUCK` and the operator asks to escalate, orchestrate stops, asks the user to confirm, then invokes `senior-dev`. **Exception:** for **`Difficulty: hard`**, after all stages pass the final verifier, orchestrate invokes `senior-dev` for **scheduled post-implementation review** without that confirmation (not the same as mid-stage escalation).
 
@@ -213,6 +213,10 @@ Use templates in:
 Use this when dispatching execution:
 
 ```text
+impl_repo_path: <absolute verified git root>
+expected_branch: <current verified branch>
+is_linked_worktree: true|false
+branch_policy: do not create, switch, checkout, or rename branches unless user explicitly requests in this turn
 Artifact: .plan/<type>.<slug>.md
 Stage IDs: <stage-id-list>
 Scope in: <paths/components>
