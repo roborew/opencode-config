@@ -153,7 +153,7 @@ Provider-level `timeout` (e.g. 300000ms) and per-model **`temperature` / `top_p`
 | --- | --- | --- |
 | Planning (primary) | `architect`, `plan` | DeepSeek V4 Flash |
 | Scoped planning | `strategist` | DeepSeek V4 Pro |
-| Orchestration | `orchestrate` | MiniMax M3 |
+| Orchestration | `orchestrate` | DeepSeek V4 Flash |
 | Primary implementation | `developer`, `frontend-dev`, `build` | MiniMax M3 |
 | Design / prototypes | `designer`, `ux-dev` | Gemini 3 Flash |
 | Senior / security depth | `senior-dev`, `security-reviewer` | DeepSeek V4 Pro |

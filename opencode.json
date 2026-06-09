@@ -173,8 +173,8 @@
       "steps": 35
     },
     "orchestrate": {
-      "model": "openrouter/minimax/minimax-m3",
-      "steps": 50
+      "model": "openrouter/deepseek/deepseek-v4-flash",
+      "steps": 100
     },
     "plan": {
       "model": "openrouter/deepseek/deepseek-v4-flash",
