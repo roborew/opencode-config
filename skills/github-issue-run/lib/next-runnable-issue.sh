@@ -4,9 +4,13 @@
 # Usage: next-runnable-issue.sh <feature_slug_without_prefix>
 set -euo pipefail
 SLUG="${1:?feature slug required}"
-REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
-FEAT="feature:${SLUG}"
+
 OC="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
+# shellcheck source=../../../scripts/lib/shared.sh
+source "${OC}/scripts/lib/shared.sh"
+
+REPO=$(gh_current_repo)
+FEAT="feature:${SLUG}"
 PARSE_META="${OC}/templates/spec-repo/bin/lib/extract_task_meta.py"
 
 RAW=$(gh issue list --repo "$REPO" -L 200 --label "$FEAT" --label state:ready-for-agent --state open --json number,title,body 2>/dev/null || true)

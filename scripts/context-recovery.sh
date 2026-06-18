@@ -3,19 +3,10 @@
 
 set -euo pipefail
 
-find_root() {
-  local dir="$PWD"
-  while [[ "$dir" != "/" ]]; do
-    if [[ -f "$dir/package.json" || -f "$dir/pyproject.toml" || -f "$dir/go.mod" || -d "$dir/.git" ]]; then
-      echo "$dir"
-      return
-    fi
-    dir=$(dirname "$dir")
-  done
-  echo "$PWD"
-}
+# shellcheck source=lib/shared.sh
+source "$(cd "$(dirname "$0")" && pwd)/lib/shared.sh"
 
-ROOT=$(find_root)
+ROOT=$(find_project_root)
 
 echo "=== CONTEXT RECOVERY ==="
 echo "Reload from docs/RUNBOOK.md in this repo for full pipeline rules."

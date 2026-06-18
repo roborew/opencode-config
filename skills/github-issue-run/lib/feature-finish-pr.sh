@@ -8,7 +8,12 @@ set -euo pipefail
 SLUG="${1:?feature slug required}"
 ARG_BASE="${2:-}"
 FEAT="feature:${SLUG}"
-REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+
+OC="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
+# shellcheck source=../../../scripts/lib/shared.sh
+source "${OC}/scripts/lib/shared.sh"
+
+REPO=$(gh_current_repo)
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
 emit() {

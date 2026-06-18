@@ -5,20 +5,10 @@ set -euo pipefail
 SRC="${1:-}"
 [[ -z "$SRC" || ! -f "$SRC" ]] && exit 0
 
-find_root() {
-  local dir
-  dir=$(cd "$(dirname "$SRC")" && pwd)
-  while [[ "$dir" != "/" ]]; do
-    if [[ -f "$dir/package.json" || -f "$dir/pyproject.toml" || -d "$dir/.git" ]]; then
-      echo "$dir"
-      return
-    fi
-    dir=$(dirname "$dir")
-  done
-  echo "$(cd "$(dirname "$SRC")" && pwd)"
-}
+# shellcheck source=lib/shared.sh
+source "$(cd "$(dirname "$0")" && pwd)/lib/shared.sh"
 
-ROOT=$(find_root)
+ROOT=$(find_project_root "$(dirname "$SRC")")
 BASE=$(basename "$SRC")
 NAME="${BASE%.*}"
 EXT="${SRC##*.}"

@@ -13,10 +13,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 OC="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
+# shellcheck source=/dev/null disable=SC1091
+source "${OC}/scripts/lib/shared.sh"
 VALIDATE="${OC}/templates/spec-repo/bin/lib/validate_issue_body.py"
 [[ -f "$VALIDATE" ]] || { echo "ERROR: validate_issue_body.py not found; run setup-project" >&2; exit 8; }
 
-REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+REPO=$(gh_current_repo)
 echo "==> feature-check: ${SLUG} in ${REPO} (level=${LEVEL})"
 
 FAIL=0

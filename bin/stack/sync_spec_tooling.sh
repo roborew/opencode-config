@@ -50,19 +50,11 @@ fi
 
 mkdir -p "$SPEC/bin/lib" "$SPEC/skills/fanout-issues" "$SPEC/docs/agents" "$SPEC/docs/prd"
 
+# shellcheck source=../../scripts/lib/shared.sh
+source "${OC}/scripts/lib/shared.sh"
+
 echo "==> Syncing spec tooling..."
 
-# Ensure LF shebangs (CRLF breaks `env: bash\r` on macOS/Linux).
-strip_crlf() {
-  python3 -c "
-import pathlib, sys
-p = pathlib.Path(sys.argv[1])
-raw = p.read_bytes()
-data = raw.replace(b'\r\n', b'\n').replace(b'\r', b'\n')
-if data != raw:
-    p.write_bytes(data)
-" "$1"
-}
 sync_bin() {
   install -m0755 "$1" "$2"
   strip_crlf "$2"

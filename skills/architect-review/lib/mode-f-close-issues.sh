@@ -9,6 +9,9 @@ PR_URL="${2:-}"
 LABEL="feature:${SLUG}"
 
 OC="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
+# shellcheck source=../../../scripts/lib/shared.sh
+source "${OC}/scripts/lib/shared.sh"
+
 TRANSITION="${OC}/skills/github-issue-run/lib/issue-state-transition.sh"
 
 if [[ ! -x "$TRANSITION" ]]; then
@@ -16,7 +19,7 @@ if [[ ! -x "$TRANSITION" ]]; then
   exit 1
 fi
 
-REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner || true)"
+REPO="$(gh_current_repo || true)"
 if [[ -z "$REPO" ]]; then
   echo "ERROR: could not resolve current repo (run from impl repo with gh auth)" >&2
   exit 1

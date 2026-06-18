@@ -11,16 +11,8 @@ IMPL="$(cd "$IMPL" && pwd)"
 mkdir -p "$IMPL/bin" "$IMPL/bin/lib"
 OC_LIB="${OC}/bin/lib"
 
-strip_crlf() {
-  python3 -c "
-import pathlib, sys
-p = pathlib.Path(sys.argv[1])
-raw = p.read_bytes()
-data = raw.replace(b'\r\n', b'\n').replace(b'\r', b'\n')
-if data != raw:
-    p.write_bytes(data)
-" "$1"
-}
+# shellcheck source=../../scripts/lib/shared.sh
+source "${OC}/scripts/lib/shared.sh"
 
 if [[ "${OPENCODE_SETUP_QUIET:-}" != "1" ]]; then
   echo "==> Syncing impl tooling into $(basename "$IMPL")..."

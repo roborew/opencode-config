@@ -3,7 +3,9 @@
 set -euo pipefail
 SLUG="${1:?feature slug required}"
 OC="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
-REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+# shellcheck source=/dev/null disable=SC1091
+source "${OC}/scripts/lib/shared.sh"
+REPO=$(gh_current_repo)
 FAIL=0
 
 echo "=== Orchestrate readiness: ${SLUG} (${REPO}) ==="

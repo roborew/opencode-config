@@ -6,19 +6,12 @@ OUT="tmp/feature-context.md"
 mkdir -p tmp
 
 BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
-OC_LIB="${HOME}/.config/opencode/bin/lib"
-if [[ -f "${BIN_DIR}/lib/fetch_spec_prd.sh" ]]; then
-  # shellcheck source=lib/fetch_spec_prd.sh disable=SC1091
-  source "${BIN_DIR}/lib/fetch_spec_prd.sh"
-elif [[ -f "${OC_LIB}/fetch_spec_prd.sh" ]]; then
-  # shellcheck source=/dev/null disable=SC1091
-  source "${OC_LIB}/fetch_spec_prd.sh"
-else
-  echo "ERROR: missing fetch_spec_prd.sh (run setup-project / sync_impl_tooling)" >&2
-  exit 8
-fi
+OC="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
+# shellcheck source=/dev/null disable=SC1091
+source "${OC}/scripts/lib/shared.sh"
+source_fetch_spec_prd "$BIN_DIR"
 
-REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+REPO=$(gh_current_repo)
 ISSUE_JSON=$(gh issue view "$ISSUE" --repo "$REPO" --json title,body,labels,url,number)
 TRACKER="docs/agents/issue-tracker.md"
 

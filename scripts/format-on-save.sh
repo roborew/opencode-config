@@ -5,20 +5,10 @@ set -euo pipefail
 FILE_PATH="${1:-}"
 [[ -z "$FILE_PATH" || ! -f "$FILE_PATH" ]] && exit 0
 
-find_root() {
-  local dir
-  dir=$(cd "$(dirname "$FILE_PATH")" && pwd)
-  while [[ "$dir" != "/" ]]; do
-    if [[ -f "$dir/package.json" || -f "$dir/pyproject.toml" || -f "$dir/go.mod" || -d "$dir/.git" ]]; then
-      echo "$dir"
-      return
-    fi
-    dir=$(dirname "$dir")
-  done
-  echo "$(cd "$(dirname "$FILE_PATH")" && pwd)"
-}
+# shellcheck source=lib/shared.sh
+source "$(cd "$(dirname "$0")" && pwd)/lib/shared.sh"
 
-ROOT=$(find_root)
+ROOT=$(find_project_root "$(dirname "$FILE_PATH")")
 EXT="${FILE_PATH##*.}"
 
 # Biome

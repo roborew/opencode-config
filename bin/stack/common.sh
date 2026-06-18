@@ -6,6 +6,10 @@ stack_oc_root() {
   cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd
 }
 
+# Source shared utilities (strip_crlf, gh_current_repo, etc.)
+# shellcheck source=../../scripts/lib/shared.sh
+source "$(stack_oc_root)/scripts/lib/shared.sh"
+
 # True if dirname is the spec repo for this app (case-insensitive *-spec match or layout).
 stack_dir_is_spec_repo() {
   local parent_dir="$1"
@@ -96,37 +100,9 @@ stack_is_spec_repo() {
 }
 
 # owner/name from git remote (prefer gh; fallback parse).
+# Delegates to gh_current_repo from scripts/lib/shared.sh.
 stack_gh_repo_from_dir() {
-  local dir="$1"
-  local url name
-  if command -v gh >/dev/null 2>&1; then
-    name="$(cd "$dir" && gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true)"
-    if [[ -n "$name" && "$name" == */* ]]; then
-      printf '%s\n' "$name"
-      return 0
-    fi
-  fi
-  url="$(git -C "$dir" remote get-url origin 2>/dev/null || true)"
-  [[ -n "$url" ]] || return 1
-  case "$url" in
-    git@github.com:*)
-      name="${url#git@github.com:}"
-      name="${name%.git}"
-      ;;
-    https://github.com/*|http://github.com/*)
-      name="${url#https://github.com/}"
-      name="${name#http://github.com/}"
-      name="${name%.git}"
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-  if [[ "$name" == */* ]]; then
-    printf '%s\n' "$name"
-    return 0
-  fi
-  return 1
+  gh_current_repo "$1"
 }
 
 # App slug from spec folder (blocshed-spec -> blocshed).
