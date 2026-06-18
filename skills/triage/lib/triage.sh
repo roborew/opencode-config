@@ -24,7 +24,11 @@ remove_state_labels() {
   local num="$1"
   local l
   for l in "${state_labels[@]}"; do
-    gh issue edit "$num" --repo "$REPO" --remove-label "$l" 2>/dev/null || true
+    if ! gh issue edit "$num" --repo "$REPO" --remove-label "$l" 2>/dev/null; then
+      if gh issue view "$num" --repo "$REPO" --json labels -q '[.labels[].name] | join(",")' 2>/dev/null | grep -q "$l"; then
+        echo "WARN: failed to remove label $l from $REPO#$num" >&2
+      fi
+    fi
   done
 }
 

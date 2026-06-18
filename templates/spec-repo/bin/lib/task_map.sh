@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Portable task_id -> issue number map (bash 3.2+; no declare -A).
+set -euo pipefail
+
 task_map_init() {
-  TASK_MAP_FILE=$(mktemp)
+  TASK_MAP_FILE=$(mktemp) || { echo "ERROR: mktemp failed for task map" >&2; return 1; }
   : >"$TASK_MAP_FILE"
 }
 

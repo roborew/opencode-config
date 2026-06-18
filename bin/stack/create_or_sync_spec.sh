@@ -64,7 +64,9 @@ fi
 cd "$SPEC_DIR"
 
 if [[ "$CREATED_SPEC" == "true" ]]; then
-  git branch -M "${PRIMARY_BRANCH}" 2>&1 | grep -v '^$' >&2 || true
+  if ! git branch -M "${PRIMARY_BRANCH}" 2>&1 | grep -v '^$' >&2; then
+    echo "WARN: could not rename branch to ${PRIMARY_BRANCH}" >&2
+  fi
 fi
 
 SKIP_BRANCH_SYNC=false
@@ -76,14 +78,20 @@ if [[ "$CREATED_SPEC" != "true" && "$KEEP_BRANCH" != "true" ]]; then
 fi
 
 if [[ "$CREATED_SPEC" != "true" && "$KEEP_BRANCH" != "true" && "$SKIP_BRANCH_SYNC" != "true" ]]; then
-  git fetch origin >/dev/null 2>&1 || true
+  if ! git fetch origin >/dev/null 2>&1; then
+    echo "WARN: git fetch origin failed; remote ref operations may use stale data" >&2
+  fi
   remote_default="$(gh repo view "$SPEC_REPO" --json defaultBranchRef --jq '.defaultBranchRef.name')"
   if [[ "$remote_default" == "master" ]] && git show-ref --verify --quiet refs/remotes/origin/master; then
     if ! git show-ref --verify --quiet "refs/remotes/origin/${PRIMARY_BRANCH}"; then
       git switch -c "${PRIMARY_BRANCH}" origin/master >/dev/null 2>&1
       git push -u origin "${PRIMARY_BRANCH}" >/dev/null 2>&1
-      gh repo edit "${SPEC_REPO}" --default-branch "${PRIMARY_BRANCH}" >/dev/null 2>&1 || true
-      git fetch origin >/dev/null 2>&1 || true
+      if ! gh repo edit "${SPEC_REPO}" --default-branch "${PRIMARY_BRANCH}" >/dev/null 2>&1; then
+        echo "WARN: could not set default branch to ${PRIMARY_BRANCH} on ${SPEC_REPO}" >&2
+      fi
+      if ! git fetch origin >/dev/null 2>&1; then
+        echo "WARN: git fetch origin failed after branch rename" >&2
+      fi
     fi
   fi
   checkout_branch=""
@@ -105,7 +113,9 @@ if [[ "$CREATED_SPEC" != "true" && "$KEEP_BRANCH" != "true" && "$SKIP_BRANCH_SYN
     else
       git switch -c "${checkout_branch}" "origin/${checkout_branch}" >/dev/null 2>&1
     fi
-    git pull --ff-only origin "${checkout_branch}" >/dev/null 2>&1 || true
+    if ! git pull --ff-only origin "${checkout_branch}" >/dev/null 2>&1; then
+      echo "WARN: git pull --ff-only failed on ${checkout_branch}; local branch may be behind origin" >&2
+    fi
   fi
 elif [[ "$KEEP_BRANCH" == "true" ]]; then
   echo "==> Spec repo: keeping branch $(git branch --show-current 2>/dev/null)" >&2

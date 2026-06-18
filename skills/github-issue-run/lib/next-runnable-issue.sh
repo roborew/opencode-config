@@ -10,7 +10,10 @@ OC="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
 PARSE_META="${OC}/templates/spec-repo/bin/lib/extract_task_meta.py"
 
 RAW=$(gh issue list --repo "$REPO" -L 200 --label "$FEAT" --label state:ready-for-agent --state open --json number,title,body 2>/dev/null || true)
-[[ -n "$RAW" ]] || exit 1
+if [[ -z "$RAW" ]]; then
+  echo "WARN: no issues returned for ${FEAT} state:ready-for-agent in ${REPO} (API error or none exist)" >&2
+  exit 1
+fi
 LIST=$(echo "$RAW" | jq 'sort_by(.number)')
 [[ "$LIST" != "[]" ]] || exit 1
 
@@ -28,7 +31,10 @@ is_blocked_open() {
   local d st
   while IFS= read -r d; do
     [[ -z "$d" ]] && continue
-    st=$(gh issue view "$d" --repo "$REPO" --json state -q .state 2>/dev/null || echo OPEN)
+    if ! st=$(gh issue view "$d" --repo "$REPO" --json state -q .state 2>/dev/null); then
+      echo "WARN: could not fetch state of #$d; assuming OPEN (blocked)" >&2
+      st="OPEN"
+    fi
     if [[ "$st" != "CLOSED" ]]; then
       return 0
     fi

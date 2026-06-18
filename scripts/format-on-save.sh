@@ -24,7 +24,13 @@ EXT="${FILE_PATH##*.}"
 # Biome
 if [[ -f "$ROOT/node_modules/.bin/biome" ]] && { [[ -f "$ROOT/biome.json" ]] || [[ -f "$ROOT/biome.jsonc" ]]; }; then
   case "$EXT" in
-    js|jsx|ts|tsx|json|css) "$ROOT/node_modules/.bin/biome" format --write "$FILE_PATH" 2>/dev/null && exit 0 ;;
+    js|jsx|ts|tsx|json|css)
+      if ! "$ROOT/node_modules/.bin/biome" format --write "$FILE_PATH" 2>&1; then
+        echo "format-on-save: biome format failed for $FILE_PATH" >&2
+        exit 1
+      fi
+      exit 0
+      ;;
   esac
 fi
 
@@ -32,7 +38,11 @@ fi
 if [[ -f "$ROOT/node_modules/.bin/prettier" ]]; then
   case "$EXT" in
     js|jsx|ts|tsx|json|css|scss|md|yaml|yml|html)
-      npx prettier --write "$FILE_PATH" 2>/dev/null && exit 0
+      if ! npx prettier --write "$FILE_PATH" 2>&1; then
+        echo "format-on-save: prettier failed for $FILE_PATH" >&2
+        exit 1
+      fi
+      exit 0
       ;;
   esac
 fi
@@ -40,8 +50,14 @@ fi
 # Ruff
 if command -v ruff >/dev/null 2>&1 && [[ "$EXT" == "py" ]]; then
   if [[ -f "$ROOT/ruff.toml" || -f "$ROOT/.ruff.toml" ]] || grep -q '\[tool\.ruff\]' "$ROOT/pyproject.toml" 2>/dev/null; then
-    ruff format "$FILE_PATH" 2>/dev/null || true
-    ruff check --fix "$FILE_PATH" 2>/dev/null || true
+    if ! ruff format "$FILE_PATH" 2>&1; then
+      echo "format-on-save: ruff format failed for $FILE_PATH" >&2
+      exit 1
+    fi
+    if ! ruff check --fix "$FILE_PATH" 2>&1; then
+      echo "format-on-save: ruff check --fix failed for $FILE_PATH" >&2
+      exit 1
+    fi
     exit 0
   fi
 fi

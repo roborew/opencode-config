@@ -27,6 +27,9 @@ else
 fi
 
 if [[ -z "$COMMAND" ]]; then
+  if [[ -n "$INPUT" ]]; then
+    echo "WARN: could not parse command from input; allowing passthrough" >&2
+  fi
   exit 0
 fi
 

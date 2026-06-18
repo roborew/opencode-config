@@ -210,7 +210,9 @@ if [[ "$SPEC_ONLY" != "true" && ${#TARGETS[@]} -gt 0 ]]; then
     fi
     if [[ -d "${impl_path}/.git" ]]; then
       "$LINK" "${impl_path}" "$SPEC_REPO"
-      "${STACK}/sync_impl_tooling.sh" "${impl_path}" || true
+      if ! "${STACK}/sync_impl_tooling.sh" "${impl_path}"; then
+        echo "WARN: sync_impl_tooling failed for ${local_dir}" >&2
+      fi
       LINKED=$((LINKED + 1))
     else
       echo "WARN: ${local_dir} not found under ${PARENT}" >&2

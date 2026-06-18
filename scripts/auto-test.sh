@@ -3,7 +3,14 @@
 
 set -euo pipefail
 SRC="${1:-}"
-[[ -z "$SRC" || ! -f "$SRC" ]] && exit 0
+if [[ -z "$SRC" ]]; then
+  echo "auto-test: no file argument provided" >&2
+  exit 0
+fi
+if [[ ! -f "$SRC" ]]; then
+  echo "auto-test: file not found: $SRC" >&2
+  exit 1
+fi
 
 find_root() {
   local dir
@@ -29,7 +36,9 @@ if [[ "$EXT" == "py" ]]; then
   if command -v pytest >/dev/null 2>&1; then
     for candidate in "tests/test_${NAME}.py" "test_${NAME}.py" "${NAME}_test.py" "tests/${NAME}_test.py"; do
       if [[ -f "$candidate" ]]; then
-        pytest -q "$candidate" && exit 0
+        echo "auto-test: running pytest $candidate" >&2
+        pytest -q "$candidate"
+        exit $?
       fi
     done
   fi
@@ -40,10 +49,14 @@ if [[ "$EXT" =~ ^(ts|tsx|js|jsx)$ ]]; then
     for candidate in "${NAME}.test.${EXT}" "${NAME}.spec.${EXT}" "__tests__/${NAME}.test.${EXT}"; do
       if [[ -f "$candidate" ]]; then
         if grep -q '"vitest"' "$ROOT/package.json" 2>/dev/null && command -v npx >/dev/null 2>&1; then
-          npx vitest run "$candidate" 2>/dev/null && exit 0
+          echo "auto-test: running vitest $candidate" >&2
+          npx vitest run "$candidate"
+          exit $?
         fi
         if grep -q '"jest"' "$ROOT/package.json" 2>/dev/null && command -v npx >/dev/null 2>&1; then
-          npx jest "$candidate" 2>/dev/null && exit 0
+          echo "auto-test: running jest $candidate" >&2
+          npx jest "$candidate"
+          exit $?
         fi
       fi
     done

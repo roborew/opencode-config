@@ -19,7 +19,15 @@ STATE_LABELS=(
 )
 
 for l in "${STATE_LABELS[@]}"; do
-  gh issue edit "$NUM" --repo "$REPO" --remove-label "$l" 2>/dev/null || true
+  # Label may not be present; ignore "not found" but warn on other errors.
+  if ! gh issue edit "$NUM" --repo "$REPO" --remove-label "$l" 2>/dev/null; then
+    if gh issue view "$NUM" --repo "$REPO" --json labels -q '[.labels[].name] | join(",")' 2>/dev/null | grep -q "$l"; then
+      echo "WARN: failed to remove label $l from $REPO#$NUM" >&2
+    fi
+  fi
 done
-gh issue edit "$NUM" --repo "$REPO" --add-label "$NEW"
+if ! gh issue edit "$NUM" --repo "$REPO" --add-label "$NEW"; then
+  echo "ERROR: failed to add label $NEW to $REPO#$NUM" >&2
+  exit 1
+fi
 echo "OK: $REPO#$NUM -> $NEW"
