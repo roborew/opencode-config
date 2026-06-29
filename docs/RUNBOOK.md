@@ -24,6 +24,17 @@ After `bin/fanout`, **GitHub issues are the execution source of truth**. Do not 
 
 Shell bootstrap syncs `bin/*` and templates; registry **INCOMPLETE** until the OpenCode interview fills TBD fields is normal (`exit 3` / `NEXT:`). Re-run `setup-project` after adding sibling impl repos. Details: [README.md](../README.md) Setup, [skills/setup-project/SKILL.md](../skills/setup-project/SKILL.md).
 
+## Project overview (GitHub Project board)
+
+When `GH_PROJECT` is set in `~/.opencode-agent-env`:
+
+- **`bin/publish-prd-issue`** registers the PRD parent issue on the org board and writes `parent_issue` into the PRD frontmatter.
+- **`bin/fanout`** creates child issues as sub-issues, labels them `prd-task`, and registers each on the board.
+- Sub-issue progress rolls up on the parent card in the project view.
+- Spec repo workflow **`prd-parent-auto-close`** closes PRD parents when all sub-issues are done.
+
+Full setup: [GITHUB-PROJECT-BOARD.md](GITHUB-PROJECT-BOARD.md). Requires `gh` >= 2.94.0 and `gh auth refresh -s project`.
+
 ## Push cadence (issue-backed execution)
 
 - **Commit locally** after each passing stage using the stage `commit_message` from `opencode-task-yaml` (append `Refs: #<issue_number>`). Local commits are fine; remote pushes are not part of the per-issue loop.

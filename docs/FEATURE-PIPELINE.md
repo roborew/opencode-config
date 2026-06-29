@@ -6,8 +6,8 @@ Spec-driven path from PRD to orchestrate-ready GitHub issues. **Agents run `bin/
 
 | # | Where | Who does it |
 |---|--------|-------------|
-| 1 | spec | User + **architect**: grill-me → to-prd → approve PRD |
-| 2 | spec | **architect** (fanout-issues): creates child issues per repo |
+| 1 | spec | User + **architect**: grill-me → to-prd → approve PRD (parent issue → org project board when `GH_PROJECT` set) |
+| 2 | spec | **architect** (fanout-issues): creates child issues per repo (sub-issues + `prd-task` label + board) |
 | 3 | impl | User: **architect option 1** + slug → **issue-expand** runs bundle, plans each issue, gates |
 | 4 | impl | User approves issue edits in chat → **architect** runs checks → prompts **orchestrate** |
 | 5 | impl | **orchestrate** exhausts `feature:<slug>` queue locally → runs one CodeRabbit CLI review → fixes the findings locally → final push + ready-for-review PR (unless opted out) → prints table sign-off handoff for the exact feature/PR → **new session** → **architect** Mode F sign-off → human merge PR |
@@ -69,6 +69,8 @@ cd ~/code/APP && setup-project
 ```
 
 `GH_ORG` is the GitHub **owner** (`owner/repo`), not the app slug or local folder name. That syncs tooling into spec + impl repos. Everything else is OpenCode agents and skills. See [RUNBOOK.md](RUNBOOK.md) and [skills/setup-project/SKILL.md](../skills/setup-project/SKILL.md).
+
+**Project board (optional):** Set `GH_PROJECT` in `~/.opencode-agent-env` before publish/fanout. See [GITHUB-PROJECT-BOARD.md](GITHUB-PROJECT-BOARD.md).
 
 ## Responsibility split
 

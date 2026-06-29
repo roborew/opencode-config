@@ -60,6 +60,18 @@ cd APP-spec && opencode
 
 **Pass criteria:** `setup-project --check-only .` from parent passes after registry interview.
 
+## Project board smoke (optional)
+
+Requires `GH_PROJECT` in `~/.opencode-agent-env` and `gh auth refresh -s project`.
+
+After fanout for a test slug:
+
+1. PRD parent issue appears on [RoborewDev Project #1](https://github.com/orgs/RoborewDev/projects/1).
+2. Child issues appear as sub-issues of the parent with label `prd-task`.
+3. Parent issue shows sub-issue completion progress (e.g. 0/3).
+
+See [GITHUB-PROJECT-BOARD.md](../GITHUB-PROJECT-BOARD.md).
+
 ## End-to-end feature smoke (optional)
 
 **Spec feature:** spec repo → grill-me → to-prd → approve → architect runs fanout → impl architect issue-expand → orchestrate GitHub backlog `feature:<slug>`.

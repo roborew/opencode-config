@@ -49,7 +49,9 @@ Do not assume zero issues were created. Partial fanout is common.
 
 - Each ticket row becomes one child issue in the repo named by `repo` (full `owner/repo` matching `docs/agents/repos.md`).
 - Issues are created in dependency order (`depends_on` task ids).
-- Labels include `feature:<slug>`, `state:ready-for-agent`, `mode:afk` or `mode:hitl`, and `category:feature`.
+- Labels include `feature:<slug>`, `state:ready-for-agent`, `mode:afk` or `mode:hitl`, `category:feature`, and **`prd-task`** (for org project board auto-add).
+- Child issues are created as **sub-issues** of the PRD parent (`parent_issue` in PRD frontmatter) via `gh issue create --parent`.
+- When `GH_PROJECT` is set in `~/.opencode-agent-env`, `bin/fanout` also adds each child issue to the org project board.
 - The issue body embeds fenced `opencode-task-json` metadata plus human-readable sections.
 
 ### Legacy `slices:`
@@ -60,5 +62,6 @@ Do not assume zero issues were created. Partial fanout is common.
 ### Idempotency
 
 - Before each create, `bin/fanout` checks existing issues by exact title and embedded task id.
+- Re-running fanout on existing issues re-links them as sub-issues and adds them to the project board when `GH_PROJECT` is set.
 - Duplicate ticket ids or duplicate `(repo, title)` pairs in the PRD cause fanout to exit before creating anything.
 - Multiple GitHub issues matching one ticket cause fanout to exit; close extras first.

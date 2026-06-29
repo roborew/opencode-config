@@ -5,17 +5,31 @@ SLUG="${1:?slug required}"
 TITLE="${2:?title required}"
 BODY_FILE="${3:?body file required}"
 
+BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$BIN_DIR/.." && pwd)"
+PRD_PATH="${ROOT}/docs/prd/${SLUG}.md"
+PRD_IO="${BIN_DIR}/lib/prd_io.py"
+# shellcheck source=lib/github_project.sh
+source "${BIN_DIR}/lib/github_project.sh"
+
 [[ -f "$BODY_FILE" ]] || { echo "missing body file: $BODY_FILE" >&2; exit 2; }
+[[ -f "$PRD_PATH" ]] || { echo "missing PRD file: $PRD_PATH" >&2; exit 2; }
+[[ -f "$PRD_IO" ]] || { echo "missing $PRD_IO" >&2; exit 8; }
 
 REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 for label in "prd" "state:ready-for-agent" "category:feature" "feature:${SLUG}"; do
   gh label create "$label" --repo "$REPO" 2>/dev/null || true
 done
 
-gh issue create \
+URL=$(gh issue create \
   --repo "$REPO" \
   --title "$TITLE" \
   --body-file "$BODY_FILE" \
-  --label "prd,state:ready-for-agent,category:feature,feature:${SLUG}"
+  --label "prd,state:ready-for-agent,category:feature,feature:${SLUG}" \
+  --json url -q .url)
 
-echo "Published parent PRD issue for ${SLUG} on ${REPO}"
+github_project_add_issue "$URL"
+python3 "$PRD_IO" set "$PRD_PATH" parent_issue "$URL"
+
+echo "Published parent PRD issue for ${SLUG} on ${REPO}: ${URL}"
+echo "Updated parent_issue in ${PRD_PATH}"

@@ -14,12 +14,14 @@ Stage-based **Architect → Orchestrate → subagents** pipeline with model rout
 | **`OPENCODE_CONFIG_DIR`** (default `~/.config/opencode` on macOS) | OpenCode loads `opencode.json`, agents, skills, and [rules/](rules/)                    |
 | **GitHub CLI** (`gh`) authenticated                               | Issues, `setup-project`, fanout, PR workflows                                             |
 | **`GH_ORG`** (or `--org`) for stack bootstrap                     | GitHub **owner** in `owner/repo` — your user login or org, not the app slug               |
+| **`GH_PROJECT`** (optional) in `~/.opencode-agent-env`            | Org-wide project board — PRD parent + child issues registered at publish/fanout           |
 | **Sibling clones** before spec bootstrap                          | `setup-project` creates/syncs **`<app>-spec`** and links repos that already exist on disk |
 
 
 Optional but recommended:
 
 - Add OpenCode CLI tools to your shell: `export PATH="$OPENCODE_CONFIG_DIR/bin:$PATH"`
+- Org project board: `export GH_PROJECT="https://github.com/orgs/RoborewDev/projects/1"` in `~/.opencode-agent-env` — see [docs/GITHUB-PROJECT-BOARD.md](docs/GITHUB-PROJECT-BOARD.md)
 - Label sync across repos: `gh secret set LABEL_SYNC_PAT --repo <owner>/<app>-spec` (see [templates/spec-repo/.github/workflows/sync-labels.yml](templates/spec-repo/.github/workflows/sync-labels.yml))
 - Consistent agent shell: [scripts/agent-run.zsh](scripts/agent-run.zsh) and `~/.opencode-agent-env` for secrets (see RUNBOOK)
 

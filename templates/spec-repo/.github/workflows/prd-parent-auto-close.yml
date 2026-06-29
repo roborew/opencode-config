@@ -1,0 +1,68 @@
+name: prd-parent-auto-close
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  check-prd-completion:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close PRD parents when all sub-issues are done
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SPEC_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          spec_owner="${SPEC_REPO%%/*}"
+          spec_name="${SPEC_REPO##*/}"
+
+          mapfile -t prd_numbers < <(
+            gh issue list --repo "$SPEC_REPO" \
+              --label prd --state open --limit 200 \
+              --json number -q '.[].number'
+          )
+
+          if [[ ${#prd_numbers[@]} -eq 0 ]]; then
+            echo "No open PRD parent issues."
+            exit 0
+          fi
+
+          for num in "${prd_numbers[@]}"; do
+            [[ -n "$num" ]] || continue
+            result=$(gh api graphql -f query='
+              query($owner: String!, $name: String!, $number: Int!) {
+                repository(owner: $owner, name: $name) {
+                  issue(number: $number) {
+                    title
+                    subIssues(first: 100) {
+                      totalCount
+                      nodes { state }
+                    }
+                  }
+                }
+              }
+            ' -f owner="$spec_owner" -f name="$spec_name" -F number="$num")
+
+            total=$(echo "$result" | jq -r '.data.repository.issue.subIssues.totalCount // 0')
+            open_count=$(echo "$result" | jq -r '
+              [.data.repository.issue.subIssues.nodes[]? | select(.state != "CLOSED")] | length
+            ')
+            title=$(echo "$result" | jq -r '.data.repository.issue.title // ""')
+
+            if [[ "$total" -eq 0 ]]; then
+              echo "SKIP #${num} (${title}): no sub-issues linked yet"
+              continue
+            fi
+            if [[ "$open_count" -gt 0 ]]; then
+              echo "SKIP #${num} (${title}): ${open_count}/${total} sub-issues still open"
+              continue
+            fi
+
+            echo "Closing PRD parent #${num} (${title}) — all ${total} sub-issues closed"
+            gh issue close "$num" --repo "$SPEC_REPO"
+            gh issue edit "$num" --repo "$SPEC_REPO" --add-label "state:done" 2>/dev/null || true
+          done
