@@ -127,8 +127,9 @@ When no artifact path or `feature:<slug>` is provided (new session, greeting, un
    - **`no`** → set `env_gate_declined: true`; do not run preflight this session unless the user later asks to rerun.
    - **Already `env_gate_passed` or `env_gate_declined`** → do not ask again; continue.
 2. **Checkout identity gate** (above) — mandatory even when preflight was declined.
-3. **Claude Context readiness gate** (below).
-4. **Fresh Context: Work selection** — present the **(1)/(2)/(3)/(4)** menu only after steps 1–2 are resolved.
+3. **Issue-expand readiness gate** (GitHub backlog only) — see below.
+4. **Claude Context readiness gate** (below).
+5. **Fresh Context: Work selection** — present the **(1)/(2)/(3)/(4)** menu only after steps 1–3 are resolved.
 
 When the user provides a **`.plan` path** or **`feature:<slug>`** before bootstrap completed: if neither `env_gate_passed` nor `env_gate_declined`, ask the preflight **yes/no** first; run **checkout identity gate**; then enter the stage or GitHub loop.
 
@@ -139,6 +140,18 @@ On fresh context, and before delegating discovery-heavy planning or review work:
 1. Call `claude-context` `get_indexing_status` for the workspace path.
 2. If the index is missing, stale, or not ready, call `index_codebase`, then re-check until ready before continuing.
 3. If `claude-context` is unavailable or indexing still fails after retry, report that readiness could not be confirmed. Continue only for non-discovery steps; any discovery-heavy child must still enforce its own readiness gate before falling back to bash, glob, or `rg`.
+
+## Issue-expand readiness gate (GitHub backlog — mandatory)
+
+**Orchestrate never runs issue-expand.** It only verifies that planning completed in the spec architect session.
+
+After **checkout identity gate** and before the GitHub backlog loop (or when the user provides `feature:<slug>`):
+
+1. Task **`developer`** `load: minimal` with `OPENCODE_EXPECT_REPO_ROOT` from `checkout_contract`:
+   - `opencode-run impl orchestrate-readiness-check <slug>`
+2. **PASS** — substantive **Implementation plan** and non-empty `stages[]` on every open issue; proceed to the backlog loop.
+3. **FAIL** — **stop**; do not enter flat mode or implement placeholder issues. Emit a table handoff: return to **spec repo → architect option 1** (issue-expand) with the slug; include readiness-check stderr summary.
+4. **Re-run** — if issues are already expanded, readiness check passes immediately; orchestrate does not re-expand.
 
 ## Fresh Context: Work selection (mandatory)
 
@@ -164,9 +177,11 @@ If there are no **active** plans (only archived `*.completed.md`, directory miss
 
 ## GitHub feature backlog loop (no `.plan` artifact)
 
-Use this path after spec `fanout` and impl **issue-expand** (`feature:<slug>`, `state:ready-for-agent`, `opencode-task-yaml` with `stages[]`). **You have no `bash` tool** — for this loop only, delegate every `gh` invocation and helper script to **`developer`** via Task (`load: minimal` for pure shell, `load: full` for implementation). (Bootstrap env shell uses **`worktree-env`** / **`preflight`**, not **`developer`**.)
+Use this path after spec `fanout` and **issue-expand** in the spec repo (`feature:<slug>`, `state:ready-for-agent`, `opencode-task-json` with non-empty `stages[]`). **You have no `bash` tool** — for this loop only, delegate every `gh` invocation and helper script to **`developer`** via Task (`load: minimal` for pure shell, `load: full` for implementation). (Bootstrap env shell uses **`worktree-env`** / **`preflight`**, not **`developer`**.)
 
 Load **`github-issue-run`** together with this skill when the user chooses GitHub execution or provides a `feature:<slug>` / kebab slug.
+
+**Prerequisite:** **Issue-expand readiness gate** above must PASS before step 1 of the loop below.
 
 ### Config path for helper scripts
 
@@ -180,7 +195,7 @@ Load **`github-issue-run`** together with this skill when the user chooses GitHu
 4. Task `developer` `load: minimal` with `OPENCODE_EXPECT_REPO_ROOT` and `OPENCODE_EXPECT_BRANCH` set from `checkout_contract`: `issue-state-transition.sh "<repo>" "<number>" state:in-progress`
 5. **Stages vs flat issue:** Parse `opencode_meta` from the discovery JSON.
    - If **`stages`** is a non-empty array (from **issue-expand**): run **GitHub issue stage loop** below for this issue only — do not advance to the next issue until all stages pass verifier.
-   - Else **flat mode:** single implement pass using root `acceptance` and `test_commands` (fanout default).
+   - Else **flat mode:** **blocked on spec-driven path** — readiness gate should have prevented this. Stop and return user to spec architect option 1. Flat mode applies only to legacy targeted issues without `stages[]` when explicitly not using the spec fanout path.
 6. **Implement (flat mode):** Task `developer` or `frontend-dev` per `opencode_meta.owner` with **`load: full`**. **GitHub issue contract:**
    - `execution_mode: github_issue`
    - `issue_number`, `repo`, `title`
@@ -218,7 +233,7 @@ When discovery fails (queue exhausted):
 
 **Opt-out:** `ORCHESTRATE_AUTO_PR=0` or user instruction not to open a PR. **Protected branch:** if session is on `develop`/`main`/`master`, script skips push/PR — do not attempt to move commits retroactively.
 
-**Prerequisite:** Issues must pass **issue-expand** gates (`orchestrate-readiness-check`) — substantive **Implementation planning** and non-empty `stages[]` in **`opencode-task-yaml`**.
+**Prerequisite (enforced):** **Issue-expand readiness gate** — substantive **Implementation plan** and non-empty `stages[]` in **`opencode-task-json`**. Orchestrate does not run issue-expand.
 
 ## Stage Loop
 
@@ -357,10 +372,11 @@ When verifier passes for all stages, any required **CodeRabbit gate** has **`COD
 | Field | Value |
 |-------|-------|
 | Feature / artifact | `<Display Name>` (`feature:<slug>` or `.plan/<type>.<slug>.md`) |
-| Repo | `<owner/name or local repo>` |
+| Impl repo | `<owner/name>` |
+| Impl path | `<absolute path to impl git root>` |
 | Branch / base | `<branch>` -> `<base>` |
 | PR | `<pr_url>` or `<skip reason>` |
-| Sign-off owner | `architect` Mode F (GitHub feature) or Mode B (`.plan` artifact) |
+| Sign-off owner | **spec** architect option 4 Mode F (GitHub feature) or Mode B (`.plan` artifact) |
 
 ### Work completed
 | Task / stage | Status | Evidence | Notes / follow-up |
@@ -394,8 +410,8 @@ When verifier passes for all stages, any required **CodeRabbit gate** has **`COD
 ### Next steps
 | Order | Who | Action | Exact prompt / input |
 |-------|-----|--------|----------------------|
-| 1 | User | Start a new `architect` session for this feature sign-off | `feature:<slug> PR: <pr_url>` |
-| 2 | architect | Run Mode F/Mode B sign-off, close accepted issues, then documentation | Review the table above; do not re-run orchestration unless remediation is required |
+| 1 | User | Start a new **spec** `architect` session (option 4) for this impl PR sign-off | `feature:<slug> impl_repo: owner/name impl_repo_path: /abs/path PR: <pr_url>` |
+| 2 | architect | Run Mode F sign-off, close accepted issues in impl repo, then documentation on feature branch | Review the table above; do not re-run orchestration unless remediation is required |
 
 ### Copy/paste sign-off script
 ```text

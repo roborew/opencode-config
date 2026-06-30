@@ -77,3 +77,5 @@ Report a **Fanout summary** table to the user (mandatory):
 | Project board | `<GH_PROJECT url or "skipped (GH_PROJECT unset)">` |
 | Sub-issues linked | `<count> / <ticket count>` |
 | Child issues | `<repo>#<n>` per ticket (or compact table) |
+
+Then **continue in the same session** — load **`issue-expand`** immediately (do not ask the user to switch repos). Report the fanout summary briefly, then proceed to issue-expand without re-pasting the full PRD.

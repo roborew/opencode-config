@@ -6,10 +6,10 @@
 
 | Mode | Planning | Execution source of truth |
 |------|----------|----------------------------|
-| **Spec / GitHub** (default) | Spec: PRD + fanout; impl: **issue-expand** (architect option 1) | GitHub child issues (`feature:<slug>`, `opencode-task-yaml` + `stages[]`) |
-| **Legacy local** | Architect option 2 → scribe writes `.plan/feature.<slug>.md` | Active `.plan/*.md` (excludes `*.completed.md`) |
+| **Spec / GitHub** (default) | Spec: PRD + fanout + **issue-expand** (architect option 1, same session) | GitHub child issues (`feature:<slug>`, `opencode-task-json` + `stages[]`) |
+| **Legacy local** | Architect option 1 (targeted) → scribe writes `.plan/feature.<slug>.md` | Active `.plan/*.md` (excludes `*.completed.md`) |
 
-See [FEATURE-PIPELINE.md](FEATURE-PIPELINE.md) for the numbered pipeline. **Fanout alone does not populate `stages[]`** — run issue-expand in each implementation repo before orchestrate on the spec path.
+See [FEATURE-PIPELINE.md](FEATURE-PIPELINE.md) for the numbered pipeline. **Fanout alone does not populate `stages[]`** — issue-expand runs in the spec architect session before orchestrate.
 
 ## GitHub-always principle (spec path)
 
@@ -195,7 +195,7 @@ Runtime authority: `opencode.json`. Agent frontmatter `model:` should match for 
 
 Primaries and execution agents should use MCP only when it reduces uncertainty:
 
-- **`claude-context`**: Semantic code search in workspace. Use during planning (architect, **strategist**, debugger, refactor, review, document, designer). Discovery-heavy agents must run a readiness gate first (`get_indexing_status`; if needed `index_codebase`) and may fall back to bash/glob only when MCP is unavailable or indexing still fails after retry, with `MCP_FALLBACK` recorded in output. `orchestrate` also runs a lightweight readiness check on fresh startup even when full preflight is skipped.
+- **`claude-context`**: Semantic code search keyed by **absolute path** (not only the OpenCode workspace). Pass the absolute path of the repo under investigation to `get_indexing_status`, `index_codebase`, and `search_code`. From the **spec repo**, resolve sibling impl paths via `bin/project/spec/lib/resolve_impl_path.sh` (`../<repo-basename>` beside spec). Use during planning (architect, **strategist**, debugger, refactor, review, document, designer). Discovery-heavy agents must run a readiness gate first (`get_indexing_status` for the target path; if needed `index_codebase`) and may fall back to bash/glob (`rg`, `find` on the sibling path) only when MCP is unavailable or indexing still fails after retry, with `MCP_FALLBACK` recorded in output. `orchestrate` also runs a lightweight readiness check on fresh startup even when full preflight is skipped.
 - **`context7`**: Up-to-date docs for 9000+ external libraries. Use when framework/library API behavior is uncertain. Limit to 3 calls per question.
 - **`docs-mcp-server`**: Internal docs, prototypes, linked repos, architecture notes.
 - **`dash-api`**: API/library contract lookup when behavior is unclear.

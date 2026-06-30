@@ -97,19 +97,20 @@ When no artifact path or feature slug is provided:
    - **no** → set `env_gate_declined`; continue without preflight (checkout identity gate still runs).
    - Already passed or declined → skip this question.
 2. **Checkout identity gate** — run before work menu or execution (see above). Declining preflight does **not** skip this step.
-3. Run Claude Context readiness gate.
-4. Present **exactly** this menu **verbatim** (numbers **1–4** match display order; do not add a title line or rephrase):
+3. **Issue-expand readiness gate** (GitHub `feature:<slug>` only) — delegate `opencode-run impl orchestrate-readiness-check <slug>`; on FAIL stop and hand back to spec architect option 1 (see `orchestrate-execution`).
+4. Run Claude Context readiness gate.
+5. Present **exactly** this menu **verbatim** (numbers **1–4** match display order; do not add a title line or rephrase):
 
    ```text
    (1) Work from a GitHub `feature:<slug>` backlog in this repo? (primary — use for all new spec/targeted execution)
-   (2) Hand back to `architect` (review, sign-off, new planning)?
+   (2) Hand back to `architect` (review, sign-off in spec option 4, new planning)?
    (3) Something else (debug, refactor, hotfix, doc review, etc.) — describe the task; usually switch to `architect` unless they give a `feature:<slug>`, issue #, or narrow execution scope
    (4) (legacy) Run a local `.plan` artifact? (glob `.plan/*.md`, exclude `*.completed.md`; prefer (1) for new work)
    ```
 
 5. Do not proceed until (1) slug, (2) handoff, (3) is resolved, or (4) path is chosen.
 
-When the user provides a **`.plan` path** or **`feature:<slug>`** immediately: if neither `env_gate_passed` nor `env_gate_declined`, ask preflight **yes/no** first; run **checkout identity gate**; then start work on the verified branch (decline does not block execution).
+When the user provides a **`.plan` path** or **`feature:<slug>`** immediately: if neither `env_gate_passed` nor `env_gate_declined`, ask preflight **yes/no** first; run **checkout identity gate**; run **issue-expand readiness gate** for `feature:<slug>`; then start work on the verified branch (decline does not block execution).
 
 ## When Invoking Subagents
 

@@ -41,14 +41,46 @@ github_project_add_issue() {
   fi
 }
 
+# Resolve a GitHub issue URL to its GraphQL node id.
+# Echoes the id (e.g. I_kwDO...) on success, empty string on failure.
+github_project_issue_node_id() {
+  local url="${1:?issue url required}"
+  [[ "$url" =~ ^https?://github\.com/([^/]+)/([^/]+)/issues/([0-9]+) ]] || return 1
+  local owner="${BASH_REMATCH[1]}"
+  local repo="${BASH_REMATCH[2]}"
+  local num="${BASH_REMATCH[3]}"
+
+  gh api graphql -f query='
+    query($owner:String!,$repo:String!,$number:Int!){
+      repository(owner:$owner,name:$repo){issue(number:$number){id}}
+    }' \
+    -F owner="$owner" \
+    -F repo="$repo" \
+    -F number="$num" \
+    --jq '.data.repository.issue.id // empty' 2>/dev/null || true
+}
+
 # Link child issue URL as sub-issue of parent issue URL. Idempotent.
+# Uses the GraphQL addSubIssue mutation (gh 2.93.0 lacks `gh issue edit --add-sub-issue`).
 github_project_link_subissue() {
   local parent_url="${1:?parent url required}"
   local child_url="${2:?child url required}"
 
-  local err
-  if ! err=$(gh issue edit "$parent_url" --add-sub-issue "$child_url" 2>&1); then
-    if echo "$err" | grep -qiE 'already|exists|duplicate|sub-issue'; then
+  local parent_id child_id err
+  parent_id=$(github_project_issue_node_id "$parent_url")
+  child_id=$(github_project_issue_node_id "$child_url")
+  if [[ -z "$parent_id" || -z "$child_id" ]]; then
+    echo "WARN: could not resolve node ids for sub-issue link $child_url under $parent_url" >&2
+    return 0
+  fi
+
+  if ! err=$(gh api graphql -f query='
+    mutation($issueId:ID!,$subIssueId:ID!){
+      addSubIssue(input:{issueId:$issueId,subIssueId:$subIssueId}){subIssue{id}}
+    }' \
+    -F issueId="$parent_id" \
+    -F subIssueId="$child_id" 2>&1); then
+    if echo "$err" | grep -qiE 'already|exists|duplicate|already.*sub'; then
       return 0
     fi
     echo "WARN: failed to link sub-issue $child_url under $parent_url: $err" >&2
@@ -57,19 +89,18 @@ github_project_link_subissue() {
 }
 
 # Batch-link all child URLs to parent. Comma-separated child URLs.
+# Loops one-at-a-time via addSubIssue so a single failure does not block siblings.
 github_project_reconcile_subissues() {
   local parent_url="${1:?parent url required}"
   local child_urls_csv="${2:-}"
   [[ -n "$child_urls_csv" ]] || return 0
 
-  local err
-  if ! err=$(gh issue edit "$parent_url" --add-sub-issue "$child_urls_csv" 2>&1); then
-    if echo "$err" | grep -qiE 'already|exists|duplicate|sub-issue'; then
-      return 0
-    fi
-    echo "WARN: failed to reconcile sub-issues under $parent_url: $err" >&2
-    return 0
-  fi
+  local child
+  local IFS=','
+  for child in $child_urls_csv; do
+    [[ -n "$child" ]] || continue
+    github_project_link_subissue "$parent_url" "$child"
+  done
 }
 
 # Collect child issue URLs from task map file (task_id TAB issue_num) + repo lookup.

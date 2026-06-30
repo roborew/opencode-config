@@ -38,7 +38,7 @@ IMPL_REPOS=$(python3 "${BIN_DIR}/lib/prd_io.py" tickets_json "${ROOT}/docs/prd/$
 echo ""
 echo "Next steps (OpenCode — not shell)"
 for repo in $IMPL_REPOS; do
-  echo "  ${repo}: open repo in OpenCode → architect → option 1 → slug ${SLUG} (issue-expand)"
+  echo "  ${repo}: spec repo → architect → option 1 → slug ${SLUG} (issue-expand; same session after fanout or feature-upgrade)"
 done
 
 echo ""
@@ -47,7 +47,7 @@ if [[ "$FANOUT_OK" == "true" && "$ORCH_OK" == "true" ]]; then
   exit 0
 fi
 if [[ "$FANOUT_OK" == "true" ]]; then
-  echo "STATUS: fanout structure OK; run issue-expand in impl repos (see above)."
+  echo "STATUS: fanout structure OK; run issue-expand from spec architect option 1 (see above)."
   exit 0
 fi
 echo "STATUS: INCOMPLETE — fix fanout/feature-check errors, re-run opencode-run spec feature-upgrade ${SLUG}"

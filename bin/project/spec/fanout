@@ -30,7 +30,7 @@ python3 "$VALIDATE_PRD" "$PRD_PATH"
 PARENT_URL=$(python3 "$PRD_IO" get "$PRD_PATH" parent_issue)
 [[ -n "$PARENT_URL" ]] || { echo "parent_issue empty in frontmatter" >&2; exit 3; }
 
-for label in "prd-task"; do
+for label in "prd-task" "feature:${SLUG}"; do
   gh label create "$label" --repo "$(gh repo view --json nameWithOwner -q .nameWithOwner)" 2>/dev/null || true
 done
 
@@ -88,6 +88,7 @@ fanout_legacy_slices() {
   while IFS= read -r KEY; do
     [[ -z "$KEY" ]] && continue
     gh label create "prd-task" --repo "$KEY" 2>/dev/null || true
+    gh label create "feature:${SLUG}" --repo "$KEY" 2>/dev/null || true
     if ! python3 -c "
 import sys
 from pathlib import Path
@@ -102,7 +103,7 @@ sys.exit(0 if '${KEY}' in repos else 1)
     TITLE=$(yq -r ".slices[\"${KEY}\"].title // \"\"" "$PRD_PATH")
     BODY=$(yq -r ".slices[\"${KEY}\"].body // \"\"" "$PRD_PATH")
     [[ -n "$TITLE" ]] || { echo "missing title for slice ${KEY}" >&2; exit 4; }
-    mapfile -t EXISTING_NUMS < <(existing_issue_numbers "$KEY" "$TITLE")
+    IFS=$'\n' read -rd '' -a EXISTING_NUMS < <(existing_issue_numbers "$KEY" "$TITLE" && printf '\0')
     if [[ ${#EXISTING_NUMS[@]} -gt 1 ]]; then
       echo "duplicate GitHub issues for legacy slice ${KEY}: #${EXISTING_NUMS[*]}" >&2
       echo "Close extras, then run opencode-run spec fanout-audit ${SLUG}" >&2
@@ -125,16 +126,17 @@ sys.exit(0 if '${KEY}' in repos else 1)
     META_YAML=$(echo "$META_JSON" | python3 "${BIN_DIR}/lib/task_meta_to_yaml.py")
     REQ_SECTION="- See issue body for product requirements."
     ISSUE_BODY="$(build_issue_body "$PARENT_URL" "$SLUG" "$META_YAML" "**Blocked by:** (none)" "$BODY" "" "" "$REQ_SECTION")"
+    # gh 2.93.0 lacks --parent and --json on `gh issue create`; capture URL from stdout tail.
     URL=$(gh issue create \
       --repo "$KEY" \
       --title "$TITLE" \
       --body "$ISSUE_BODY" \
-      --parent "$PARENT_URL" \
       --label "feature:${SLUG},state:ready-for-agent,mode:afk,category:feature,prd-task" \
-      --json url -q .url)
+      | tail -1)
     NUM=$(echo "$URL" | sed -E 's#.*/issues/##')
     task_map_set "legacy-$(echo "$KEY" | tr '/' '-')" "$NUM"
     github_project_add_issue "$URL"
+    github_project_link_subissue "$PARENT_URL" "$URL"
     fanout_track_child_url "$URL"
     echo "Created child #${NUM} on ${KEY}"
   done < <(python3 "$PRD_IO" slices_json "$PRD_PATH" | jq -r 'keys[]?' 2>/dev/null || yq -r '.slices | keys | .[]' "$PRD_PATH")
@@ -164,6 +166,7 @@ fanout_tickets() {
     [[ -z "$TID" ]] && continue
     REPO=$(jq -r --arg id "$TID" '.[] | select(.id==$id) | .repo' "$TMP")
     gh label create "prd-task" --repo "$REPO" 2>/dev/null || true
+    gh label create "feature:${SLUG}" --repo "$REPO" 2>/dev/null || true
     TITLE=$(jq -r --arg id "$TID" '.[] | select(.id==$id) | .title' "$TMP")
     CAPABILITY=$(jq -r --arg id "$TID" '.[] | select(.id==$id) | (.capability // .role // "")' "$TMP")
     OWNER=$(jq -r --arg id "$TID" '.[] | select(.id==$id) | .owner' "$TMP")
@@ -208,7 +211,7 @@ fanout_tickets() {
     MODE_LABEL="mode:afk"
     [[ "${MODE}" == "hitl" ]] && MODE_LABEL="mode:hitl"
 
-    mapfile -t EXISTING_NUMS < <(existing_issue_numbers "$REPO" "$TITLE" "$TID")
+    IFS=$'\n' read -rd '' -a EXISTING_NUMS < <(existing_issue_numbers "$REPO" "$TITLE" "$TID" && printf '\0')
     if [[ ${#EXISTING_NUMS[@]} -gt 1 ]]; then
       echo "duplicate GitHub issues for ticket ${TID} on ${REPO}: #$(IFS=' #'; echo "${EXISTING_NUMS[*]}")" >&2
       echo "Close extras, then run opencode-run spec fanout-audit ${SLUG}" >&2
@@ -231,16 +234,17 @@ fanout_tickets() {
 
     ISSUE_BODY="$(build_issue_body "$PARENT_URL" "$SLUG" "$META_YAML" "$BLOCKED_LINE" "$EXTRA" "$US_HINT" "" "$REQ_SECTION")"
 
+    # gh 2.93.0 lacks --parent and --json on `gh issue create`; capture URL from stdout tail.
     URL=$(gh issue create \
       --repo "$REPO" \
       --title "$TITLE" \
       --body "$ISSUE_BODY" \
-      --parent "$PARENT_URL" \
       --label "feature:${SLUG},state:ready-for-agent,${MODE_LABEL},category:feature,prd-task" \
-      --json url -q .url)
+      | tail -1)
     NUM=$(echo "$URL" | sed -E 's#.*/issues/##')
     task_map_set "$TID" "$NUM"
     github_project_add_issue "$URL"
+    github_project_link_subissue "$PARENT_URL" "$URL"
     fanout_track_child_url "$URL"
     echo "Created #${NUM} on $REPO ($TID)"
   done < <(python3 "$TOPOSORT" <"$TMP")

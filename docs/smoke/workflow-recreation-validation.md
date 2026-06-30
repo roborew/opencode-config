@@ -78,6 +78,6 @@ See [GITHUB-PROJECT-BOARD.md](../GITHUB-PROJECT-BOARD.md).
 
 ## End-to-end feature smoke (optional)
 
-**Spec feature:** spec repo → grill-me → to-prd → approve → architect runs fanout → impl architect issue-expand → orchestrate GitHub backlog `feature:<slug>`.
+**Spec feature:** spec repo → grill-me → to-prd → approve → fanout → issue-expand (spec, same session) → orchestrate per impl repo → spec architect option 4 sign-off.
 
-**Targeted change:** impl repo → architect targeted change → to-issues → optional issue-expand → orchestrate.
+**Targeted change:** impl repo → architect option 1 (targeted change) → to-issues → orchestrate.

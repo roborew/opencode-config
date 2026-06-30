@@ -28,7 +28,7 @@ URL=$(gh issue create \
   --title "$TITLE" \
   --body-file "$BODY_FILE" \
   --label "prd,state:ready-for-agent,category:feature,feature:${SLUG}" \
-  --json url -q .url)
+  | tail -1)
 
 github_project_add_issue "$URL"
 python3 "$PRD_IO" set "$PRD_PATH" parent_issue "$URL"

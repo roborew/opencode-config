@@ -45,7 +45,10 @@ EXISTING="${BIN_DIR}/lib/existing_issue.py"
 
 find_issue() {
   local repo="$1" title="$2" task_id="$3"
-  mapfile -t nums < <(python3 "$EXISTING" find-all "$repo" "$SLUG" "$title" "$task_id")
+  local nums=()
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && nums+=("$line")
+  done < <(python3 "$EXISTING" find-all "$repo" "$SLUG" "$title" "$task_id")
   if [[ ${#nums[@]} -gt 1 ]]; then
     echo "FAIL: duplicate issues for ${task_id} on ${repo}: #$(IFS=' #'; echo "${nums[*]}")"
     DUPLICATE_ISSUES=$((DUPLICATE_ISSUES + 1))

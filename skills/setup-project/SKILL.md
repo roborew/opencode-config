@@ -93,8 +93,8 @@ For **each** sibling implementation repo, read-only scan then propose batch acti
 
 When check passes:
 
-- Stack is ready for `grill-me` / `to-prd` / fanout (you run `opencode-run spec fanout` via **`fanout-issues`** skill after human PRD approval).
-- Implementation work uses **issue-expand** → **orchestrate** (not per-repo setup-skills).
+- Stack is ready for `grill-me` / `to-prd` / fanout / **issue-expand** in this spec repo (option 1 chain).
+- Implementation work uses **orchestrate** per impl repo after spec handoff (not per-repo setup-skills).
 - Close features with **feature-complete** in this spec repo.
 
 ## Bash (architect)

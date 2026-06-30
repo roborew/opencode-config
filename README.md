@@ -188,13 +188,13 @@ For a repo that later joins a stack, run [Existing repositories](#existing-repos
 1. **Install this config** (above).
 2. Place clones as **siblings** under one parent (e.g. move `myapp-web` and `myapp-api` under `~/code/myapp/`).
 3. From the parent, run **`setup-project`** (same as [shell bootstrap](#2-shell-bootstrap-once-per-stack)). Existing spec content (PRDs, ADRs, prototypes) is preserved; tooling and registry links are refreshed.
-4. Open **`myapp-spec` only** in OpenCode → **architect → option 7 (Setup / bootstrap stack)**. Do not repeat setup in impl repos; stack-bootstrap updates them from spec.
+4. Open **`myapp-spec` only** in OpenCode → **architect → option 8 (Setup / bootstrap stack)**. Do not repeat setup in impl repos; stack-bootstrap updates them from spec.
 
 ### Add a new implementation repo to a stack
 
 1. Create and clone `myapp-new-surface` next to existing siblings.
 2. Re-run from parent: `setup-project` (links the new repo, updates registry).
-3. In **spec only**: **architect → option 7** to register `application_role`, capabilities, and run **stack-bootstrap** on the new repo.
+3. In **spec only**: **architect → option 8** to register `application_role`, capabilities, and run **stack-bootstrap** on the new repo.
 
 ### Legacy `.plan/` and old `docs/agents/`
 
@@ -226,27 +226,24 @@ tmp/
 
 ### Product (spec repo)
 
-`grill-me` → `to-prd` → human approves PRD → architect runs fanout (**fanout-issues** skill)
+`grill-me` → `to-prd` → human approves PRD → fanout → **issue-expand** (all impl siblings) → gates → execution handoff(s) per impl repo
 
 ### Implementation (per repo, dependency order)
 
-1. **`architect`** (impl repo) → **option 1** or targeted **to-issues** → planning gates → ends with the canonical table handoff naming the feature, slug, queue source, readiness status, and copy/paste first message (`feature:<slug>`).
-2. **`/new`** → **`orchestrate`** → paste or type the **first message** from that handoff (usually `feature:<slug>`). See [Session handoffs](#session-handoffs-architect--orchestrate).
-3. When orchestrate reports queue exhausted (+ PR URL): **new session** → **`architect`** (impl repo) → **option 5** or *ready for review* with `feature:<slug>` and PR link → **Mode F** two-phase sign-off: **Phase 1** verify vs PRD/tickets and close issues (`state:done`); **Phase 2** mandatory changelog (+ optional guides) written and pushed to the feature PR via **developer**.
-4. **Human:** review and **merge** the impl-repo PR on GitHub after Mode F Phase 2 (orchestrate may have opened it via `feature-finish-pr.sh`; use **`ship`** only if PR was skipped).
-5. When **every** impl repo for the feature is signed off: **`architect`** in **spec** → **option 3** (**feature-complete**) → human confirms closing the spec parent PRD issue.
+1. **`/new`** → **`orchestrate`** (impl repo) → paste **first message** from spec handoff (`feature:<slug>`).
+2. When orchestrate reports queue exhausted (+ PR URL): **new session** → **`architect`** in **spec** → **option 4** with `feature:<slug>`, `impl_repo`, `impl_repo_path`, and PR URL → **Mode F** sign-off.
+3. **Human:** review and **merge** the impl-repo PR on GitHub after Mode F Phase 2.
+4. When **every** impl repo for the feature is signed off: **`architect`** in **spec** → **option 3** (**feature-complete**).
 
-**Legacy path:** architect **option 2** (local `.plan`) → orchestrate on artifact path → architect **option 5** Mode B (review + docs + `*.completed.md` archive).
+**Legacy path:** architect **option 1** (targeted `.plan`) → orchestrate on artifact path → architect **option 4** Mode B (review + docs + `*.completed.md` archive).
 
 ### Session handoffs (architect ↔ orchestrate)
 
-OpenCode can switch agents in one session, but **architect (Qwen) + many tools → orchestrate (MiniMax)** often breaks if the full tool transcript is replayed. Use **GitHub as the handoff**, not chat memory.
-
 | Step | Session | Agent | You do |
 |------|---------|-------|--------|
-| Plan + expand | A (planning) | **architect** | Option 1, slug, approve issue bodies in chat |
-| Execute backlog | **B (new)** | **orchestrate** | `/new`, then: `feature:<slug>` — start first runnable issue |
-| Sign-off per impl repo | **C (new)** | **architect** | Option 5 or paste the orchestrate **Copy/paste sign-off script** for the exact `feature:<slug>` + PR |
+| Plan + expand | A (spec) | **architect** | Option 1 — approve issue bodies; receive per-repo handoffs |
+| Execute backlog | **B (new, per impl)** | **orchestrate** | Open impl repo; `/new`; `feature:<slug>` |
+| Sign-off per impl repo | **C (new, spec)** | **architect** | Option 4 — paste orchestrate sign-off script with impl_repo + PR |
 | Close feature (multi-repo) | **D (spec)** | **architect** | Option 3 **feature-complete** after all impl repos |
 
 Optional same-session path: architect ends with a short table **HANDOFF** block → you run **`/compact`** → switch to orchestrate → kickoff with `feature:<slug>`. If MiniMax returns duplicate `tool_call` errors, use **`/new`** instead.
@@ -260,7 +257,7 @@ Optional same-session path: architect ends with a short table **HANDOFF** block 
 | `git commit` on current feature branch (`Refs:` / `Closes:` issue #) | Implementation subagents on **`expected_branch`** from checkout contract (orchestrate requires evidence in completion report) |
 | Issue labels `state:in-progress` → `state:ready-for-review` | **orchestrate** via **`developer`** + `issue-state-transition.sh` |
 | Final push + open ready-for-review PR after queue empty and CodeRabbit fixes are local | **orchestrate** via **`developer`** + `feature-finish-pr.sh` (skip with `ORCHESTRATE_AUTO_PR=0`) |
-| Code/PR review vs tickets + PRD; `state:done` + close issues | **architect** **Mode F Phase 1** (option 5) — not orchestrate |
+| Code/PR review vs tickets + PRD; `state:done` + close issues | **architect** **Mode F Phase 1** (spec option 4) — not orchestrate |
 | Changelog + sign-off docs on feature PR | **architect** **Mode F Phase 2** (`document` → `scribe` → **developer** push) |
 | Remediation after failed sign-off | **architect** publishes fixes (**to-issues** or review plan) → **new orchestrate session** |
 | Merge PR on GitHub | **You** (human) — after Mode F Phase 2 |
