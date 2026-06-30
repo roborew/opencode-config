@@ -13,8 +13,15 @@ source "${BIN_DIR}/lib/task_map.sh"
 source "${BIN_DIR}/lib/fanout_lock.sh"
 # shellcheck source=lib/existing_issue.sh
 source "${BIN_DIR}/lib/existing_issue.sh"
+GITHUB_PROJECT_LIB="${BIN_DIR}/lib/github_project.sh"
+if [[ ! -f "$GITHUB_PROJECT_LIB" ]]; then
+  echo "ERROR: spec repo bin/ is outdated (missing lib/github_project.sh)." >&2
+  echo "From the project parent (folder with *-spec): ~/.config/opencode/bin/setup-project" >&2
+  echo "Then re-run: bin/fanout ${SLUG:-<slug>}" >&2
+  exit 11
+fi
 # shellcheck source=lib/github_project.sh
-source "${BIN_DIR}/lib/github_project.sh"
+source "$GITHUB_PROJECT_LIB"
 PRD_PATH="${ROOT}/docs/prd/${SLUG}.md"
 TOPOSORT="${BIN_DIR}/lib/toposort_tickets.py"
 VALIDATE="${BIN_DIR}/lib/validate_tickets.py"

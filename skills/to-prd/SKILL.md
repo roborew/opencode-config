@@ -32,7 +32,7 @@ Publish a **human-reviewable PRD** before vertical slicing. This closes the gap 
    ```
    - Body: use `skills/to-prd/templates/prd-issue.md` filled with the same sections (or link to `docs/prd/<slug>.md` path in repo + paste summary).
    - `bin/publish-prd-issue` writes `parent_issue` into `docs/prd/<slug>.md` frontmatter and adds the parent issue to the org project board when `GH_PROJECT` is set.
-8. **Stop.** Tell the user: "PRD published — **human review required**. Do not run fanout until you approve the PRD, ticket repo/capability mapping, and PRD issue body. Confirm `parent_issue` is set in the PRD frontmatter (the publish script sets this automatically)."
+8. **Stop.** Tell the user: "PRD published — **human review required**. Do not run fanout until you approve the PRD, ticket repo/capability mapping, and PRD issue body. Confirm `parent_issue` is set in the PRD frontmatter (the publish script sets this automatically)." Include **Parent issue URL** and **Project board** (`$GH_PROJECT` or "skipped") in the reply.
 
 ## Hard rules
 

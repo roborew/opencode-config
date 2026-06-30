@@ -9,8 +9,14 @@ BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$BIN_DIR/.." && pwd)"
 PRD_PATH="${ROOT}/docs/prd/${SLUG}.md"
 PRD_IO="${BIN_DIR}/lib/prd_io.py"
+GITHUB_PROJECT_LIB="${BIN_DIR}/lib/github_project.sh"
+if [[ ! -f "$GITHUB_PROJECT_LIB" ]]; then
+  echo "ERROR: spec repo bin/ is outdated (missing lib/github_project.sh)." >&2
+  echo "From the project parent (folder with *-spec): ~/.config/opencode/bin/setup-project" >&2
+  exit 11
+fi
 # shellcheck source=lib/github_project.sh
-source "${BIN_DIR}/lib/github_project.sh"
+source "$GITHUB_PROJECT_LIB"
 
 [[ -f "$BODY_FILE" ]] || { echo "missing body file: $BODY_FILE" >&2; exit 2; }
 [[ -f "$PRD_PATH" ]] || { echo "missing PRD file: $PRD_PATH" >&2; exit 2; }

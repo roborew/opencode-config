@@ -65,3 +65,17 @@ Do not assume zero issues were created. Partial fanout is common.
 - Re-running fanout on existing issues re-links them as sub-issues and adds them to the project board when `GH_PROJECT` is set.
 - Duplicate ticket ids or duplicate `(repo, title)` pairs in the PRD cause fanout to exit before creating anything.
 - Multiple GitHub issues matching one ticket cause fanout to exit; close extras first.
+
+## After fanout completes
+
+Report a **Fanout summary** table to the user (mandatory):
+
+| Field | Value |
+|-------|-------|
+| PRD | `docs/prd/<slug>.md` |
+| Parent issue | `<url>` |
+| Project board | `<GH_PROJECT url or "skipped (GH_PROJECT unset)">` |
+| Sub-issues linked | `<count> / <ticket count>` |
+| Child issues | `<repo>#<n>` per ticket (or compact table) |
+
+If `bin/fanout` exits 11 (outdated `bin/`), tell the user to run **`setup-project`** from the project parent, then re-run fanout — do not hand-create issues.
