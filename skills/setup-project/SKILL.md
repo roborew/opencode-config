@@ -104,6 +104,7 @@ Architect runs discovery and validation shell; **stack-bootstrap** / **scribe** 
 | Allowed (examples) | Denied (architect `permission.bash`) |
 |--------------------|--------------------------------------|
 | `gh repo view … -q .nameWithOwner` | `rm`, `mv`, `cp`, `mkdir`, `chmod` |
+| `gh issue view`, `gh issue list`, `gh pr list` | `gh issue create`, `gh issue edit`, `gh issue close`, `gh issue comment` |
 | `ls -d ../*/` (no `2>/dev/null` with space before `2>`) | `git add`, `git commit`, `git push` |
 | `bash -lc "$OC/bin/setup-project --check-only …"` | `echo … > file` (`* > *` deny) |
 | `bin/fanout`, `yq`, `file`, `python3 bin/lib/*` | Package installs (`npm install`, etc.) |

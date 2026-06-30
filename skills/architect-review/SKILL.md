@@ -63,7 +63,7 @@ Close helper: $OC/skills/architect-review/lib/mode-f-close-issues.sh
 
 #### 1. Data collection
 
-Architect bash `gh` and/or Task **developer** `load: minimal`:
+Architect: **read-only** `gh issue list` / `gh issue view` / `gh pr list` via bash when collecting data. Any **`gh issue edit`**, **`gh issue close`**, **`gh issue comment`**, or **git** mutation → Task **developer** `load: minimal`:
 
 ```bash
 gh issue list -l "feature:<slug>" --state all -L 200 --json number,title,url,labels,body,state

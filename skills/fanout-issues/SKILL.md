@@ -2,7 +2,7 @@
 name: fanout-issues
 description: "Cross-repo companion to to-prd: after PRD frontmatter is filled, run bin/fanout <slug> from this spec repo to create child GitHub issues (one per ticket or legacy slice)."
 modelTier: "fast"
-roleReminder: "Operates in the application spec repo; uses gh + yq."
+roleReminder: "Spec repo. bin/fanout for child issues (never gh issue create). Task scribe for files; Task developer for gh edits."
 ---
 
 # Fanout issues

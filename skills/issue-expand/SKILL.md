@@ -2,14 +2,14 @@
 name: issue-expand
 description: Implementation technical planning on GitHub issues — codebase-backed plans, readable markdown, YAML stages for orchestrate. Spec fanout only captures requirements.
 modelTier: smart
-roleReminder: "Implementation repo. YOU run all bin/* scripts via bash. User approves plans and switches agents only."
+roleReminder: "Implementation repo. Run read-only bin/* via bash. Task developer for gh issue edits; Task scribe for files — never raw gh/git/file mutations."
 ---
 
 # Issue expand (implementation technical planning)
 
 Phase 4 of the feature pipeline: turn spec fanout tickets into **developer-reviewable implementation plans** on each GitHub issue, then gate orchestrate.
 
-**The user does not run `bin/*` in this repo.** You run tooling via bash. The user approves each issue edit and switches to **orchestrate** when you prompt.
+**The user does not run `bin/*` in this repo.** You run **read-only** `bin/*` validators via bash. **Task developer** for `gh issue edit`; **Task scribe** for any file write. The user approves each issue edit and switches to **orchestrate** when you prompt.
 
 ## When
 

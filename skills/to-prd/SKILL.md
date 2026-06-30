@@ -2,7 +2,7 @@
 name: to-prd
 description: "Synthesise a PRD from grill-me / research context, write docs/prd/<slug>.md, publish a GitHub issue with prd + state:ready-for-agent + feature:<slug>. Halt after publish — do not invoke fanout."
 modelTier: smart
-roleReminder: "Run after grill-me when the feature is understood. Scribe writes files; you use gh for the issue or delegate to developer."
+roleReminder: "Run after grill-me when the feature is understood. Task scribe for files; bin/publish-prd-issue for parent issue (never raw gh issue create)."
 ---
 
 # To PRD
@@ -25,12 +25,11 @@ Publish a **human-reviewable PRD** before vertical slicing. This closes the gap 
 4. **Draft tickets (when slicing in same session):** Each ticket must include `repo`, **`capability`** (from that repo's registry entry), `title`, `owner` (match registry `agent_owner` unless justified), and **`acceptance`** as **product outcomes** (not file paths or shell commands). **Do not** put `test_commands` or `commit_message` in PRD tickets — implementation **issue-expand** discovers those from the codebase. **Do not** assign work by inferring backend/frontend from repo names.
 5. **YAML frontmatter rules (mandatory before scribe):** Ticket fields under `tickets:` must stay **indented 4 spaces** under each `- id:` item. Quote `title` when it contains `:`. After composing, validate with `python3 bin/lib/validate_prd_frontmatter.py docs/prd/<slug>.md` — do not invoke scribe until it exits 0.
 6. **Invoke `scribe`** to write `docs/prd/<slug>.md` with the full markdown (verbatim template structure including frontmatter).
-7. **Create GitHub issue** in this spec repo via **`bin/publish-prd-issue`** (not raw `gh issue create`):
-   - Write the filled body to a temp file, then:
+7. **Create GitHub issue** in this spec repo via **`bin/publish-prd-issue`** (not raw `gh issue create`). The PRD file at `docs/prd/<slug>.md` must already exist (scribe wrote it in step 6) — use it as the body file:
    ```bash
-   bin/publish-prd-issue <slug> "[PRD] <slug>: <one-line summary>" /path/to/body.md
+   bin/publish-prd-issue <slug> "[PRD] <slug>: <one-line summary>" docs/prd/<slug>.md
    ```
-   - Body: use `skills/to-prd/templates/prd-issue.md` filled with the same sections (or link to `docs/prd/<slug>.md` path in repo + paste summary).
+   Or Task **`developer`** `load: minimal` with the same command if `bin/publish-prd-issue` is unavailable.
    - `bin/publish-prd-issue` writes `parent_issue` into `docs/prd/<slug>.md` frontmatter and adds the parent issue to the org project board when `GH_PROJECT` is set.
 8. **Stop.** Tell the user: "PRD published — **human review required**. Do not run fanout until you approve the PRD, ticket repo/capability mapping, and PRD issue body. Confirm `parent_issue` is set in the PRD frontmatter (the publish script sets this automatically)." Include **Parent issue URL** and **Project board** (`$GH_PROJECT` or "skipped") in the reply.
 
