@@ -160,6 +160,12 @@
         "-y",
         "@zilliz/claude-context-mcp@latest"
       ]
+    },
+    "cloudflare-api": {
+      "type": "remote",
+      "url": "https://mcp.cloudflare.com/mcp",
+      "enabled": true,
+      "oauth": {}
     }
   },
   "agent": {

@@ -20,5 +20,5 @@ Other read-only specialists (`debugger`, `refactor`, `designer`, `strategist`, `
 ## Preserved strengths
 
 - Per-agent model routing in `opencode.json`.
-- MCP: `context7`, `docs-mcp-server`, `dash-api`, `claude-context` (command path unchanged).
+- MCP: `context7`, `docs-mcp-server`, `dash-api`, `claude-context` (command path unchanged), `cloudflare-api` (OAuth, DNS/zone/API ops).
 - `strategist`, `preflight`, architect plan/review split.

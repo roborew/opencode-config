@@ -199,6 +199,7 @@ Primaries and execution agents should use MCP only when it reduces uncertainty:
 - **`context7`**: Up-to-date docs for 9000+ external libraries. Use when framework/library API behavior is uncertain. Limit to 3 calls per question.
 - **`docs-mcp-server`**: Internal docs, prototypes, linked repos, architecture notes.
 - **`dash-api`**: API/library contract lookup when behavior is unclear.
+- **`cloudflare-api`**: Live Cloudflare account operations — DNS records, zone settings, Workers, and other API-backed changes when the task requires current account state or mutations. Not for general Cloudflare documentation (use `context7` instead). Prefer read-only verification first; confirm zone, record name, type, and TTL before create/update/delete DNS records.
 
 If a user says "look at the prototype", check `docs-mcp-server` first and record what was used.
 
