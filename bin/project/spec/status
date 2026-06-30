@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# List issues for a feature label (run inside spec repo via opencode-run).
+set -euo pipefail
+SLUG="${1:?slug required}"
+# shellcheck source=../lib/repo-context.sh disable=SC1091
+source "$(cd "$(dirname "$0")/../lib" && pwd)/repo-context.sh"
+opencode_project_init spec
+
+SPEC=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+OWNER=$(echo "$SPEC" | cut -d/ -f1)
+echo "SPEC_REPO=${SPEC}"
+echo "Searching label feature:${SLUG}:"
+gh search issues "label:feature:${SLUG}" --owner "$OWNER" --limit 50 --json repository,number,state,title,url 2>/dev/null | \
+  jq -r '.[] | "\(.repository.nameWithOwner)#\(.number) [\(.state)] \(.title) — \(.url)"' || true

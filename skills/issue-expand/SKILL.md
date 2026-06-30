@@ -2,14 +2,14 @@
 name: issue-expand
 description: Implementation technical planning on GitHub issues — codebase-backed plans, readable markdown, YAML stages for orchestrate. Spec fanout only captures requirements.
 modelTier: smart
-roleReminder: "Implementation repo. Run read-only bin/* via bash. Task developer for gh issue edits; Task scribe for files — never raw gh/git/file mutations."
+roleReminder: "Implementation repo. Run read-only opencode-run impl/* via bash. Task developer for gh issue edits; Task scribe for files — never raw gh/git/file mutations."
 ---
 
 # Issue expand (implementation technical planning)
 
 Phase 4 of the feature pipeline: turn spec fanout tickets into **developer-reviewable implementation plans** on each GitHub issue, then gate orchestrate.
 
-**The user does not run `bin/*` in this repo.** You run **read-only** `bin/*` validators via bash. **Task developer** for `gh issue edit`; **Task scribe** for any file write. The user approves each issue edit and switches to **orchestrate** when you prompt.
+**The user does not run project automation in this repo.** You run **read-only** `opencode-run impl/*` validators via bash. **Task developer** for `gh issue edit`; **Task scribe** for any file write. The user approves each issue edit and switches to **orchestrate** when you prompt.
 
 ## When
 
@@ -19,19 +19,19 @@ Phase 4 of the feature pipeline: turn spec fanout tickets into **developer-revie
 
 ## Hard rules (non-negotiable)
 
-- **You** run `bin/issue-expand-bundle`, `bin/feature-check`, `bin/orchestrate-readiness-check`, and optional `bin/feature-context` — **never** paste these as instructions for the user.
+- **You** run `opencode-run impl issue-expand-bundle`, `opencode-run impl feature-check`, `opencode-run impl orchestrate-readiness-check`, and optional `opencode-run impl feature-context` — **never** paste these as instructions for the user.
 - **Never** prompt orchestrate because gates passed if **Implementation planning** is still placeholder or lacks **Context**, **Current state**, **Stage plan**, and **Tests**.
 - **Never** treat existing production code as "ticket done" — map each requirement to tests or an explicit gap.
 - If bundle fails, read `tmp/issue-expand-bundle.md` (Errors section) and fix/sync — do not ask the user to run the same commands.
-- **Never** use `2>/dev/null`, `>`, or `>>` in bash (architect deny rules). Run bins bare.
+- **Never** use `2>/dev/null`, `>`, or `>>` in bash (architect deny rules). Run opencode-run bare.
 - **Human approval** required before each `gh issue edit` (Task **developer**).
 
 ## Workflow (architect executes)
 
 ### 1. Bootstrap — you run
 
-`bin/issue-expand-bundle <slug>`  
-Read `tmp/issue-expand-bundle.md`. PRD file is loaded from the **local spec sibling checkout**, else `SPEC_PRD_REF` in `docs/agents/issue-tracker.md` (e.g. `develop`), else `develop`/`main` — **not** spec default branch only. If the file is missing, the bundle still lists **GitHub child issues** and the parent PRD issue from `Parent PRD:` lines. Optional per ticket: `bin/feature-context <n>`.
+`opencode-run impl issue-expand-bundle <slug>`  
+Read `tmp/issue-expand-bundle.md`. PRD file is loaded from the **local spec sibling checkout**, else `SPEC_PRD_REF` in `docs/agents/issue-tracker.md` (e.g. `develop`), else `develop`/`main` — **not** spec default branch only. If the file is missing, the bundle still lists **GitHub child issues** and the parent PRD issue from `Parent PRD:` lines. Optional per ticket: `opencode-run impl feature-context <n>`.
 
 ### 2. Claude Context (mandatory)
 
@@ -60,8 +60,8 @@ For each issue (respect **Blocked by** / `depends_on`):
 
 ### 4. Gates — you run
 
-`bin/feature-check <slug> --level orchestrate`  
-`bin/orchestrate-readiness-check <slug>`
+`opencode-run impl feature-check <slug> --level orchestrate`  
+`opencode-run impl orchestrate-readiness-check <slug>`
 
 Both must **PASS** with substantive plans. If FAIL, continue planning — do not hand off to orchestrate.
 

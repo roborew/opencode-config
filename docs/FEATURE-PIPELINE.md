@@ -87,15 +87,16 @@ Details: [plan-artifact-schema.md](plan-artifact-schema.md).
 
 ## Internal scripts (agents only)
 
-Synced to each repo for architect/orchestrate — **not** a user runbook:
+Central in `OPENCODE_CONFIG_DIR` — invoke via **`opencode-run`** (never copied into app repos):
 
-| Script | Used by |
-|--------|---------|
-| `bin/issue-expand-bundle` | issue-expand (PRD from local spec checkout, `SPEC_PRD_REF`, or `develop`/`main` — not default branch only) |
-| `bin/feature-check` | issue-expand, feature-upgrade |
-| `bin/orchestrate-readiness-check` | issue-expand |
-| `bin/feature-context` | issue-expand, orchestrate |
-| `bin/fanout` | fanout-issues (spec) |
+| Command | Used by |
+|---------|---------|
+| `opencode-run impl issue-expand-bundle` | issue-expand (PRD from local spec checkout, `SPEC_PRD_REF`, or `develop`/`main` — not default branch only) |
+| `opencode-run impl feature-check` | issue-expand (single impl repo) |
+| `opencode-run spec feature-check` | feature-upgrade, fanout-issues (all repos in PRD) |
+| `opencode-run impl orchestrate-readiness-check` | issue-expand |
+| `opencode-run impl feature-context` | issue-expand, orchestrate |
+| `opencode-run spec fanout` | fanout-issues (spec) |
 
 ## See also
 

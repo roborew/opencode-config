@@ -11,7 +11,11 @@ bash scripts/validate-opencode-config.sh
 python3 bin/lib/test_migrate_repos_registry.py
 bash bin/lib/test_read_spec_repo.sh
 bash -n bin/setup-project
+bash -n bin/opencode-run
+bash -n bin/opencode-assess-stack
 bash -n bin/stack/*.sh
+bash -n bin/project/spec/*
+bash -n bin/project/impl/*
 ```
 
 ## blocshed — regression (`--check-only`)
@@ -45,7 +49,7 @@ Then in OpenCode (`fidget-spec`):
 ~/.config/opencode/bin/setup-project --check-only /Users/robo/05_Repos/01_PROJECTS/apps/fidget
 ```
 
-**Pass criteria:** `--check-only` exit 0; `fidget-web` and `fidget-ingest` have `docs/agents/issue-tracker.md` with `SPEC_REPO:` and `bin/feature-context`.
+**Pass criteria:** `--check-only` exit 0; `fidget-web` and `fidget-ingest` have `docs/agents/issue-tracker.md` with `SPEC_REPO:` (no copied `bin/` tooling required).
 
 ## New project — onboarding smoke
 

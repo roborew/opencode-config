@@ -24,7 +24,6 @@ Copy when missing or when parent says `force: true` for that file:
 | `skills/setup-skills/templates/issue-tracker.md` | `docs/agents/issue-tracker.md` (set `SPEC_REPO:` line) |
 | `skills/setup-skills/templates/triage-labels.md` | `docs/agents/triage-labels.md` |
 | `skills/setup-skills/templates/domain.md` | `docs/agents/domain.md` |
-| `templates/bin/feature-context` | `bin/feature-context` (chmod +x) |
 | `templates/.github/ISSUE_TEMPLATE/child-feature.yml` | `.github/ISSUE_TEMPLATE/child-feature.yml` |
 | `docs/templates/opencode.md.template` | `opencode.md` (only if missing) |
 

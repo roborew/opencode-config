@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# Hydrate tmp/feature-context.md from GitHub issue + parent PRD (spec repo from docs/agents/issue-tracker.md).
+set -euo pipefail
+ISSUE="${1:?issue number required}"
+OUT="tmp/feature-context.md"
+mkdir -p tmp
+
+# shellcheck source=../lib/repo-context.sh disable=SC1091
+source "$(cd "$(dirname "$0")/../lib" && pwd)/repo-context.sh"
+opencode_project_init impl
+# shellcheck source=lib/fetch_spec_prd.sh disable=SC1091
+source "${BIN_DIR}/lib/fetch_spec_prd.sh"
+
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+ISSUE_JSON=$(gh issue view "$ISSUE" --repo "$REPO" --json title,body,labels,url,number)
+TRACKER="docs/agents/issue-tracker.md"
+
+SPEC_REPO=""
+if [[ -f "$TRACKER" ]]; then
+  SPEC_REPO=$(read_spec_repo_from_file "$TRACKER" 2>/dev/null || true)
+fi
+if [[ -z "$SPEC_REPO" ]]; then
+  echo "WARN: $TRACKER missing or no SPEC_REPO line — parent PRD fetch may fail. Run setup-project from project parent." >&2
+fi
+
+SLUG=$(echo "$ISSUE_JSON" | jq -r '.labels[].name' | grep '^feature:' | head -1 | cut -d: -f2- || true)
+if [[ -z "$SLUG" ]]; then
+  echo "WARN: no feature:<slug> label on issue #$ISSUE" >&2
+  SLUG="unknown"
+fi
+
+ISSUE_BODY=$(echo "$ISSUE_JSON" | jq -r '.body // ""')
+PARENT_URL=$(parent_prd_url_from_text "$ISSUE_BODY" 2>/dev/null || true)
+if [[ -z "$PARENT_URL" ]]; then
+  PARENT_URL=$(echo "$ISSUE_BODY" | grep -oE 'https://github.com/[^/]+/[^/]+/issues/[0-9]+' | head -1 || true)
+fi
+
+{
+  echo "# Feature context: ${SLUG} (${REPO}#${ISSUE})"
+  echo
+  echo "## This issue"
+  echo "$ISSUE_JSON" | jq -r '"Title: \(.title)\nURL: \(.url)\n\n\(.body)"'
+  echo
+  if [[ -n "$PARENT_URL" ]]; then
+    echo "## Parent PRD issue"
+    PARENT_JSON=$(gh issue view "$PARENT_URL" --json title,body,url 2>/dev/null || true)
+    if [[ -n "$PARENT_JSON" ]] && echo "$PARENT_JSON" | jq -e 'type == "object"' >/dev/null 2>&1; then
+      echo "$PARENT_JSON" | jq -r '"Title: \(.title)\nURL: \(.url)\n\n\(.body)"'
+    else
+      echo "_Could not load parent issue._"
+    fi
+    echo
+  else
+    echo "## Parent PRD issue"
+    echo "_No Parent PRD line or issue URL found in this issue body._"
+    echo
+  fi
+
+  if [[ -n "$SPEC_REPO" && "$SLUG" != "unknown" ]]; then
+    PRD_PATH="docs/prd/${SLUG}.md"
+    echo "## PRD file (${SPEC_REPO} ${PRD_PATH})"
+    if PRD_BODY=$(fetch_spec_prd_markdown "$SPEC_REPO" "$SLUG" "$TRACKER"); then
+      echo "_Source: ${FETCH_SPEC_PRD_SOURCE}${FETCH_SPEC_PRD_REF:+, ref ${FETCH_SPEC_PRD_REF}}_"
+      echo
+      echo "$PRD_BODY"
+    else
+      echo "_Could not fetch PRD file (set \`SPEC_PRD_REF: develop\` in ${TRACKER} or keep spec repo checked out on the branch with the PRD)._"
+      echo "_Planning can still use this issue body and the parent PRD issue above._"
+    fi
+    echo
+  fi
+
+  echo "## Local CONTEXT.md"
+  if [[ -f CONTEXT.md ]]; then
+    cat CONTEXT.md
+  else
+    echo "_No CONTEXT.md at repo root._"
+  fi
+} >"$OUT"
+
+echo "Wrote $OUT"

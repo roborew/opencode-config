@@ -1,0 +1,260 @@
+#!/usr/bin/env bash
+# Create child issues from PRD frontmatter (run inside spec repo via opencode-run).
+# Prefers `tickets` (multiple issues per repo); falls back to legacy `slices`.
+set -euo pipefail
+SLUG="${1:?slug required}"
+# shellcheck source=../lib/repo-context.sh disable=SC1091
+source "$(cd "$(dirname "$0")/../lib" && pwd)/repo-context.sh"
+opencode_project_init spec
+# shellcheck source=lib/build_issue_body.sh
+source "${BIN_DIR}/lib/build_issue_body.sh"
+# shellcheck source=lib/task_map.sh
+source "${BIN_DIR}/lib/task_map.sh"
+# shellcheck source=lib/fanout_lock.sh
+source "${BIN_DIR}/lib/fanout_lock.sh"
+# shellcheck source=lib/existing_issue.sh
+source "${BIN_DIR}/lib/existing_issue.sh"
+# shellcheck source=lib/github_project.sh
+source "${BIN_DIR}/lib/github_project.sh"
+PRD_PATH="${ROOT}/docs/prd/${SLUG}.md"
+TOPOSORT="${BIN_DIR}/lib/toposort_tickets.py"
+VALIDATE="${BIN_DIR}/lib/validate_tickets.py"
+VALIDATE_PRD="${BIN_DIR}/lib/validate_prd_frontmatter.py"
+PRD_IO="${BIN_DIR}/lib/prd_io.py"
+REGISTRY_PATH="${ROOT}/docs/agents/repos.md"
+
+[[ -f "$PRD_PATH" ]] || { echo "missing $PRD_PATH" >&2; exit 2; }
+[[ -f "$VALIDATE_PRD" ]] || { echo "missing $VALIDATE_PRD" >&2; exit 8; }
+[[ -f "$PRD_IO" ]] || { echo "missing $PRD_IO" >&2; exit 8; }
+python3 "$VALIDATE_PRD" "$PRD_PATH"
+PARENT_URL=$(python3 "$PRD_IO" get "$PRD_PATH" parent_issue)
+[[ -n "$PARENT_URL" ]] || { echo "parent_issue empty in frontmatter" >&2; exit 3; }
+
+for label in "prd-task"; do
+  gh label create "$label" --repo "$(gh repo view --json nameWithOwner -q .nameWithOwner)" 2>/dev/null || true
+done
+
+validate_tickets_against_registry() {
+  local tickets_json="$1"
+  [[ -f "$VALIDATE" ]] || { echo "missing $VALIDATE" >&2; exit 8; }
+  echo "$tickets_json" | python3 "$VALIDATE" "$REGISTRY_PATH"
+}
+
+fanout_reconcile_subissues() {
+  local child_urls="${FANOUT_CHILD_URLS:-}"
+  [[ -n "$child_urls" ]] || return 0
+  echo "==> Reconciling sub-issue links on parent..."
+  github_project_reconcile_subissues "$PARENT_URL" "$child_urls"
+}
+
+fanout_track_child_url() {
+  local url="$1"
+  [[ -n "$url" ]] || return 0
+  if [[ -z "${FANOUT_CHILD_URLS:-}" ]]; then
+    FANOUT_CHILD_URLS="$url"
+  else
+    FANOUT_CHILD_URLS="${FANOUT_CHILD_URLS},${url}"
+  fi
+}
+
+fanout_lock_acquire "$SLUG" "$ROOT"
+FANOUT_TMP=""
+FANOUT_CHILD_URLS=""
+
+_fanout_exit() {
+  fanout_reconcile_subissues
+  task_map_cleanup
+  fanout_lock_release
+  rm -f "${FANOUT_TMP:-}"
+}
+trap '_fanout_exit' EXIT
+
+registry_repo_count() {
+  python3 -c "
+import sys
+from pathlib import Path
+sys.path.insert(0, '${BIN_DIR}/lib')
+from validate_tickets import load_registry
+print(len(load_registry(Path('${REGISTRY_PATH}'))))
+"
+}
+
+fanout_legacy_slices() {
+  if [[ ! -s "$REGISTRY_PATH" ]] || [[ "$(registry_repo_count)" -eq 0 ]]; then
+    echo "docs/agents/repos.md has no repo entries; fill application_role and capabilities before fanout" >&2
+    exit 5
+  fi
+  task_map_init
+  while IFS= read -r KEY; do
+    [[ -z "$KEY" ]] && continue
+    gh label create "prd-task" --repo "$KEY" 2>/dev/null || true
+    if ! python3 -c "
+import sys
+from pathlib import Path
+sys.path.insert(0, '${BIN_DIR}/lib')
+from validate_tickets import load_registry
+repos = {r.get('repo') for r in load_registry(Path('${REGISTRY_PATH}'))}
+sys.exit(0 if '${KEY}' in repos else 1)
+"; then
+      echo "legacy slice repo '${KEY}' not in docs/agents/repos.md" >&2
+      exit 9
+    fi
+    TITLE=$(yq -r ".slices[\"${KEY}\"].title // \"\"" "$PRD_PATH")
+    BODY=$(yq -r ".slices[\"${KEY}\"].body // \"\"" "$PRD_PATH")
+    [[ -n "$TITLE" ]] || { echo "missing title for slice ${KEY}" >&2; exit 4; }
+    mapfile -t EXISTING_NUMS < <(existing_issue_numbers "$KEY" "$TITLE")
+    if [[ ${#EXISTING_NUMS[@]} -gt 1 ]]; then
+      echo "duplicate GitHub issues for legacy slice ${KEY}: #${EXISTING_NUMS[*]}" >&2
+      echo "Close extras, then run opencode-run spec fanout-audit ${SLUG}" >&2
+      exit 10
+    fi
+    if [[ ${#EXISTING_NUMS[@]} -eq 1 ]]; then
+      EXISTING="${EXISTING_NUMS[0]}"
+      EXISTING_URL=$(gh issue view "$EXISTING" --repo "$KEY" --json url -q .url)
+      task_map_set "legacy-$(echo "$KEY" | tr '/' '-')" "$EXISTING"
+      github_project_add_issue "$EXISTING_URL"
+      github_project_link_subissue "$PARENT_URL" "$EXISTING_URL"
+      fanout_track_child_url "$EXISTING_URL"
+      echo "Skipping existing #${EXISTING} on ${KEY}"
+      continue
+    fi
+    META_JSON=$(jq -nc \
+      --arg tid "legacy-$(echo "$KEY" | tr '/' '-')" \
+      --arg owner "developer" \
+      '{task_id:$tid,depends_on:[],owner:$owner}')
+    META_YAML=$(echo "$META_JSON" | python3 "${BIN_DIR}/lib/task_meta_to_yaml.py")
+    REQ_SECTION="- See issue body for product requirements."
+    ISSUE_BODY="$(build_issue_body "$PARENT_URL" "$SLUG" "$META_YAML" "**Blocked by:** (none)" "$BODY" "" "" "$REQ_SECTION")"
+    URL=$(gh issue create \
+      --repo "$KEY" \
+      --title "$TITLE" \
+      --body "$ISSUE_BODY" \
+      --parent "$PARENT_URL" \
+      --label "feature:${SLUG},state:ready-for-agent,mode:afk,category:feature,prd-task" \
+      --json url -q .url)
+    NUM=$(echo "$URL" | sed -E 's#.*/issues/##')
+    task_map_set "legacy-$(echo "$KEY" | tr '/' '-')" "$NUM"
+    github_project_add_issue "$URL"
+    fanout_track_child_url "$URL"
+    echo "Created child #${NUM} on ${KEY}"
+  done < <(python3 "$PRD_IO" slices_json "$PRD_PATH" | jq -r 'keys[]?' 2>/dev/null || yq -r '.slices | keys | .[]' "$PRD_PATH")
+}
+
+fanout_tickets() {
+  [[ -f "$TOPOSORT" ]] || { echo "missing $TOPOSORT" >&2; exit 6; }
+  local TMP
+  TMP=$(mktemp)
+  python3 "$PRD_IO" tickets_json "$PRD_PATH" >"$TMP"
+  DUPES=$(jq -r '
+    [
+      (group_by(.id)[] | select(length > 1) | "duplicate ticket id: " + (.[0].id // "")),
+      (group_by([.repo, .title])[] | select(length > 1) | "duplicate ticket title in repo " + (.[0].repo // "") + ": " + (.[0].title // ""))
+    ]
+    | .[]
+  ' "$TMP")
+  if [[ -n "$DUPES" ]]; then
+    echo "$DUPES" >&2
+    rm -f "$TMP"
+    exit 7
+  fi
+  validate_tickets_against_registry "$(cat "$TMP")"
+  FANOUT_TMP="$TMP"
+  task_map_init
+  while IFS= read -r TID; do
+    [[ -z "$TID" ]] && continue
+    REPO=$(jq -r --arg id "$TID" '.[] | select(.id==$id) | .repo' "$TMP")
+    gh label create "prd-task" --repo "$REPO" 2>/dev/null || true
+    TITLE=$(jq -r --arg id "$TID" '.[] | select(.id==$id) | .title' "$TMP")
+    CAPABILITY=$(jq -r --arg id "$TID" '.[] | select(.id==$id) | (.capability // .role // "")' "$TMP")
+    OWNER=$(jq -r --arg id "$TID" '.[] | select(.id==$id) | .owner' "$TMP")
+    MODE=$(jq -r --arg id "$TID" '.[] | select(.id==$id) | (.mode // "afk")' "$TMP")
+    ACC=$(jq -c --arg id "$TID" '.[] | select(.id==$id) | (.acceptance // [])' "$TMP")
+    EXTRA=$(jq -r --arg id "$TID" '.[] | select(.id==$id) | (.body // "")' "$TMP")
+    COVERS=$(jq -r --arg id "$TID" '.[] | select(.id==$id) | (.covers_user_stories // []) | join(", ")' "$TMP")
+    DEPS=$(jq -c --arg id "$TID" '.[] | select(.id==$id) | (.depends_on // [])' "$TMP")
+
+    local BLOCKED_LINE=""
+    DEP_ISSUES=()
+    while IFS= read -r dep_id; do
+      [[ -z "$dep_id" ]] && continue
+      dn=$(task_map_get "$dep_id")
+      [[ -n "$dn" ]] && DEP_ISSUES+=("#$dn")
+    done < <(echo "$DEPS" | jq -r '.[]?')
+
+    if [[ ${#DEP_ISSUES[@]} -gt 0 ]]; then
+      BLOCKED_LINE="**Blocked by:** $(IFS=', '; echo "${DEP_ISSUES[*]}")"
+    else
+      BLOCKED_LINE="**Blocked by:** (none)"
+    fi
+
+    META_JSON=$(jq -nc \
+      --arg tid "$TID" \
+      --arg owner "$OWNER" \
+      --arg capability "$CAPABILITY" \
+      --argjson deps "$DEPS" \
+      '{task_id:$tid,depends_on:$deps,owner:$owner,capability:$capability}')
+    META_YAML=$(echo "$META_JSON" | python3 "${BIN_DIR}/lib/task_meta_to_yaml.py")
+
+    US_HINT=""
+    if [[ -n "$COVERS" ]]; then
+      US_HINT="- PRD \`covers_user_stories\`: ${COVERS}"
+    fi
+    REQ_SECTION=""
+    while IFS= read -r line; do
+      [[ -z "$line" ]] && continue
+      REQ_SECTION+="- ${line}"$'\n'
+    done < <(echo "$ACC" | jq -r '.[]?')
+
+    MODE_LABEL="mode:afk"
+    [[ "${MODE}" == "hitl" ]] && MODE_LABEL="mode:hitl"
+
+    mapfile -t EXISTING_NUMS < <(existing_issue_numbers "$REPO" "$TITLE" "$TID")
+    if [[ ${#EXISTING_NUMS[@]} -gt 1 ]]; then
+      echo "duplicate GitHub issues for ticket ${TID} on ${REPO}: #$(IFS=' #'; echo "${EXISTING_NUMS[*]}")" >&2
+      echo "Close extras, then run opencode-run spec fanout-audit ${SLUG}" >&2
+      exit 10
+    fi
+    if [[ ${#EXISTING_NUMS[@]} -eq 1 ]]; then
+      EXISTING="${EXISTING_NUMS[0]}"
+      EXISTING_URL=$(gh issue view "$EXISTING" --repo "$REPO" --json url -q .url)
+      task_map_set "$TID" "$EXISTING"
+      github_project_add_issue "$EXISTING_URL"
+      github_project_link_subissue "$PARENT_URL" "$EXISTING_URL"
+      fanout_track_child_url "$EXISTING_URL"
+      echo "Skipping existing #${EXISTING} on $REPO ($TID)"
+      continue
+    fi
+    if [[ -n "$(task_map_get "$TID")" ]]; then
+      echo "Skipping already-mapped $TID on $REPO (#$(task_map_get "$TID"))"
+      continue
+    fi
+
+    ISSUE_BODY="$(build_issue_body "$PARENT_URL" "$SLUG" "$META_YAML" "$BLOCKED_LINE" "$EXTRA" "$US_HINT" "" "$REQ_SECTION")"
+
+    URL=$(gh issue create \
+      --repo "$REPO" \
+      --title "$TITLE" \
+      --body "$ISSUE_BODY" \
+      --parent "$PARENT_URL" \
+      --label "feature:${SLUG},state:ready-for-agent,${MODE_LABEL},category:feature,prd-task" \
+      --json url -q .url)
+    NUM=$(echo "$URL" | sed -E 's#.*/issues/##')
+    task_map_set "$TID" "$NUM"
+    github_project_add_issue "$URL"
+    fanout_track_child_url "$URL"
+    echo "Created #${NUM} on $REPO ($TID)"
+  done < <(python3 "$TOPOSORT" <"$TMP")
+}
+
+TICKET_COUNT=$(python3 "$PRD_IO" tickets_count "$PRD_PATH")
+if [[ "${TICKET_COUNT}" -gt 0 ]]; then
+  fanout_tickets
+  echo "==> Auditing ticket ↔ issue mapping..."
+  "${BIN_DIR}/fanout-audit" "$SLUG"
+  echo "==> Normalizing child issue bodies (Parent PRD, opencode-task-json, sections)..."
+  "${BIN_DIR}/sync-fanout-bodies" "$SLUG"
+  echo "==> Validating fanout contract..."
+  "${BIN_DIR}/feature-check" "$SLUG" --level fanout
+else
+  fanout_legacy_slices
+fi

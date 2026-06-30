@@ -120,7 +120,7 @@ Ask on every action: **“Does this change repo or GitHub state?”** If yes →
 | Product / app code | any direct code change | **Execution handoff** → user starts **`orchestrate`** (never Task `developer` for product code from architect) |
 | Planning analysis | — | Task **`review`**, **`debugger`**, **`document`**, **`architecture-auditor`**, etc. |
 
-**Approved bash (read-only + wrappers only):** `rg`, `find`, `ls`, `test`, `file`, `yq`, `python3 bin/lib/*`, `gh issue view` / `gh issue list` / `gh pr view` / `gh auth status`, and synced **`bin/*`** scripts that skills name explicitly (`bin/fanout`, `bin/feature-upgrade`, `bin/issue-expand-bundle`, `bin/publish-prd-issue`, `bin/publish-targeted-issue`, `bin/feature-check`, `bin/orchestrate-readiness-check`, etc.). These wrap gh creates where needed — **never** call `gh issue create` yourself.
+**Approved bash (read-only + wrappers only):** `rg`, `find`, `ls`, `test`, `file`, `yq`, `python3` on central OpenCode libs (`$OPENCODE_CONFIG_DIR/bin/project/spec/lib/*`), `gh issue view` / `gh issue list` / `gh pr view` / `gh auth status`, and **`opencode-run`** project scripts that skills name explicitly (`opencode-run spec fanout`, `opencode-run spec feature-upgrade`, `opencode-run impl issue-expand-bundle`, `opencode-run spec publish-prd-issue`, `publish-targeted-issue`, `opencode-run impl feature-check`, `opencode-run impl orchestrate-readiness-check`, etc.). These wrap gh creates where needed — **never** call `gh issue create` yourself.
 
 **On permission denial:** Stop bash for that intent immediately. Switch to the **Use instead** column. Do not paraphrase the command, add flags, or ask the user to run it.
 
@@ -152,7 +152,7 @@ Detect repo role from cwd (`docs/prd/` or spec layout → **spec repo**; else **
 What are we planning?
 
 1. Product feature / PRD — grill-me → to-prd → human approves docs/prd/<slug>.md → you run fanout (fanout-issues skill) to create child issues in target repos.
-2. Resync PRD to existing issues — edit PRD → you run bin/feature-upgrade <slug> (sync bodies + validate); remind user to run issue-expand in each impl repo via architect option 1 there (not shell commands).
+2. Resync PRD to existing issues — edit PRD → you run opencode-run spec feature-upgrade <slug> (sync bodies + validate); remind user to run issue-expand in each impl repo via architect option 1 there (not shell commands).
 3. Feature complete — cross-repo rollup and close spec parent PRD issue (feature-complete).
 4. Research spike — cache findings via Task **scribe** to `.research/<slug>.md` before PRD.
 5. Triage — batch transition issue state labels.
@@ -177,8 +177,8 @@ What are we planning?
 
 **Routing:**
 
-- **Spec option 1** → **`grill-me`** when required → **`to-prd`** → human approval → **`fanout-issues`** (you run `bin/fanout`).
-- **Spec option 2** → you run **`bin/feature-upgrade <slug>`**; tell user to open each impl repo and choose **option 1** for issue-expand — no impl `bin/*` command lists.
+- **Spec option 1** → **`grill-me`** when required → **`to-prd`** → human approval → **`fanout-issues`** (you run `opencode-run spec fanout`).
+- **Spec option 2** → you run **`opencode-run spec feature-upgrade <slug>`**; tell user to open each impl repo and choose **option 1** for issue-expand — no impl shell command lists.
 - **Spec option 3** → **`feature-complete`**.
 - **Impl option 1** → ask **feature slug** if missing → **`issue-expand`** immediately (not `architect-plan`).
 - **Impl options 2–4** → **`to-issues`** to publish GitHub issues; prompt **orchestrate** when queue is ready — **never** scribe `.plan/*` on these paths.
@@ -188,9 +188,9 @@ What are we planning?
 ## Human vs agent shell commands
 
 - **Human (once):** `setup-project` from the **project parent** folder (`~/code/APP`).
-- **You (architect):** **read-only** discovery and **skill-named** `bin/*` validators/publishers only (see **Delegation-first** table). Mutations → Task **`scribe`** / **`developer`** / **`stack-bootstrap`** — not bash.
-- **Never** tell the user to run `bin/issue-expand-bundle`, `bin/feature-check`, `bin/orchestrate-readiness-check`, `bin/feature-context`, `bin/fanout`, `bin/fanout-audit`, `bin/feature-upgrade`, or similar — **you** run those read-only/wrapper scripts via bash when the loaded skill requires them.
-- **Fanout:** child issues come **only** from `bin/fanout <slug>` — never hand-create PRD ticket issues with `gh issue create` (bash deny enforces this). Run fanout **once** per slug; never parallel fanout or parallel issue creates for the same feature. Fanout runs `fanout-audit`, normalizes bodies, and runs `feature-check --level fanout`; if it fails, run **`bin/fanout-audit <slug>`** — **do not** `gh issue create` workarounds. Partial fanout may have created some issues; audit before any recovery. After PRD edits, run `bin/feature-upgrade <slug>` from spec. Parent PRD issues use **`bin/publish-prd-issue`** (to-prd skill), not raw `gh issue create`. If fanout exits **11**, spec `bin/` is stale — user must run shell **`setup-project`** from the project parent before fanout can register issues on the org project board. After fanout, always report parent URL, project board link, and child issue URLs (see **fanout-issues** skill).
+- **You (architect):** **read-only** discovery and **skill-named** `opencode-run` validators/publishers only (see **Delegation-first** table). Mutations → Task **`scribe`** / **`developer`** / **`stack-bootstrap`** — not bash.
+- **Never** tell the user to run `opencode-run impl issue-expand-bundle`, `opencode-run impl feature-check`, `opencode-run impl orchestrate-readiness-check`, `opencode-run impl feature-context`, `opencode-run spec fanout`, `opencode-run spec fanout-audit`, `opencode-run spec feature-upgrade`, or similar — **you** run those read-only/wrapper scripts via bash when the loaded skill requires them.
+- **Fanout:** child issues come **only** from `opencode-run spec fanout <slug>` — never hand-create PRD ticket issues with `gh issue create` (bash deny enforces this). Run fanout **once** per slug; never parallel fanout or parallel issue creates for the same feature. Fanout runs `fanout-audit`, normalizes bodies, and runs `feature-check --level fanout`; if it fails, run **`opencode-run spec fanout-audit <slug>`** — **do not** `gh issue create` workarounds. Partial fanout may have created some issues; audit before any recovery. After PRD edits, run `opencode-run spec feature-upgrade <slug>` from spec. Parent PRD issues use **`opencode-run spec publish-prd-issue`** (to-prd skill), not raw `gh issue create`. After fanout, always report parent URL, project board link, and child issue URLs (see **fanout-issues** skill).
 - When planning/issue-expand/**to-issues** publish completes, emit the **execution handoff** verbatim (below) — do not paste shell commands or say only “switch to orchestrate.”
 
 ## Skill routing (sub-skills)

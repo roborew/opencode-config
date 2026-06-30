@@ -17,7 +17,7 @@ Shell bootstrap (from project parent, once): `setup-project` with `GH_ORG` set.
 
 1. Author PRDs under `docs/prd/<slug>.md` (see `_template.md`).
 2. Publish parent issues (see `.github/ISSUE_TEMPLATE/prd-parent.yml`).
-3. Run `bin/fanout <slug>` to create child issues in each target repo listed in `docs/agents/repos.md`.
+3. Run `opencode-run spec fanout <slug>` to create child issues in each target repo listed in `docs/agents/repos.md`.
 4. In each implementation repo, run **architect option 1** (issue-expand) then **orchestrate**.
 
 ## Labels

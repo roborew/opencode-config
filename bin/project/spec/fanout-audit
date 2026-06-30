@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Compare PRD tickets to GitHub child issues — run after fanout failure or before manual recovery.
+# Usage: opencode-run spec fanout-audit <slug>
+set -euo pipefail
+SLUG="${1:?slug required}"
+# shellcheck source=../lib/repo-context.sh disable=SC1091
+source "$(cd "$(dirname "$0")/../lib" && pwd)/repo-context.sh"
+opencode_project_init spec
+
+PRD_PATH="${ROOT}/docs/prd/${SLUG}.md"
+PRD_IO="${BIN_DIR}/lib/prd_io.py"
+AUDIT="${BIN_DIR}/lib/existing_issue.py"
+
+[[ -f "$PRD_PATH" ]] || { echo "missing $PRD_PATH" >&2; exit 2; }
+[[ -f "$PRD_IO" ]] || { echo "missing $PRD_IO" >&2; exit 8; }
+[[ -f "$AUDIT" ]] || { echo "missing $AUDIT" >&2; exit 8; }
+
+TMP=$(mktemp)
+trap 'rm -f "$TMP"' EXIT
+python3 "$PRD_IO" tickets_json "$PRD_PATH" >"$TMP"
+TICKET_COUNT=$(jq 'length' "$TMP")
+[[ "$TICKET_COUNT" -gt 0 ]] || {
+  echo "PRD has no tickets[] — nothing to audit" >&2
+  exit 4
+}
+
+python3 "$AUDIT" audit "$SLUG" "$TMP"

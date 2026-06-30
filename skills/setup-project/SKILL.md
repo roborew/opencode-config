@@ -93,7 +93,7 @@ For **each** sibling implementation repo, read-only scan then propose batch acti
 
 When check passes:
 
-- Stack is ready for `grill-me` / `to-prd` / fanout (you run `bin/fanout` via **`fanout-issues`** skill after human PRD approval).
+- Stack is ready for `grill-me` / `to-prd` / fanout (you run `opencode-run spec fanout` via **`fanout-issues`** skill after human PRD approval).
 - Implementation work uses **issue-expand** → **orchestrate** (not per-repo setup-skills).
 - Close features with **feature-complete** in this spec repo.
 
@@ -107,7 +107,7 @@ Architect runs discovery and validation shell; **stack-bootstrap** / **scribe** 
 | `gh issue view`, `gh issue list`, `gh pr list` | `gh issue create`, `gh issue edit`, `gh issue close`, `gh issue comment` |
 | `ls -d ../*/` (no `2>/dev/null` with space before `2>`) | `git add`, `git commit`, `git push` |
 | `bash -lc "$OC/bin/setup-project --check-only …"` | `echo … > file` (`* > *` deny) |
-| `bin/fanout`, `yq`, `file`, `python3 bin/lib/*` | Package installs (`npm install`, etc.) |
+| `opencode-run spec fanout`, `yq`, `file`, `python3 "$OC/bin/project/spec/lib/*"` | Package installs (`npm install`, etc.) |
 
 Prefer bare commands over `2>&1` / `2>/dev/null` when a deny might match spaced `* 2> *`.
 
@@ -116,4 +116,4 @@ Prefer bare commands over `2>&1` / `2>/dev/null` when a deny might match spaced 
 - Do not invoke `orchestrate` from this skill.
 - Do not infer backend/frontend from repo names; use registry fields.
 - **setup-skills** remains for a **single orphan repo** not in a stack — not for normal stack onboarding.
-- **Never** tell the user to run synced `bin/*` scripts — **you** run them when a loaded skill requires it (except **`setup-project`** once from project parent, which the human already ran).
+- **Never** tell the user to run `opencode-run` scripts — **you** run them when a loaded skill requires it (except **`setup-project`** once from project parent, which the human already ran).

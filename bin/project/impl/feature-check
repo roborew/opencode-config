@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Validate child issues for a feature slug in the current implementation repo.
+# Usage: opencode-run impl feature-check <slug> [--level fanout|expand|orchestrate]
+set -euo pipefail
+SLUG="${1:?slug required}"
+shift || true
+LEVEL="expand"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --level) LEVEL="${2:?}"; shift 2 ;;
+    *) echo "unknown arg: $1" >&2; exit 2 ;;
+  esac
+done
+
+# shellcheck source=../lib/repo-context.sh disable=SC1091
+source "$(cd "$(dirname "$0")/../lib" && pwd)/repo-context.sh"
+opencode_project_init impl
+
+VALIDATE="${OC}/bin/project/spec/lib/validate_issue_body.py"
+[[ -f "$VALIDATE" ]] || { echo "ERROR: validate_issue_body.py not found at ${VALIDATE}" >&2; exit 8; }
+
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+echo "==> feature-check: ${SLUG} in ${REPO} (level=${LEVEL})"
+
+FAIL=0
+COUNT=0
+while read -r num; do
+  [[ -z "$num" ]] && continue
+  COUNT=$((COUNT + 1))
+  BODY_FILE=$(mktemp)
+  gh issue view "$num" --repo "$REPO" --json body -q .body >"$BODY_FILE"
+  TID=$(sed -n '/```opencode-task-json/,/```/p' "$BODY_FILE" | sed '1d;$d' | jq -r '.task_id // empty' 2>/dev/null || true)
+  ARGS=(--level "$LEVEL" --file "$BODY_FILE")
+  [[ -n "$TID" ]] && ARGS+=(--task-id "$TID")
+  if python3 "$VALIDATE" "${ARGS[@]}"; then
+    echo "OK: #${num} (${TID:-no task_id})"
+  else
+    echo "FAIL: #${num} (${TID:-?})"
+    FAIL=1
+  fi
+  rm -f "$BODY_FILE"
+done < <(gh issue list --repo "$REPO" --label "feature:${SLUG}" --state open --limit 100 --json number -q '.[].number')
+
+[[ "$COUNT" -gt 0 ]] || { echo "FAIL: no issues with label feature:${SLUG}"; exit 1; }
+
+if [[ "$FAIL" -eq 0 ]]; then
+  echo "PASS: ${COUNT} issue(s)"
+  exit 0
+fi
+echo "FAIL: see docs/FEATURE-PIPELINE.md (issue-expand phase)"
+exit 1

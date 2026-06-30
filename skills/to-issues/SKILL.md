@@ -55,7 +55,7 @@ Publish in **dependency order** (blockers first) so "Blocked by" can cite real i
 
 - Use `bin/publish-targeted-issue` for targeted/ad-hoc issues.
 - Do **not** call raw `gh issue create`; architect permissions deny it to preserve PRD/fanout guardrails.
-- Use `bin/fanout` for PRD child issues and `bin/publish-prd-issue` for PRD parent issues.
+- Use `opencode-run spec fanout` for PRD child issues and `opencode-run spec publish-prd-issue` for PRD parent issues.
 
 **Duplicate guard (handled by `bin/publish-targeted-issue`, still required conceptually):**
 

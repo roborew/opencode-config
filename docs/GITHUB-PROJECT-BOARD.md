@@ -12,8 +12,8 @@ See also: [FEATURE-PIPELINE.md](FEATURE-PIPELINE.md) · [RUNBOOK.md](RUNBOOK.md)
 
 | Item | Repo | Label | How it gets there |
 |------|------|-------|-------------------|
-| PRD parent issue | `*-spec` | `prd` | `bin/publish-prd-issue` |
-| Child ticket issues | impl repos | `prd-task` | `bin/fanout` |
+| PRD parent issue | `*-spec` | `prd` | `opencode-run spec publish-prd-issue` |
+| Child ticket issues | impl repos | `prd-task` | `opencode-run spec fanout` |
 
 The PRD markdown file (`docs/prd/<slug>.md`) is **not** on the board. The parent GitHub issue links to it in the issue body.
 
@@ -68,8 +68,8 @@ Commit and push the spec repo when `.github/workflows/prd-parent-auto-close.yml`
 
 | Step | Script | Board action |
 |------|--------|--------------|
-| Publish PRD | `bin/publish-prd-issue` | Creates parent issue, sets `parent_issue` in PRD frontmatter, adds to board |
-| Fanout | `bin/fanout <slug>` | Creates child issues as sub-issues, label `prd-task`, adds each to board |
+| Publish PRD | `opencode-run spec publish-prd-issue` | Creates parent issue, sets `parent_issue` in PRD frontmatter, adds to board |
+| Fanout | `opencode-run spec fanout <slug>` | Creates child issues as sub-issues, label `prd-task`, adds each to board |
 | Re-run fanout | same | Idempotent: re-links existing issues, re-adds to board |
 | All children closed | `prd-parent-auto-close` workflow | Hourly check; closes open PRD parent when all sub-issues are done |
 | Feature done | `feature-complete` skill | Rollup comment + delivery record; close parent if still open |
@@ -94,6 +94,6 @@ On the PRD parent issue in GitHub, confirm sub-issues are listed and show comple
 | Symptom | Fix |
 |---------|-----|
 | Issues not on board | Set `GH_PROJECT`; run `gh auth refresh -s project` |
-| Sub-issues not linked | Re-run `bin/fanout <slug>` (idempotent reconcile) |
+| Sub-issues not linked | Re-run `opencode-run spec fanout <slug>` (idempotent reconcile) |
 | `gh issue create --parent` fails | Upgrade `gh` to >= 2.94.0 |
 | Parent never auto-closes | Ensure `prd-parent-auto-close.yml` is in spec repo; sub-issues must be linked (not body-only references) |

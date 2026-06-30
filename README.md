@@ -84,10 +84,12 @@ What this does:
 
 - Creates or syncs **`myapp-spec`** from [templates/spec-repo/](templates/spec-repo/)
 - Updates **`docs/agents/repos.md`** with discovered siblings
-- Runs **`link-spec-repo`** wiring in each local implementation repo (issue tracker, synced `bin/*`, templates)
-- Commits spec tooling when there are changes (push when ready)
+- Wires **`docs/agents/issue-tracker.md`** in each implementation repo (links to spec)
+- Aligns GitHub templates and doc scaffolding (no automation scripts copied into repos)
 
-**Re-runs are safe** — idempotent tooling refresh and re-link; an existing spec repo **stays on its current branch** unless you pass `--keep-branch` explicitly on first create.
+Project automation runs from central config via **`opencode-run`** (e.g. `opencode-run spec fanout <slug>`). Application repos may use `bin/` for **app-specific** scripts only.
+
+**Re-runs are safe** — idempotent doc/registry alignment and re-link; an existing spec repo **stays on its current branch** unless you pass `--keep-branch` explicitly on first create.
 
 Useful flags:
 
@@ -200,9 +202,9 @@ During **setup-project**, architect scans implementation repos for `.plan/featur
 
 ### Upgrade OpenCode templates later
 
-Re-run **`setup-project`** from the project parent to sync `bin/*` and templates. Commit and push spec (and impl) repos when prompted.
+Re-run **`setup-project`** from the project parent to align docs and GitHub templates. Use **`opencode-assess-stack --fix .`** once to remove legacy copied `bin/` tooling from older stacks.
 
-PRD ticket edits after publish: `feature-upgrade <slug>` from the project parent or `bin/feature-upgrade <slug>` in spec.
+PRD ticket edits after publish: `feature-upgrade <slug>` from the project parent or `opencode-run spec feature-upgrade <slug>` in spec.
 
 ---
 
@@ -281,6 +283,8 @@ Orchestrate **does not** run final product sign-off, write changelog/docs for Gi
 | Spec repo template layout                                     | [templates/spec-repo/](templates/spec-repo/)                                                                             |
 | Shared rules (loaded via `instructions`)                      | [rules/](rules/)                                                                                                         |
 | Helper scripts (secrets scan, session context, format, tests) | [scripts/](scripts/)                                                                                                     |
+| Project automation (fanout, issue-expand, feature-check) | `opencode-run` — see [bin/opencode-run](bin/opencode-run) |
+| Stack cleanup (remove legacy copied bin/) | `opencode-assess-stack` |
 | Git / SQL guardrails (scripts)                                | [scripts/block-dangerous-git.sh](scripts/block-dangerous-git.sh), [scripts/preflight-git.sh](scripts/preflight-git.sh) |
 
 

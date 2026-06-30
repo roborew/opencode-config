@@ -24,7 +24,6 @@ while IFS= read -r local_dir; do
   missing=()
   [[ -f "$impl/docs/agents/issue-tracker.md" ]] || missing+=("issue-tracker.md")
   read_spec_repo_from_file "$impl/docs/agents/issue-tracker.md" &>/dev/null || missing+=("SPEC_REPO line")
-  [[ -x "$impl/bin/feature-context" ]] || missing+=("bin/feature-context")
   grep -q '^tmp/' "$impl/.gitignore" 2>/dev/null || missing+=("gitignore scratch paths")
   if [[ ${#missing[@]} -gt 0 ]]; then
     echo "INCOMPLETE: ${local_dir}: ${missing[*]}"

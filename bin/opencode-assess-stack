@@ -1,0 +1,228 @@
+#!/usr/bin/env bash
+# Assess and optionally clean copied OpenCode tooling from project stacks.
+#
+# Usage:
+#   opencode-assess-stack <project-parent>
+#   opencode-assess-stack --fix <project-parent>
+#   opencode-assess-stack --parents <parent1> <parent2> ...
+#
+# OpenCode automation lives in OPENCODE_CONFIG_DIR (opencode-run). App repo bin/ is
+# for application scripts only.
+set -euo pipefail
+
+OC="${OPENCODE_CONFIG_DIR:-${OPENCODE_CONFIG:-$HOME/.config/opencode}}"
+FIX=false
+PARENTS=()
+
+usage() {
+  cat <<EOF
+Assess project stacks for copied OpenCode tooling (should be removed).
+
+Usage:
+  opencode-assess-stack [--fix] <project-parent>
+  opencode-assess-stack [--fix] --parents <dir> [<dir> ...]
+
+Options:
+  --fix       Remove manifest-listed tooling copies (not app-specific bin/ files)
+  --parents   Process multiple project parent directories
+  -h, --help
+
+Config: ${OC}
+EOF
+  exit "${1:-0}"
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage 0 ;;
+    --fix) FIX=true; shift ;;
+    --parents)
+      shift
+      while [[ $# -gt 0 && "$1" != --* ]]; do
+        PARENTS+=("$1")
+        shift
+      done
+      ;;
+    -*)
+      echo "unknown option: $1" >&2
+      usage 1
+      ;;
+    *)
+      PARENTS+=("$1")
+      shift
+      ;;
+  esac
+done
+
+[[ ${#PARENTS[@]} -gt 0 ]] || usage 1
+
+# Known OpenCode tooling paths (relative to repo root) — safe to remove.
+SPEC_TOOLING=(
+  bin/fanout
+  bin/fanout-audit
+  bin/publish-prd-issue
+  bin/feature-upgrade
+  bin/feature-check
+  bin/new-prd
+  bin/status
+  bin/sync-fanout-bodies
+  bin/lib/read_spec_repo.sh
+  bin/lib/fetch_spec_prd.sh
+  bin/lib/build_issue_body.sh
+  bin/lib/task_map.sh
+  bin/lib/fanout_lock.sh
+  bin/lib/existing_issue.sh
+  bin/lib/github_project.sh
+  bin/lib/prd_io.py
+  bin/lib/validate_tickets.py
+  bin/lib/validate_issue_body.py
+  bin/lib/validate_prd_frontmatter.py
+  bin/lib/toposort_tickets.py
+  bin/lib/extract_issue_sections.py
+  bin/lib/extract_task_meta.py
+  bin/lib/task_meta_to_yaml.py
+  bin/lib/issue_contract.py
+  bin/lib/existing_issue.py
+  bin/lib/test_existing_issue.py
+  bin/lib/__pycache__
+  skills/fanout-issues
+)
+IMPL_TOOLING=(
+  bin/feature-context
+  bin/issue-expand-bundle
+  bin/orchestrate-readiness-check
+  bin/feature-check
+  bin/lib/read_spec_repo.sh
+  bin/lib/fetch_spec_prd.sh
+)
+
+is_spec_repo() {
+  local repo="$1"
+  local name
+  name=$(basename "$repo")
+  if [[ "$name" =~ -[Ss]pec$ ]]; then
+    return 0
+  fi
+  [[ -f "$repo/docs/agents/repos.md" && -d "$repo/docs/prd" ]]
+}
+
+assess_repo() {
+  local repo="$1"
+  local name kind
+  name=$(basename "$repo")
+  if is_spec_repo "$repo"; then
+    kind=spec
+  else
+    kind=impl
+  fi
+
+  echo ""
+  echo "=== ${name} (${kind}) ==="
+
+  local -a tooling_paths=()
+  if [[ "$kind" == spec ]]; then
+    tooling_paths=("${SPEC_TOOLING[@]}")
+  else
+    tooling_paths=("${IMPL_TOOLING[@]}")
+  fi
+
+  local found=0
+  for rel in "${tooling_paths[@]}"; do
+    if [[ -e "$repo/$rel" ]]; then
+      echo "  REMOVE: $rel"
+      found=$((found + 1))
+      if [[ "$FIX" == true ]]; then
+        rm -rf "$repo/$rel"
+      fi
+    fi
+  done
+
+  if [[ -d "$repo/bin" ]]; then
+    while IFS= read -r f; do
+      [[ -z "$f" ]] && continue
+      rel="${f#"$repo/"}"
+      local listed=false
+      for t in "${tooling_paths[@]}"; do
+        [[ "$rel" == "$t" ]] && listed=true && break
+      done
+      if [[ "$listed" == false ]]; then
+        echo "  KEEP:   $rel (not OpenCode tooling manifest)"
+      fi
+    done < <(find "$repo/bin" -type f 2>/dev/null || true)
+  fi
+
+  if [[ -d "$repo/.opencode" ]]; then
+    echo "  REMOVE: .opencode/"
+    found=$((found + 1))
+    [[ "$FIX" == true ]] && rm -rf "$repo/.opencode"
+  fi
+
+  if [[ "$kind" == impl ]]; then
+    if [[ ! -f "$repo/docs/agents/issue-tracker.md" ]]; then
+      echo "  FIX:    missing docs/agents/issue-tracker.md (run setup-project)"
+    fi
+  fi
+
+  if [[ "$found" -eq 0 ]]; then
+    echo "  OK: no copied OpenCode tooling"
+  elif [[ "$FIX" == true ]]; then
+    echo "  FIXED: removed ${found} tooling path(s)"
+    # Remove empty bin/lib and bin if only tooling lived there
+    rmdir "$repo/bin/lib" 2>/dev/null || true
+    rmdir "$repo/bin" 2>/dev/null || true
+  fi
+
+  if [[ -x "${OC}/bin/opencode-run" ]]; then
+    if [[ "$kind" == "spec" ]]; then
+      if (cd "$repo" && "${OC}/bin/opencode-run" spec status --help >/dev/null 2>&1); then
+        : # status requires slug; smoke git root only
+      fi
+      if git -C "$repo" rev-parse --show-toplevel >/dev/null 2>&1; then
+        echo "  SMOKE: git root OK for opencode-run"
+      fi
+    else
+      if git -C "$repo" rev-parse --show-toplevel >/dev/null 2>&1; then
+        echo "  SMOKE: git root OK for opencode-run"
+      fi
+    fi
+  fi
+}
+
+assess_parent() {
+  local parent="$1"
+  parent="$(cd "$parent" && pwd)"
+
+  # Single git repo path (not a stack parent)
+  if [[ -d "$parent/.git" ]]; then
+    echo "Single repo: ${parent}"
+    assess_repo "$parent"
+    return 0
+  fi
+
+  echo "Project parent: ${parent}"
+
+  local -a repos=()
+  local d
+  for d in "$parent"/*; do
+    [[ -d "$d/.git" ]] || continue
+    repos+=("$d")
+  done
+
+  if [[ ${#repos[@]} -eq 0 ]]; then
+    echo "WARN: no git repos under ${parent}" >&2
+    return 0
+  fi
+
+  for d in "${repos[@]}"; do
+    assess_repo "$d"
+  done
+}
+
+for p in "${PARENTS[@]}"; do
+  assess_parent "$p"
+done
+
+if [[ "$FIX" == true ]]; then
+  echo ""
+  echo "==> Review git status in each repo and commit removals."
+fi

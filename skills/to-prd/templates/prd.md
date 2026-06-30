@@ -42,7 +42,7 @@ Before fanout, confirm target repos and roles match `docs/agents/repos.md`. Do n
 
 ## Tickets (frontmatter)
 
-Define work as **`tickets`** (recommended). `bin/fanout <slug>` creates **one GitHub issue per ticket**, in dependency order, and embeds machine-readable metadata for orchestrate.
+Define work as **`tickets`** (recommended). `opencode-run spec fanout <slug>` creates **one GitHub issue per ticket**, in dependency order, and embeds machine-readable metadata for orchestrate.
 
 Each ticket object:
 

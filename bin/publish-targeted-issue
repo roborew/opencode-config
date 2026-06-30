@@ -8,7 +8,7 @@ Usage:
                              [--feature-slug SLUG] [--label LABEL ...]
 
 Creates one targeted/ad-hoc GitHub issue with duplicate guards.
-Use bin/fanout for PRD child issues and bin/publish-prd-issue for PRD parents.
+Use opencode-run spec fanout for PRD child issues and opencode-run spec publish-prd-issue for PRD parents.
 Use --body-file - to read the issue body from stdin.
 USAGE
 }
@@ -72,7 +72,7 @@ fi
 [[ -f "$body_file" ]] || { echo "body file not found: $body_file" >&2; exit 2; }
 
 OC="${OPENCODE_CONFIG:-$(cd "$(dirname "$0")/.." && pwd)}"
-EMBED_META="${OC}/templates/spec-repo/bin/lib/extract_task_meta.py"
+EMBED_META="${OC}/bin/project/spec/lib/extract_task_meta.py"
 if [[ -f "$EMBED_META" ]] && ! grep -qE 'opencode-task-(yaml|json)' "$body_file"; then
   enriched_body="$(mktemp)"
   python3 "$EMBED_META" --embed --title "$title" ${feature_slug:+--feature-slug "$feature_slug"} --in "$body_file" --out "$enriched_body"
@@ -86,7 +86,7 @@ if [[ -f "$EMBED_META" ]] && ! grep -qE 'opencode-task-(yaml|json)' "$body_file"
 fi
 
 if grep -Eiq '(^|[^a-z])(prd|fanout)[_-]?(ticket|issue|parent)|parent_prd|prd_ticket_id' "$body_file"; then
-  echo "refusing PRD/fanout-looking issue body; use bin/fanout or bin/publish-prd-issue" >&2
+  echo "refusing PRD/fanout-looking issue body; use opencode-run spec fanout or opencode-run spec publish-prd-issue" >&2
   exit 2
 fi
 
