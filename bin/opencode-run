@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Execute OpenCode project tooling from central config (single source of truth).
+# Never copy these scripts into application repos — use this dispatcher instead.
+#
+# Usage:
+#   opencode-run spec fanout <slug>
+#   opencode-run impl feature-context <issue#>
+#   opencode-run impl issue-expand-bundle <slug>
+#   opencode-run --cwd /path/to/repo spec feature-upgrade <slug>
+#
+# Requires OPENCODE_CONFIG_DIR (default ~/.config/opencode) and a git repo cwd.
+set -euo pipefail
+
+OC="${OPENCODE_CONFIG_DIR:-${OPENCODE_CONFIG:-$HOME/.config/opencode}}"
+CWD=""
+KIND=""
+SCRIPT=""
+
+usage() {
+  cat <<EOF
+Run OpenCode project automation from central config (not from repo bin/).
+
+Usage:
+  opencode-run <spec|impl> <script> [args...]
+  opencode-run --cwd <repo-path> <spec|impl> <script> [args...]
+
+Examples:
+  cd myapp-spec && opencode-run spec fanout my-feature
+  cd myapp-web  && opencode-run impl issue-expand-bundle my-feature
+  opencode-run --cwd ~/code/myapp/myapp-spec spec feature-upgrade my-feature
+
+Config root: ${OC}
+EOF
+  exit "${1:-0}"
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) usage 0 ;;
+    --cwd)
+      CWD="${2:?}"
+      shift 2
+      ;;
+    spec|impl)
+      KIND="$1"
+      shift
+      ;;
+    -*)
+      echo "unknown option: $1" >&2
+      usage 1
+      ;;
+    *)
+      if [[ -z "$SCRIPT" ]]; then
+        SCRIPT="$1"
+        shift
+        break
+      fi
+      echo "unexpected argument: $1" >&2
+      usage 1
+      ;;
+  esac
+done
+
+[[ -n "$KIND" && -n "$SCRIPT" ]] || usage 1
+
+TARGET="${OC}/bin/project/${KIND}/${SCRIPT}"
+[[ -x "$TARGET" ]] || {
+  echo "ERROR: missing script: ${TARGET}" >&2
+  echo "       Ensure OPENCODE_CONFIG_DIR points at your OpenCode config checkout." >&2
+  exit 8
+}
+
+if [[ -n "$CWD" ]]; then
+  cd "$CWD"
+fi
+
+exec "$TARGET" "$@"

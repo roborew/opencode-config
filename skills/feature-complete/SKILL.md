@@ -48,11 +48,19 @@ Present rollup and gaps. Ask: **Close spec parent issue?** Only on explicit yes.
 
 ## Close parent
 
+Task **`developer`** `load: minimal` — check whether the parent is already closed (the spec repo **`prd-parent-auto-close`** workflow may have closed it when all sub-issues finished):
+
+```bash
+gh issue view <parent-n> --repo <spec-owner/name> --json state -q .state
+```
+
+If still open and the user confirmed:
+
 ```bash
 gh issue close <parent-n> --repo <spec-owner/name>
 ```
 
-Optional: `gh issue edit` add label `state:done`.
+Optional: Task **developer** to `gh issue edit` and add label `state:done`.
 
 ## PRD delivery record
 

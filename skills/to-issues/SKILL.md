@@ -7,6 +7,8 @@ description: Break a plan, spec, or PRD into independently-grabbable GitHub issu
 
 Break work into independently-grabbable **GitHub issues** using **vertical slices** (tracer bullets). Primary path for **targeted changes**, debug fixes, and refactor slices — replaces local `.plan` artifacts in GitHub-first workflows.
 
+**Architect delegation:** publish via `bin/publish-targeted-issue` (bash). Never `gh issue create`. File drafts → Task **scribe** first if a body file must exist on disk.
+
 ## Preconditions
 
 - Read `docs/agents/issue-tracker.md` and `docs/agents/triage-labels.md` when present (from **`setup-skills`** or **`setup-project`**).
@@ -53,7 +55,7 @@ Publish in **dependency order** (blockers first) so "Blocked by" can cite real i
 
 - Use `bin/publish-targeted-issue` for targeted/ad-hoc issues.
 - Do **not** call raw `gh issue create`; architect permissions deny it to preserve PRD/fanout guardrails.
-- Use `bin/fanout` for PRD child issues and `bin/publish-prd-issue` for PRD parent issues.
+- Use `opencode-run spec fanout` for PRD child issues and `opencode-run spec publish-prd-issue` for PRD parent issues.
 
 **Duplicate guard (handled by `bin/publish-targeted-issue`, still required conceptually):**
 

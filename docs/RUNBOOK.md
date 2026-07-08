@@ -6,14 +6,14 @@
 
 | Mode | Planning | Execution source of truth |
 |------|----------|----------------------------|
-| **Spec / GitHub** (default) | Spec: PRD + fanout; impl: **issue-expand** (architect option 1) | GitHub child issues (`feature:<slug>`, `opencode-task-yaml` + `stages[]`) |
-| **Legacy local** | Architect option 2 → scribe writes `.plan/feature.<slug>.md` | Active `.plan/*.md` (excludes `*.completed.md`) |
+| **Spec / GitHub** (default) | Spec: PRD + fanout + **issue-expand** (architect option 1, same session) | GitHub child issues (`feature:<slug>`, `opencode-task-json` + `stages[]`) |
+| **Legacy local** | Architect option 1 (targeted) → scribe writes `.plan/feature.<slug>.md` | Active `.plan/*.md` (excludes `*.completed.md`) |
 
-See [FEATURE-PIPELINE.md](FEATURE-PIPELINE.md) for the numbered pipeline. **Fanout alone does not populate `stages[]`** — run issue-expand in each implementation repo before orchestrate on the spec path.
+See [FEATURE-PIPELINE.md](FEATURE-PIPELINE.md) for the numbered pipeline. **Fanout alone does not populate `stages[]`** — issue-expand runs in the spec architect session before orchestrate.
 
 ## GitHub-always principle (spec path)
 
-After `bin/fanout`, **GitHub issues are the execution source of truth**. Do not create parallel `.plan/issue.*` files for spec-driven features. Orchestrate reads **issue bodies** (`opencode_meta`, `stages[]`, Implementation planning markdown), not the full PRD, unless a subagent explicitly needs PRD context. Ephemeral caches (`tmp/feature-context.md`) are not authoritative.
+After `opencode-run spec fanout`, **GitHub issues are the execution source of truth**. Do not create parallel `.plan/issue.*` files for spec-driven features. Orchestrate reads **issue bodies** (`opencode_meta`, `stages[]`, Implementation planning markdown), not the full PRD, unless a subagent explicitly needs PRD context. Ephemeral caches (`tmp/feature-context.md`) are not authoritative.
 
 ## Stack bootstrap (`setup-project`)
 
@@ -22,7 +22,18 @@ After `bin/fanout`, **GitHub issues are the execution source of truth**. Do not 
 | **Human (once per stack)** | `cd ~/code/APP && setup-project` from project parent (`GH_ORG` or `--org` required) |
 | **OpenCode (spec repo)** | architect → **setup-project** skill: interview, `docs/agents/repos.md`, Task **stack-bootstrap** per impl repo |
 
-Shell bootstrap syncs `bin/*` and templates; registry **INCOMPLETE** until the OpenCode interview fills TBD fields is normal (`exit 3` / `NEXT:`). Re-run `setup-project` after adding sibling impl repos. Details: [README.md](../README.md) Setup, [skills/setup-project/SKILL.md](../skills/setup-project/SKILL.md).
+Shell bootstrap aligns docs and GitHub templates; registry **INCOMPLETE** until the OpenCode interview fills TBD fields is normal (`exit 3` / `NEXT:`). Re-run `setup-project` after adding sibling impl repos. Details: [README.md](../README.md) Setup, [skills/setup-project/SKILL.md](../skills/setup-project/SKILL.md).
+
+## Project overview (GitHub Project board)
+
+When `GH_PROJECT` is set in `~/.opencode-agent-env`:
+
+- **`opencode-run spec publish-prd-issue`** registers the PRD parent issue on the org board and writes `parent_issue` into the PRD frontmatter.
+- **`opencode-run spec fanout`** creates child issues as sub-issues, labels them `prd-task`, and registers each on the board.
+- Sub-issue progress rolls up on the parent card in the project view.
+- Spec repo workflow **`prd-parent-auto-close`** closes PRD parents when all sub-issues are done.
+
+Full setup: [GITHUB-PROJECT-BOARD.md](GITHUB-PROJECT-BOARD.md). Requires `gh` >= 2.94.0 and `gh auth refresh -s project`.
 
 ## Push cadence (issue-backed execution)
 
@@ -34,7 +45,7 @@ Shell bootstrap syncs `bin/*` and templates; registry **INCOMPLETE** until the O
 ## Overview
 
 - **Built-in agents:** `plan` uses DeepSeek V4 Flash; `build` uses MiniMax M3 in `opencode.json` for generic/quick tasks.
-- **Primary planning mode** (`architect`) — read-only with **allow-by-default bash** (explicit deny for destructive/mutating shell): exploration, `gh`, `bin/*`, `setup-project --check-only`; artifact writes via **scribe** / **stack-bootstrap** Tasks only. Invokes: `debugger`, `refactor`, `review`, `document`, `designer`, `scribe`. Never invokes `frontend-dev`, `developer`, or `orchestrate`. Prompts user to switch to orchestrate when done; receives user back for review + docs after orchestrate completes. **Skills:** `architect-plan` (new planning, features, specialists, Mode A); `architect-review` (post-implementation Mode B only). The monolithic `architect` skill package is removed.
+- **Primary planning mode** (`architect`) — read-only with **allow-by-default bash** (explicit deny for destructive/mutating shell): exploration, `gh`, `opencode-run`, `setup-project --check-only`; artifact writes via **scribe** / **stack-bootstrap** Tasks only.
 - **Primary execution mode** (`orchestrate`) runs delegated stage execution and recovery flow. Reads `## Difficulty` from the artifact (`easy` \| `medium` \| `hard`; default `medium` if missing). After **all** stages/issues pass the final verifier (one gate per artifact or `feature:<slug>`): **medium/hard** — **CodeRabbit gate** via `review` + `code-review` skill (single CLI review of accumulated changes against `develop` by default; no CodeRabbit validation reruns); **easy** — skips CodeRabbit. **Never** runs CodeRabbit per GitHub issue, mid-stage, or after CodeRabbit remediation. Then: **easy** — no further gates; **medium** — `review` post-execution check; **hard** — `senior-dev` (scheduled review, no user confirmation) then `helper` (strategy conformance). On completion, prints a table-based sign-off handoff naming the exact feature/artifact, PR, work completed, gates, CodeRabbit, findings/risks, and the copy/paste prompt for architect. **Skills:** `orchestrate-execution` (bootstrap: preflight yes/no, optional env gate, work selection, stage loop, grading, completion gates); `orchestrate-recovery` (helper triggers, loops, env, escalation, manual paste). The monolithic `orchestrate` skill package is removed.
 - **Planning specialists** (`debugger`, `refactor`, `review`, `designer`) — read-only subagents of architect; return plan drafts, never write code. `designer` synthesizes design briefs for Prototype Design. The **`review`** agent may Task **`security-reviewer`**, **`performance-reviewer`**, and **`doc-reviewer`** when change scope warrants (see `skills/review/SKILL.md`).
 - **Documentation generator** (`document`) — read-only; generates changelog/guides/architecture content; architect invokes, then scribe writes.
@@ -184,10 +195,11 @@ Runtime authority: `opencode.json`. Agent frontmatter `model:` should match for 
 
 Primaries and execution agents should use MCP only when it reduces uncertainty:
 
-- **`claude-context`**: Semantic code search in workspace. Use during planning (architect, **strategist**, debugger, refactor, review, document, designer). Discovery-heavy agents must run a readiness gate first (`get_indexing_status`; if needed `index_codebase`) and may fall back to bash/glob only when MCP is unavailable or indexing still fails after retry, with `MCP_FALLBACK` recorded in output. `orchestrate` also runs a lightweight readiness check on fresh startup even when full preflight is skipped.
+- **`claude-context`**: Semantic code search keyed by **absolute path** (not only the OpenCode workspace). Pass the absolute path of the repo under investigation to `get_indexing_status`, `index_codebase`, and `search_code`. From the **spec repo**, resolve sibling impl paths via `bin/project/spec/lib/resolve_impl_path.sh` (`../<repo-basename>` beside spec). Use during planning (architect, **strategist**, debugger, refactor, review, document, designer). Discovery-heavy agents must run a readiness gate first (`get_indexing_status` for the target path; if needed `index_codebase`) and may fall back to bash/glob (`rg`, `find` on the sibling path) only when MCP is unavailable or indexing still fails after retry, with `MCP_FALLBACK` recorded in output. `orchestrate` also runs a lightweight readiness check on fresh startup even when full preflight is skipped.
 - **`context7`**: Up-to-date docs for 9000+ external libraries. Use when framework/library API behavior is uncertain. Limit to 3 calls per question.
 - **`docs-mcp-server`**: Internal docs, prototypes, linked repos, architecture notes.
 - **`dash-api`**: API/library contract lookup when behavior is unclear.
+- **`cloudflare-api`**: Live Cloudflare account operations — DNS records, zone settings, Workers, and other API-backed changes when the task requires current account state or mutations. Not for general Cloudflare documentation (use `context7` instead). Prefer read-only verification first; confirm zone, record name, type, and TTL before create/update/delete DNS records.
 
 If a user says "look at the prototype", check `docs-mcp-server` first and record what was used.
 
@@ -236,22 +248,11 @@ Constraints: approved paths only; markdown or .env.example only
 
 ## Troubleshooting: CRLF / `env: bash\r`
 
-On macOS/Linux, **CRLF** line endings in `bin/*` shell scripts break the shebang (`env: bash\r: No such file or directory`). OpenCode templates are LF; spec-repo copies are normalized on every **`sync_spec_tooling.sh`** run (`strip_crlf` after install).
+On macOS/Linux, **CRLF** line endings in shell scripts break the shebang (`env: bash\r: No such file or directory`). OpenCode config scripts use LF.
 
-**Agents:** Do not fix CRLF file-by-file with sed/Python. Run one of:
+**Agents:** Do not fix CRLF file-by-file with sed/Python. Project automation runs from `OPENCODE_CONFIG_DIR` via **`opencode-run`** — update the config checkout if scripts fail with `env: bash\r`.
 
-```bash
-# From spec repo (when ./bin/* fails)
-bash bin/feature-upgrade <slug>
-"$HOME/.config/opencode/bin/stack/sync_spec_tooling.sh" "$(pwd)"
-
-# From project parent (wrapper syncs tooling before exec)
-feature-upgrade <slug>
-```
-
-**Prevention:** Spec repos receive [`.gitattributes`](../templates/spec-repo/.gitattributes) on sync so Git keeps `bin/**` as LF. Re-run **`setup-project`** or **`sync_spec_tooling.sh`** after pulling OpenCode config updates that touch `templates/spec-repo/bin/`.
-
-Config-repo CI runs `scripts/check-crlf.sh` on `bin/`, `scripts/`, `templates/`, and `.gitattributes`.
+**Prevention:** Spec repos receive [`.gitattributes`](../templates/spec-repo/.gitattributes) on align for doc paths. Config-repo CI runs `scripts/check-crlf.sh` on `bin/`, `bin/project/`, `scripts/`, `templates/`, and `.gitattributes`.
 
 ## Smoke Checklist
 

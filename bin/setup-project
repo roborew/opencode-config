@@ -210,7 +210,6 @@ if [[ "$SPEC_ONLY" != "true" && ${#TARGETS[@]} -gt 0 ]]; then
     fi
     if [[ -d "${impl_path}/.git" ]]; then
       "$LINK" "${impl_path}" "$SPEC_REPO"
-      "${STACK}/sync_impl_tooling.sh" "${impl_path}" || true
       LINKED=$((LINKED + 1))
     else
       echo "WARN: ${local_dir} not found under ${PARENT}" >&2
@@ -223,8 +222,8 @@ fi
 if git -C "$SPEC_PATH" rev-parse --git-dir &>/dev/null; then
   git -C "$SPEC_PATH" add -A
   if ! git -C "$SPEC_PATH" diff --cached --quiet; then
-    if git -C "$SPEC_PATH" commit -m "chore: sync OpenCode spec tooling from setup-project" >/dev/null 2>&1; then
-      echo "==> Committed spec tooling updates ($(git -C "$SPEC_PATH" branch --show-current))" >&2
+    if git -C "$SPEC_PATH" commit -m "chore: align OpenCode spec docs from setup-project" >/dev/null 2>&1; then
+      echo "==> Committed spec doc updates ($(git -C "$SPEC_PATH" branch --show-current))" >&2
       git -C "$SPEC_PATH" push origin HEAD >/dev/null 2>&1 || \
         echo "NOTE: Push spec repo when ready: cd ${SPEC_PATH} && git push" >&2
     else

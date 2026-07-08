@@ -13,7 +13,8 @@ Companion to **`orchestrate-execution`** when working from a **GitHub `feature:<
 
 - Session bootstrap completed: user chose preflight **yes** (`env_gate_passed`) or **no** (`env_gate_declined`) before work selection.
 - **Checkout identity gate** completed: `checkout_contract` captured (`impl_repo_path`, `branch`, `branch_policy`) — mandatory even when preflight was declined.
-- Implementation repo with child issues from spec fanout + impl **issue-expand** (`opencode-task-yaml` with non-empty `stages[]` for orchestrate level).
+- Implementation repo with child issues from spec fanout + **issue-expand in spec repo** (`opencode-task-json` with non-empty `stages[]` for orchestrate level).
+- **Issue-expand readiness gate** passed (`opencode-run impl orchestrate-readiness-check <slug>`) before the loop starts.
 - `gh` authenticated (via delegated **developer** Tasks).
 - Issues labelled `feature:<slug>` and `state:ready-for-agent` (or transitioned to `state:in-progress` during execution).
 - Current branch is the user's selected feature/topic branch (primary checkout or linked worktree). Protected branches (`develop`/`main`/`master`) require explicit user confirmation before `state:in-progress`.
@@ -77,7 +78,7 @@ bash "$OC/skills/github-issue-run/lib/issue-state-transition.sh" "<repo>" "<numb
 3. **next-runnable-issue.sh** → capture JSON.
 4. Set `OPENCODE_EXPECT_REPO_ROOT` and `OPENCODE_EXPECT_BRANCH` from `checkout_contract`; transition to **`state:in-progress`**.
 5. If **`opencode_meta.stages`** is non-empty → follow **stage loop** in **`orchestrate-execution`** (`execution_mode: github_issue_stage`).
-6. Else **flat mode** → single implement pass (`execution_mode: github_issue`) using root acceptance + test_commands from meta. Pass `impl_repo_path`, `branch`, `branch_policy` from `checkout_contract`.
+6. Else **flat mode** — **blocked on spec-driven path**; return to spec architect option 1. Flat mode applies only to targeted issues without `stages[]` outside the spec fanout path.
 7. Task **verifier** with same contract + completion report.
 8. Grade per **Child Report Grading Gate**; require **`git_commit`** with `Refs: #<n>` when files changed.
 9. On PASS → **`state:ready-for-review`** + optional `gh issue comment` with summary + commit hash. **Do not** run CodeRabbit per issue.

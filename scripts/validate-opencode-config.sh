@@ -89,6 +89,13 @@ if ! grep -qE 'git[[:space:]]+switch' scripts/block-dangerous-git.sh 2>/dev/null
   ERR=1
 fi
 
+if [[ -n "${GH_PROJECT:-}" ]] && command -v gh >/dev/null 2>&1; then
+  echo "Checking GH_PROJECT scope (warn only)..."
+  if ! gh auth status 2>&1 | grep -q 'project'; then
+    echo "  WARN: GH_PROJECT is set but gh token may lack project scope — run: gh auth refresh -s project"
+  fi
+fi
+
 if [[ ! -f skills/github-issue-run/lib/checkout-contract.sh ]]; then
   echo "  MISSING: skills/github-issue-run/lib/checkout-contract.sh"
   ERR=1

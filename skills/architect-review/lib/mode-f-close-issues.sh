@@ -1,11 +1,31 @@
 #!/usr/bin/env bash
 # Mode F sign-off: transition feature:<slug> issues to state:done and close them.
 # Only closes issues that currently have state:ready-for-review.
-# Usage: mode-f-close-issues.sh <kebab-slug> [pr_url_for_comment]
+# Usage: mode-f-close-issues.sh <kebab-slug> [pr_url_for_comment] [--repo OWNER/NAME]
 set -euo pipefail
 
 SLUG="${1:?kebab slug required}"
-PR_URL="${2:-}"
+shift || true
+PR_URL=""
+REPO="${GH_REPO:-}"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --repo)
+      REPO="${2:?}"
+      shift 2
+      ;;
+    *)
+      if [[ -z "$PR_URL" ]]; then
+        PR_URL="$1"
+        shift
+      else
+        echo "unknown argument: $1" >&2
+        exit 2
+      fi
+      ;;
+  esac
+done
+
 LABEL="feature:${SLUG}"
 
 OC="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
@@ -16,9 +36,11 @@ if [[ ! -x "$TRANSITION" ]]; then
   exit 1
 fi
 
-REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner || true)"
 if [[ -z "$REPO" ]]; then
-  echo "ERROR: could not resolve current repo (run from impl repo with gh auth)" >&2
+  REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true)"
+fi
+if [[ -z "$REPO" ]]; then
+  echo "ERROR: could not resolve repo (pass --repo OWNER/NAME or run from impl repo with gh auth)" >&2
   exit 1
 fi
 

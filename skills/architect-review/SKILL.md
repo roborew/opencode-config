@@ -13,7 +13,7 @@ Do not narrate the mode switch. Do not describe what you are about to do.
 
 | Signal | Mode |
 |--------|------|
-| `feature:<slug>` handoff, orchestrate queue exhausted, impl **option 5** with slug + PR URL, or user asks GitHub feature sign-off | **Mode F** |
+| `feature:<slug>` handoff, orchestrate queue exhausted, **spec option 4**, impl **option 4**, handoff with `impl_repo` + `pr_url`, or user asks GitHub feature sign-off | **Mode F** |
 | Explicit executed path `.plan/<type>.<slug>.md` (orchestrate ran on that artifact) | **Mode B** |
 | Ambiguous (both slug and `.plan` mentioned) | Ask once: sign-off from **GitHub issues** (`feature:<slug>`) or **local plan file**? |
 | New feature planning | Load **`architect-plan`** instead |
@@ -54,24 +54,37 @@ Use when signing off **`feature:<slug>`** vs PRD/tickets (no `.plan/feature.*` r
 
 ```text
 OC="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
-PRD: $SPEC_REPO/docs/prd/<slug>.md when SPEC_REPO is set
+PRD: docs/prd/<slug>.md in spec repo cwd, else $SPEC_REPO/docs/prd/<slug>.md from impl issue-tracker
+Impl repo: owner/name from orchestrate handoff (required when cwd is spec)
+Impl path: absolute sibling path from handoff or resolve_impl_path.sh (for developer docs commit)
 Issue scripts: $OC/skills/github-issue-run/lib/issue-state-transition.sh
-Close helper: $OC/skills/architect-review/lib/mode-f-close-issues.sh
+Close helper: $OC/skills/architect-review/lib/mode-f-close-issues.sh (--repo OWNER/NAME when cwd is spec)
 ```
+
+### Spec-repo sign-off (cwd is spec)
+
+When orchestrate handoff includes **`impl_repo`** and **`pr_url`**:
+
+- Use **`gh issue list` / `gh issue view` / `gh pr view`** with explicit `--repo owner/name` for the **impl** repo (not spec).
+- Read PRD from **`docs/prd/<slug>.md`** (local spec path).
+- Task **developer** for issue closure: pass `--repo <impl_repo>` to `mode-f-close-issues.sh`.
+- Task **developer** for docs commit (Phase 2): pass **`impl_repo_path`** and feature branch from PR; scribe writes paths relative to impl repo layout — verify with `test -f` using paths under `impl_repo_path` or delegate verify to developer on that checkout.
 
 ### Phase 1 — Verification
 
 #### 1. Data collection
 
-Architect bash `gh` and/or Task **developer** `load: minimal`:
+Architect: **read-only** `gh issue list` / `gh issue view` / `gh pr list` via bash when collecting data. Any **`gh issue edit`**, **`gh issue close`**, **`gh issue comment`**, or **git** mutation → Task **developer** `load: minimal`:
 
 ```bash
-gh issue list -l "feature:<slug>" --state all -L 200 --json number,title,url,labels,body,state
+gh issue list --repo owner/name -l "feature:<slug>" --state all -L 200 --json number,title,url,labels,body,state
 ```
 
+When cwd is **spec**, always pass **`--repo <impl_repo>`** from the orchestrate handoff.
+
 - Require every open issue to have **`state:ready-for-review`** (or document exception in review context).
-- PR from orchestrate handoff or `gh pr list --head <branch> --json number,url,headRefName`.
-- Read PRD when `$SPEC_REPO` is set; parse **`opencode-task-yaml`** / legacy **`opencode-task-json`** per issue; collect verifier summaries and commit SHAs from issue comments.
+- PR from orchestrate handoff or `gh pr view <url>` / `gh pr list --repo owner/name --head <branch>`.
+- Read PRD from spec (`docs/prd/<slug>.md`) or impl tracker path; parse **`opencode-task-json`** per issue; collect verifier summaries and commit SHAs from issue comments.
 
 #### 2. Architect checklist (before Tasking `review`)
 
@@ -116,7 +129,7 @@ stage:
   files: []
   acceptance: mode-f-close-issues.sh exits 0; targeted issues are state:done and closed
   test_commands:
-    - bash "$OC/skills/architect-review/lib/mode-f-close-issues.sh" "<slug>" "<pr_url_or_empty>"
+    - bash "$OC/skills/architect-review/lib/mode-f-close-issues.sh" "<slug>" "<pr_url_or_empty>" --repo <owner/name>
   commit_message: "chore(<slug>): architect Mode F issue closure"
 ```
 
@@ -187,7 +200,7 @@ Collect the verified path list for step 9 `files_to_change`.
 
 #### 9. Task `developer` — commit docs to feature PR
 
-**Start contract required** — use `github_issue_stage` (same `issue_number` / `repo` as step 5). On the **feature branch** from handoff / `feature-finish-pr.sh`:
+**Start contract required** — use `github_issue_stage` (same `issue_number` / `repo` as step 5). On the **feature branch** in the **impl repo** (`impl_repo_path` from handoff when cwd is spec):
 
 **Task prompt — docs commit:**
 
@@ -196,17 +209,18 @@ load: minimal
 execution_mode: github_issue_stage
 issue_number: <n>
 repo: <owner/name>
+impl_repo_path: <absolute path to impl git root>
 stage_id: mode-f-signoff-docs
 stage:
-  objective: Commit sign-off documentation to the feature branch and push
+  objective: Commit sign-off documentation to the feature branch and push (impl repo checkout)
   files: [<verified paths from step 8>]
-  acceptance: All listed doc files exist on disk, are committed, and pushed to origin on the feature branch
+  acceptance: All listed doc files exist on disk under impl_repo_path, are committed, and pushed to origin on the feature branch
   test_commands:
-    - test -f docs/changelog/<date>-<slug>.md
-    - git checkout <feature-branch>
-    - git add <verified paths>
-    - git commit -m "docs(<slug>): sign-off changelog and guides"
-    - git push origin HEAD
+    - cd <impl_repo_path> && test -f <each verified path from step 8>
+    - cd <impl_repo_path> && git checkout <feature-branch>
+    - cd <impl_repo_path> && git add <verified paths from step 8>
+    - cd <impl_repo_path> && git commit -m "docs(<slug>): sign-off changelog and guides"
+    - cd <impl_repo_path> && git push origin HEAD
   commit_message: "docs(<slug>): sign-off changelog and guides"
 ```
 

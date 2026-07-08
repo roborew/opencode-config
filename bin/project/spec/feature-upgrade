@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# Sync PRD → GitHub issue bodies and validate feature:<slug> tickets (all repos in PRD).
+# Run from spec repo via opencode-run after editing docs/prd/<slug>.md
+#
+# Usage: opencode-run spec feature-upgrade <slug>
+set -euo pipefail
+SLUG="${1:?slug required}"
+shift || true
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --skip-sync-tooling) shift ;;
+    *) echo "unknown arg: $1" >&2; exit 2 ;;
+  esac
+done
+
+# shellcheck source=../lib/repo-context.sh disable=SC1091
+source "$(cd "$(dirname "$0")/../lib" && pwd)/repo-context.sh"
+opencode_project_init spec
+
+echo "==> feature-upgrade: ${SLUG}"
+echo "    spec repo: ${ROOT}"
+
+echo "==> Syncing issue bodies from PRD (preserves filled issue-expand content)..."
+"${BIN_DIR}/sync-fanout-bodies" "$SLUG"
+
+echo ""
+echo "==> Checking fanout structure (all repos)..."
+FANOUT_OK=true
+"${BIN_DIR}/feature-check" "$SLUG" --level fanout || FANOUT_OK=false
+
+echo ""
+echo "==> Checking orchestrate readiness (all repos)..."
+ORCH_OK=true
+"${BIN_DIR}/feature-check" "$SLUG" --level orchestrate || ORCH_OK=false
+
+IMPL_REPOS=$(python3 "${BIN_DIR}/lib/prd_io.py" tickets_json "${ROOT}/docs/prd/${SLUG}.md" | jq -r '.[].repo' | sort -u)
+
+echo ""
+echo "Next steps (OpenCode — not shell)"
+for repo in $IMPL_REPOS; do
+  echo "  ${repo}: spec repo → architect → option 1 → slug ${SLUG} (issue-expand; same session after fanout or feature-upgrade)"
+done
+
+echo ""
+if [[ "$FANOUT_OK" == "true" && "$ORCH_OK" == "true" ]]; then
+  echo "STATUS: PASS — ready for orchestrate on all repos."
+  exit 0
+fi
+if [[ "$FANOUT_OK" == "true" ]]; then
+  echo "STATUS: fanout structure OK; run issue-expand from spec architect option 1 (see above)."
+  exit 0
+fi
+echo "STATUS: INCOMPLETE — fix fanout/feature-check errors, re-run opencode-run spec feature-upgrade ${SLUG}"
+exit 1

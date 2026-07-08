@@ -42,7 +42,7 @@ Before fanout, confirm target repos and roles match `docs/agents/repos.md`. Do n
 
 ## Tickets (frontmatter)
 
-Define work as **`tickets`** (recommended). `bin/fanout <slug>` creates **one GitHub issue per ticket**, in dependency order, and embeds slim **opencode-task-yaml** routing metadata for orchestrate.
+Define work as **`tickets`** (recommended). `opencode-run spec fanout <slug>` creates **one GitHub issue per ticket**, in dependency order, and embeds slim **opencode-task-yaml** routing metadata for orchestrate.
 
 Each ticket object:
 
@@ -86,4 +86,4 @@ tickets:
       - Admin can list archived items from the distribution API
 ```
 
-**YAML authoring:** Every ticket field must be indented under its `- id:` line. Run `python3 bin/lib/validate_prd_frontmatter.py docs/prd/<slug>.md` before fanout.
+**YAML authoring:** Every ticket field must be indented under its `- id:` line. Run `python3 "${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}/bin/project/spec/lib/validate_prd_frontmatter.py" docs/prd/<slug>.md` before fanout.

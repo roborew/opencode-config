@@ -1,47 +1,8 @@
 #!/usr/bin/env bash
-# Sync implementation-repo bins from OpenCode templates.
+# Deprecated: OpenCode project scripts live in OPENCODE_CONFIG_DIR (use opencode-run).
 # Usage: sync_impl_tooling.sh <impl-repo-path>
 set -euo pipefail
-
 IMPL="${1:?implementation repo path}"
-OC="$(cd "$(dirname "$0")/../.." && pwd)"
-TEMPLATE="${OC}/templates/bin"
-
-IMPL="$(cd "$IMPL" && pwd)"
-mkdir -p "$IMPL/bin" "$IMPL/bin/lib"
-OC_LIB="${OC}/bin/lib"
-
-strip_crlf() {
-  python3 -c "
-import pathlib, sys
-p = pathlib.Path(sys.argv[1])
-raw = p.read_bytes()
-data = raw.replace(b'\r\n', b'\n').replace(b'\r', b'\n')
-if data != raw:
-    p.write_bytes(data)
-" "$1"
-}
-
 if [[ "${OPENCODE_SETUP_QUIET:-}" != "1" ]]; then
-  echo "==> Syncing impl tooling into $(basename "$IMPL")..."
+  echo "==> Skipping impl bin sync for $(basename "$IMPL") (use opencode-run from central config)"
 fi
-
-for lib in read_spec_repo.sh fetch_spec_prd.sh; do
-  src="${OC_LIB}/${lib}"
-  [[ -f "$src" ]] || continue
-  install -m0644 "$src" "$IMPL/bin/lib/${lib}"
-  strip_crlf "$IMPL/bin/lib/${lib}"
-  if [[ "${OPENCODE_SETUP_QUIET:-}" != "1" ]]; then
-    echo "Synced bin/lib/${lib}"
-  fi
-done
-
-for script in feature-context issue-expand-bundle orchestrate-readiness-check feature-check; do
-  src="${TEMPLATE}/${script}"
-  [[ -f "$src" ]] || continue
-  install -m0755 "$src" "$IMPL/bin/${script}"
-  strip_crlf "$IMPL/bin/${script}"
-  if [[ "${OPENCODE_SETUP_QUIET:-}" != "1" ]]; then
-    echo "Synced bin/${script}"
-  fi
-done
