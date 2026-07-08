@@ -216,9 +216,9 @@ stage:
   files: [<verified paths from step 8>]
   acceptance: All listed doc files exist on disk under impl_repo_path, are committed, and pushed to origin on the feature branch
   test_commands:
-    - cd <impl_repo_path> && test -f docs/changelog/<date>-<slug>.md
+    - cd <impl_repo_path> && test -f <each verified path from step 8>
     - cd <impl_repo_path> && git checkout <feature-branch>
-    - cd <impl_repo_path> && git add <verified paths>
+    - cd <impl_repo_path> && git add <verified paths from step 8>
     - cd <impl_repo_path> && git commit -m "docs(<slug>): sign-off changelog and guides"
     - cd <impl_repo_path> && git push origin HEAD
   commit_message: "docs(<slug>): sign-off changelog and guides"

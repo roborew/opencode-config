@@ -62,14 +62,21 @@ github_project_reconcile_subissues() {
   local child_urls_csv="${2:-}"
   [[ -n "$child_urls_csv" ]] || return 0
 
-  local err
-  if ! err=$(gh issue edit "$parent_url" --add-sub-issue "$child_urls_csv" 2>&1); then
-    if echo "$err" | grep -qiE 'already|exists|duplicate|sub-issue'; then
-      return 0
+  # Process each child URL individually (gh issue edit --add-sub-issue takes one URL at a time)
+  local IFS=','
+  local child_url
+  for child_url in $child_urls_csv; do
+    [[ -n "$child_url" ]] || continue
+    local err
+    if ! err=$(gh issue edit "$parent_url" --add-sub-issue "$child_url" 2>&1); then
+      # Only treat true duplicate/already-exists as success; fail on other errors
+      if echo "$err" | grep -qiE '(already exists|already a sub-issue|duplicate sub-issue)'; then
+        continue
+      fi
+      echo "WARN: failed to link sub-issue $child_url under $parent_url: $err" >&2
+      return 1
     fi
-    echo "WARN: failed to reconcile sub-issues under $parent_url: $err" >&2
-    return 0
-  fi
+  done
 }
 
 # Collect child issue URLs from task map file (task_id TAB issue_num) + repo lookup.

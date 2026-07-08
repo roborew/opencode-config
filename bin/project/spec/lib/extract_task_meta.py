@@ -15,8 +15,12 @@ from typing import Any
 
 try:
     import yaml  # type: ignore
+    YAMLError = yaml.YAMLError  # type: ignore
 except ImportError:
     yaml = None
+    # Fallback YAMLError for exception handling when PyYAML is not installed
+    class YAMLError(Exception):  # type: ignore
+        pass
 
 
 def slugify(text: str, max_len: int = 56) -> str:
@@ -150,7 +154,7 @@ def parse_task_meta(body: str) -> dict[str, Any] | None:
                 return None
             data = yaml.safe_load(content)
         return data if isinstance(data, dict) else None
-    except (json.JSONDecodeError, yaml.YAMLError):
+    except (json.JSONDecodeError, YAMLError):
         return None
 
 

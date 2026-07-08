@@ -14,8 +14,8 @@ bash -n bin/setup-project
 bash -n bin/opencode-run
 bash -n bin/opencode-assess-stack
 bash -n bin/stack/*.sh
-bash -n bin/project/spec/*
-bash -n bin/project/impl/*
+for script in bin/project/spec/*; do [[ -f "$script" && ! -d "$script" ]] && bash -n "$script"; done
+for script in bin/project/impl/*; do [[ -f "$script" && ! -d "$script" ]] && bash -n "$script"; done
 ```
 
 ## blocshed — regression (`--check-only`)

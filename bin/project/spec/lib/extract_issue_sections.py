@@ -5,12 +5,12 @@ from __future__ import annotations
 import json
 import re
 import sys
+from pathlib import Path
 
-
-def section(body: str, name: str) -> str | None:
-    pattern = rf"^## {re.escape(name)}\s*\n+(.*?)(?=^## |\Z)"
-    m = re.search(pattern, body, re.MULTILINE | re.DOTALL)
-    return m.group(1).strip() if m else None
+# Import shared section extraction from issue_contract
+sys.path.insert(0, str(Path(__file__).parent))
+from issue_contract import extract_section as section
+from issue_contract import is_placeholder
 
 
 def extract_json_block(body: str) -> dict | None:
@@ -21,13 +21,6 @@ def extract_json_block(body: str) -> dict | None:
         return json.loads(m.group(1))
     except json.JSONDecodeError:
         return None
-
-
-def is_placeholder(text: str | None) -> bool:
-    if not text:
-        return True
-    t = text.strip()
-    return t.startswith("_") and ("issue-expand" in t or "To be completed" in t)
 
 
 def main() -> None:

@@ -92,14 +92,13 @@ When the user answers **yes** to preflight (or asks to rerun): run the **repair-
 
 When no artifact path or feature slug is provided:
 
-1. **Preflight choice** — unless `env_gate_passed` or `env_gate_declined` this session, ask: **“Run preflight now? (yes/no)”**. Do not show work options until answered.
+1. **Preflight choice** — unless `env_gate_passed` or `env_gate_declined` this session, ask: **"Run preflight now? (yes/no)"**. Do not show work options until answered.
    - **yes** → run env gate above; then continue.
    - **no** → set `env_gate_declined`; continue without preflight (checkout identity gate still runs).
    - Already passed or declined → skip this question.
 2. **Checkout identity gate** — run before work menu or execution (see above). Declining preflight does **not** skip this step.
-3. **Issue-expand readiness gate** (GitHub `feature:<slug>` only) — delegate `opencode-run impl orchestrate-readiness-check <slug>`; on FAIL stop and hand back to spec architect option 1 (see `orchestrate-execution`).
-4. Run Claude Context readiness gate.
-5. Present **exactly** this menu **verbatim** (numbers **1–4** match display order; do not add a title line or rephrase):
+3. Run Claude Context readiness gate.
+4. Present **exactly** this menu **verbatim** (numbers **1–4** match display order; do not add a title line or rephrase):
 
    ```text
    (1) Work from a GitHub `feature:<slug>` backlog in this repo? (primary — use for all new spec/targeted execution)
@@ -109,8 +108,9 @@ When no artifact path or feature slug is provided:
    ```
 
 5. Do not proceed until (1) slug, (2) handoff, (3) is resolved, or (4) path is chosen.
+6. **Issue-expand readiness gate** (GitHub `feature:<slug>` only — after slug is captured) — delegate `opencode-run impl orchestrate-readiness-check <slug>`; on FAIL stop and hand back to spec architect option 1 (see `orchestrate-execution`).
 
-When the user provides a **`.plan` path** or **`feature:<slug>`** immediately: if neither `env_gate_passed` nor `env_gate_declined`, ask preflight **yes/no** first; run **checkout identity gate**; run **issue-expand readiness gate** for `feature:<slug>`; then start work on the verified branch (decline does not block execution).
+When the user provides a **`.plan` path** or **`feature:<slug>`** immediately: if neither `env_gate_passed` nor `env_gate_declined`, ask preflight **yes/no** first; run **checkout identity gate**; run **Claude Context readiness gate**; run **issue-expand readiness gate** for `feature:<slug>` only (after slug is captured); then start work on the verified branch (decline does not block execution).
 
 ## When Invoking Subagents
 

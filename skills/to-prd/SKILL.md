@@ -23,9 +23,9 @@ Publish a **human-reviewable PRD** before vertical slicing. This closes the gap 
 2. **Inputs:** feature name, kebab-case `<slug>`, and any user/stakeholder notes from the session.
 3. **Compose** the PRD body using `skills/to-prd/templates/prd.md` — all sections must be present (use `TBD` only where the human must fill later; prefer concrete content from the session). Include **Architecture confirmation** referencing the registry.
 4. **Draft tickets (when slicing in same session):** Each ticket must include `repo`, **`capability`** (from that repo's registry entry), `title`, `owner` (match registry `agent_owner` unless justified), and **`acceptance`** as **product outcomes** (not file paths or shell commands). **Do not** put `test_commands` or `commit_message` in PRD tickets — implementation **issue-expand** discovers those from the codebase. **Do not** assign work by inferring backend/frontend from repo names.
-5. **YAML frontmatter rules (mandatory before scribe):** Ticket fields under `tickets:` must stay **indented 4 spaces** under each `- id:` item. Quote `title` when it contains `:`. After composing, validate with `python3 "${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}/bin/project/spec/lib/validate_prd_frontmatter.py" docs/prd/<slug>.md` — do not invoke scribe until it exits 0.
-6. **Invoke `scribe`** to write `docs/prd/<slug>.md` with the full markdown (verbatim template structure including frontmatter).
-7. **Create GitHub issue** in this spec repo via **`opencode-run spec publish-prd-issue`** (not raw `gh issue create`). The PRD file at `docs/prd/<slug>.md` must already exist (scribe wrote it in step 6) — use it as the body file:
+5. **Invoke `scribe`** to write `docs/prd/<slug>.md` with the full markdown (verbatim template structure including frontmatter).
+6. **YAML frontmatter validation (after scribe writes):** Validate with `python3 "${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}/bin/project/spec/lib/validate_prd_frontmatter.py" docs/prd/<slug>.md` — if validation fails, re-Task scribe to fix the frontmatter issues and validate again.
+7. **Create GitHub issue** in this spec repo via **`opencode-run spec publish-prd-issue`** (not raw `gh issue create`). The PRD file at `docs/prd/<slug>.md` must already exist (scribe wrote it in step 5) — use it as the body file:
    ```bash
    opencode-run spec publish-prd-issue <slug> "[PRD] <slug>: <one-line summary>" docs/prd/<slug>.md
    ```

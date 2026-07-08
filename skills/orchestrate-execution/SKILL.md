@@ -122,16 +122,16 @@ Subagents must `cd` to `impl_repo_path`, verify branch matches, and report `CHEC
 
 When no artifact path or `feature:<slug>` is provided (new session, greeting, unspecified task):
 
-1. **Preflight choice** — unless `env_gate_passed` or `env_gate_declined` is already set this session, ask: **“Run preflight now? (yes/no)”** and wait for the answer. Do not list work options yet.
+1. **Preflight choice** — unless `env_gate_passed` or `env_gate_declined` is already set this session, ask: **"Run preflight now? (yes/no)"** and wait for the answer. Do not list work options yet.
    - **`yes`** → run **Environment readiness gate** above (repair-first, one auto-retry); on hard Blocked report one fix; on Ready continue.
    - **`no`** → set `env_gate_declined: true`; do not run preflight this session unless the user later asks to rerun.
    - **Already `env_gate_passed` or `env_gate_declined`** → do not ask again; continue.
 2. **Checkout identity gate** (above) — mandatory even when preflight was declined.
-3. **Issue-expand readiness gate** (GitHub backlog only) — see below.
-4. **Claude Context readiness gate** (below).
-5. **Fresh Context: Work selection** — present the **(1)/(2)/(3)/(4)** menu only after steps 1–3 are resolved.
+3. **Claude Context readiness gate** (below).
+4. **Fresh Context: Work selection** — present the **(1)/(2)/(3)/(4)** menu only after steps 1–3 are resolved.
+5. **Issue-expand readiness gate** (GitHub backlog only — after slug is captured from menu choice) — see below.
 
-When the user provides a **`.plan` path** or **`feature:<slug>`** before bootstrap completed: if neither `env_gate_passed` nor `env_gate_declined`, ask the preflight **yes/no** first; run **checkout identity gate**; then enter the stage or GitHub loop.
+When the user provides a **`.plan` path** or **`feature:<slug>`** before bootstrap completed: if neither `env_gate_passed` nor `env_gate_declined`, ask the preflight **yes/no** first; run **checkout identity gate**; run **Claude Context readiness gate**; run **issue-expand readiness gate** for `feature:<slug>` only (after slug is captured); then enter the stage or GitHub loop.
 
 ## Claude Context Readiness Gate (mandatory)
 
@@ -145,7 +145,7 @@ On fresh context, and before delegating discovery-heavy planning or review work:
 
 **Orchestrate never runs issue-expand.** It only verifies that planning completed in the spec architect session.
 
-After **checkout identity gate** and before the GitHub backlog loop (or when the user provides `feature:<slug>`):
+After **checkout identity gate**, **Claude Context readiness gate**, and **after the user has chosen GitHub backlog option (1) and provided the slug** — run before entering the GitHub backlog loop:
 
 1. Task **`developer`** `load: minimal` with `OPENCODE_EXPECT_REPO_ROOT` from `checkout_contract`:
    - `opencode-run impl orchestrate-readiness-check <slug>`
@@ -155,14 +155,13 @@ After **checkout identity gate** and before the GitHub backlog loop (or when the
 
 ## Fresh Context: Work selection (mandatory)
 
-After session bootstrap, when no artifact path or `feature:<slug>` is provided:
+After session bootstrap (steps 1-3 above), when no artifact path or `feature:<slug>` is provided:
 
-1. **Run the Claude Context readiness gate** if not already done this turn.
-2. **Present the work-selection menu** verbatim from the orchestrate agent **Fresh Context: Session Bootstrap + Work Selection** block (**(1)** GitHub backlog first; **(4)** legacy `.plan` last; numbers match display order).
-3. **On (1):** proceed to **GitHub feature backlog loop** (obtain kebab slug if missing).
-4. **On (2):** stop and prompt: switch to `architect` with the user's goal (e.g. Mode F sign-off, new planning).
-5. **On (3):** ask for a one-line description; route to `architect` for non-backlog work unless the user supplies a `feature:<slug>`, issue #, or explicit execution scope—then use **(1)** or targeted issue flow as appropriate.
-6. **On (4) — legacy only:** continue to **Legacy `.plan` selection** below. Do not glob or list `.plan/` before the user chooses **(4)**.
+1. **Present the work-selection menu** verbatim from the orchestrate agent **Fresh Context: Session Bootstrap + Work Selection** block (**(1)** GitHub backlog first; **(4)** legacy `.plan` last; numbers match display order).
+2. **On (1):** obtain kebab slug if missing; run **issue-expand readiness gate** if not already done; then proceed to **GitHub feature backlog loop**.
+3. **On (2):** stop and prompt: switch to `architect` with the user's goal (e.g. Mode F sign-off, new planning).
+4. **On (3):** ask for a one-line description; route to `architect` for non-backlog work unless the user supplies a `feature:<slug>`, issue #, or explicit execution scope—then use **(1)** or targeted issue flow as appropriate.
+5. **On (4) — legacy only:** continue to **Legacy `.plan` selection** below. Do not glob or list `.plan/` before the user chooses **(4)**.
 
 ## Legacy `.plan` selection (only after user chooses (4))
 

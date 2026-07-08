@@ -62,10 +62,10 @@ FANOUT_TMP=""
 FANOUT_CHILD_URLS=""
 
 _fanout_exit() {
-  fanout_reconcile_subissues
-  task_map_cleanup
-  fanout_lock_release
-  rm -f "${FANOUT_TMP:-}"
+  fanout_reconcile_subissues || true
+  task_map_cleanup || true
+  fanout_lock_release || true
+  rm -f "${FANOUT_TMP:-}" || true
 }
 trap '_fanout_exit' EXIT
 

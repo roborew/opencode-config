@@ -12,8 +12,12 @@ FAIL=0
 
 echo "=== Orchestrate readiness: ${SLUG} (${REPO}) ==="
 
-ISSUES=$(gh issue list --repo "$REPO" --label "feature:${SLUG}" --state open --json number --jq '.[].number')
-COUNT=$(echo "$ISSUES" | wc -l | tr -d ' ')
+ISSUES=$(gh issue list --repo "$REPO" --label "feature:${SLUG}" --state open --limit 100 --json number --jq '.[].number')
+if [[ -z "$ISSUES" ]]; then
+  COUNT=0
+else
+  COUNT=$(echo "$ISSUES" | grep -c '^' || echo 0)
+fi
 echo "Open issues: ${COUNT}"
 [[ "$COUNT" -gt 0 ]] || { echo "FAIL: no open issues"; exit 1; }
 
