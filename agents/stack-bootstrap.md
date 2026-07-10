@@ -45,8 +45,7 @@ You install OpenCode agent scaffolding into **implementation repositories** when
 
 ## Responsibilities
 
-- Copy bundled templates from the OpenCode config checkout into paths **under `local_path` only**.
-- Run `chmod +x` on `bin/feature-context` when installed.
+- Copy bundled templates from the OpenCode config checkout into paths **under `local_path` only** (docs, GitHub templates — not `bin/` automation).
 - Create `.plan/_archive/legacy/` or `docs/_archive/legacy/` when the parent requests legacy migration.
 - Run read-only validation commands the parent specifies (`setup-project --check-only`, etc.) and return stdout.
 

@@ -6,14 +6,14 @@
 
 | Mode | Planning | Execution source of truth |
 |------|----------|----------------------------|
-| **Spec / GitHub** (default) | Spec: PRD + fanout; impl: **issue-expand** (architect option 1) | GitHub child issues (`feature:<slug>`, `opencode-task-yaml` + `stages[]`) |
-| **Legacy local** | Architect option 2 → scribe writes `.plan/feature.<slug>.md` | Active `.plan/*.md` (excludes `*.completed.md`) |
+| **Spec / GitHub** (default) | Spec: PRD + fanout + **issue-expand** (architect option 1, same session) | GitHub child issues (`feature:<slug>`, `opencode-task-json` + `stages[]`) |
+| **Legacy local** | Architect option 1 (targeted) → scribe writes `.plan/feature.<slug>.md` | Active `.plan/*.md` (excludes `*.completed.md`) |
 
-See [FEATURE-PIPELINE.md](FEATURE-PIPELINE.md) for the numbered pipeline. **Fanout alone does not populate `stages[]`** — run issue-expand in each implementation repo before orchestrate on the spec path.
+See [FEATURE-PIPELINE.md](FEATURE-PIPELINE.md) for the numbered pipeline. **Fanout alone does not populate `stages[]`** — issue-expand runs in the spec architect session before orchestrate.
 
 ## GitHub-always principle (spec path)
 
-After `bin/fanout`, **GitHub issues are the execution source of truth**. Do not create parallel `.plan/issue.*` files for spec-driven features. Orchestrate reads **issue bodies** (`opencode_meta`, `stages[]`, Implementation planning markdown), not the full PRD, unless a subagent explicitly needs PRD context. Ephemeral caches (`tmp/feature-context.md`) are not authoritative.
+After `opencode-run spec fanout`, **GitHub issues are the execution source of truth**. Do not create parallel `.plan/issue.*` files for spec-driven features. Orchestrate reads **issue bodies** (`opencode_meta`, `stages[]`, Implementation planning markdown), not the full PRD, unless a subagent explicitly needs PRD context. Ephemeral caches (`tmp/feature-context.md`) are not authoritative.
 
 ## Stack bootstrap (`setup-project`)
 
@@ -22,7 +22,18 @@ After `bin/fanout`, **GitHub issues are the execution source of truth**. Do not 
 | **Human (once per stack)** | `cd ~/code/APP && setup-project` from project parent (`GH_ORG` or `--org` required) |
 | **OpenCode (spec repo)** | architect → **setup-project** skill: interview, `docs/agents/repos.md`, Task **stack-bootstrap** per impl repo |
 
-Shell bootstrap syncs `bin/*` and templates; registry **INCOMPLETE** until the OpenCode interview fills TBD fields is normal (`exit 3` / `NEXT:`). Re-run `setup-project` after adding sibling impl repos. Details: [README.md](../README.md) Setup, [skills/setup-project/SKILL.md](../skills/setup-project/SKILL.md).
+Shell bootstrap aligns docs and GitHub templates; registry **INCOMPLETE** until the OpenCode interview fills TBD fields is normal (`exit 3` / `NEXT:`). Re-run `setup-project` after adding sibling impl repos. Details: [README.md](../README.md) Setup, [skills/setup-project/SKILL.md](../skills/setup-project/SKILL.md).
+
+## Project overview (GitHub Project board)
+
+When `GH_PROJECT` is set in `~/.opencode-agent-env`:
+
+- **`opencode-run spec publish-prd-issue`** registers the PRD parent issue on the org board and writes `parent_issue` into the PRD frontmatter.
+- **`opencode-run spec fanout`** creates child issues as sub-issues, labels them `prd-task`, and registers each on the board.
+- Sub-issue progress rolls up on the parent card in the project view.
+- Spec repo workflow **`prd-parent-auto-close`** closes PRD parents when all sub-issues are done.
+
+Full setup: [GITHUB-PROJECT-BOARD.md](GITHUB-PROJECT-BOARD.md). Requires `gh` >= 2.94.0 and `gh auth refresh -s project`.
 
 ## Push cadence (issue-backed execution)
 
@@ -34,7 +45,7 @@ Shell bootstrap syncs `bin/*` and templates; registry **INCOMPLETE** until the O
 ## Overview
 
 - **Built-in agents:** `plan` uses DeepSeek V4 Flash; `build` uses MiniMax M3 in `opencode.json` for generic/quick tasks.
-- **Primary planning mode** (`architect`) — read-only with **allow-by-default bash** (explicit deny for destructive/mutating shell): exploration, `gh`, `bin/*`, `setup-project --check-only`; artifact writes via **scribe** / **stack-bootstrap** Tasks only. Invokes: `debugger`, `refactor`, `review`, `document`, `designer`, `scribe`. Never invokes `frontend-dev`, `developer`, or `orchestrate`. Prompts user to switch to orchestrate when done; receives user back for review + docs after orchestrate completes. **Skills:** `architect-plan` (new planning, features, specialists, Mode A); `architect-review` (post-implementation Mode B only). The monolithic `architect` skill package is removed.
+- **Primary planning mode** (`architect`) — read-only with **allow-by-default bash** (explicit deny for destructive/mutating shell): exploration, `gh`, `opencode-run`, `setup-project --check-only`; artifact writes via **scribe** / **stack-bootstrap** Tasks only.
 - **Primary execution mode** (`orchestrate`) runs delegated stage execution and recovery flow. Reads `## Difficulty` from the artifact (`easy` \| `medium` \| `hard`; default `medium` if missing). After **all** stages/issues pass the final verifier (one gate per artifact or `feature:<slug>`): **medium/hard** — **CodeRabbit gate** via `review` + `code-review` skill (single CLI review of accumulated changes against `develop` by default; no CodeRabbit validation reruns); **easy** — skips CodeRabbit. **Never** runs CodeRabbit per GitHub issue, mid-stage, or after CodeRabbit remediation. Then: **easy** — no further gates; **medium** — `review` post-execution check; **hard** — `senior-dev` (scheduled review, no user confirmation) then `helper` (strategy conformance). On completion, prints a table-based sign-off handoff naming the exact feature/artifact, PR, work completed, gates, CodeRabbit, findings/risks, and the copy/paste prompt for architect. **Skills:** `orchestrate-execution` (bootstrap: preflight yes/no, optional env gate, work selection, stage loop, grading, completion gates); `orchestrate-recovery` (helper triggers, loops, env, escalation, manual paste). The monolithic `orchestrate` skill package is removed.
 - **Planning specialists** (`debugger`, `refactor`, `review`, `designer`) — read-only subagents of architect; return plan drafts, never write code. `designer` synthesizes design briefs for Prototype Design. The **`review`** agent may Task **`security-reviewer`**, **`performance-reviewer`**, and **`doc-reviewer`** when change scope warrants (see `skills/review/SKILL.md`).
 - **Documentation generator** (`document`) — read-only; generates changelog/guides/architecture content; architect invokes, then scribe writes.
@@ -50,7 +61,7 @@ Shell bootstrap syncs `bin/*` and templates; registry **INCOMPLETE** until the O
 | Role                    | Agents                                       | Model Tier | Responsibility                                                                                                                                                       |
 | ----------------------- | -------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Primary (planning)      | `architect`                                  | smart      | Read-only: explore, report, draft. Plan mode: scribe writes artifact → switch to orchestrate. Post-implementation: review → sign-off → document → scribe writes docs → scribe archives plan to `.plan/<type>.<slug>.completed.md` |
-| Coordinator             | `orchestrate`                                | smart      | Execute stages, grade children, helper recovery, optional `review` (medium) / `senior-dev`+`helper` (hard) after final verifier, dispatch scribe. Plan picker lists **active** `.plan/*.md` only (excludes `*.completed.md`). Startup: optional preflight prompt → **`worktree-env`** + **`developer`** preflight if **yes**, then work menu.                       |
+| Coordinator             | `orchestrate`                                | smart      | Execute stages, grade children, helper recovery, optional `review` (medium) / `senior-dev`+`helper` (hard) after final verifier, dispatch scribe. Plan picker lists **active** `.plan/*.md` only (excludes `*.completed.md`). Startup: optional preflight prompt; **checkout identity gate always**; **`worktree-env`** + **`preflight`** only when user opts in.                       |
 | Planning specialists    | `debugger`, `refactor`, `review`, `designer` | smart      | Return type-specific plan drafts to architect. `designer` uses Gemini 3 Flash. `review` may also be invoked by orchestrate on **medium** Difficulty after execution.    |
 | Documentation generator | `document`                                   | fast       | Generate changelog/guides/architecture content; architect invokes, scribe writes                                                                                     |
 | Artifact writer         | `scribe`                                     | fast       | Write/update plan artifacts, docs, `README.md`, `.env.example` from architect/orchestrate content                                                                     |
@@ -77,7 +88,7 @@ Rules:
 
 ## Permission Conventions (skill creep prevention)
 
-- **Skill:** Each agent may load only its core skill(s). No `skill: { "*": "allow" }`. Explicit allow per skill (e.g. `architect-plan` + `architect-review` for architect; `orchestrate-execution` + `orchestrate-recovery` for orchestrate; `developer`, `preflight` for developer; `worktree-env` for **`worktree-env`**).
+- **Skill:** Each agent may load only its core skill(s). No `skill: { "*": "allow" }`. Explicit allow per skill (e.g. `architect-plan` + `architect-review` for architect; `orchestrate-execution` + `orchestrate-recovery` for orchestrate; `developer` for developer; `preflight` for **`preflight`**; `worktree-env` for **`worktree-env`**).
 - **Architect subagents** (`debugger`, `refactor`, `review`, `document`, `designer`): `task: { "*": deny }` — they cannot invoke scribe or any other agent. Return content only to parent; architect handles scribe handoff.
 
 ## OpenRouter preset (limit “Others” model spend)
@@ -94,11 +105,11 @@ OpenCode does not define an in-repo model allowlist beyond [`opencode.json`](../
 3. `architect` invokes `scribe` to write the artifact to `.plan/<type>.<slug>.md` (mandatory step).
 4. User switches to `orchestrate`.
 5. `orchestrate` ensures artifact exists; if missing, dispatches `scribe` to write it.
-6. `orchestrate` asks **“Run preflight now? (yes/no)”** unless preflight already passed or was declined this session; does not show work options until answered. **yes** → **`worktree-env`** then **`developer`** preflight; **no** → skip preflight for the session.
+6. `orchestrate` asks **“Run preflight now? (yes/no)”** unless preflight already passed or was declined this session; does not show work options until answered. **yes** → repair-first bootstrap: **`worktree-env`** (once, with completion trust) then **`preflight`** agent (auto-repair deps/runtime/indexing once); **no** → skip preflight for the session. **Either way:** run **checkout identity gate** (`checkout-contract.sh`) to capture current `impl_repo_path` and `branch` before work selection or implementation. Subagents must not create or switch branches.
 7. `orchestrate` runs Claude Context readiness (`get_indexing_status` → `index_codebase` if needed).
 8. `orchestrate` shows the **work-selection menu** verbatim (**(1)** GitHub backlog first; **(4)** legacy `.plan` last; numbers match display order). On **(1)**, run the GitHub `feature:<slug>` backlog. On **(4)** only, **read `.plan/` via a filesystem tool** (glob or list), list **active** plans (omit `*.completed.md`) from that output only—never from memory—and ask the user to select one. **(2)** / **(3)** route to `architect` or clarified scope as in the orchestrate agent.
 9. Preflight may be re-run only when the user asks or after `ENV_BLOCKED` remediation.
-10. `orchestrate` dispatches one stage at a time to `developer`, `frontend-dev`, or `ux-dev` (by stage Owner). Design artifacts use `Owner: ux-dev`; `ux-dev` outputs HTML-only files to `.prototype/<slug>/`.
+10. `orchestrate` dispatches one stage at a time to `developer`, `frontend-dev`, or `ux-dev` (by stage Owner). Pass `impl_repo_path`, `expected_branch`, and `branch_policy` on every implementation Task. Design artifacts use `Owner: ux-dev`; `ux-dev` outputs HTML-only files to `.prototype/<slug>/`.
 11. Execution subagent returns completion report (`stage_id`, files, tests, checks, blockers, risks, next input).
 12. `orchestrate` dispatches next stage only after successful handoff.
 13. For final completion, run `verifier` per stage; run final verifier when all stages complete.
@@ -130,7 +141,7 @@ Recovery loop:
 
 Do not advance stages until helper amendment is applied.
 Do not allow repeated test-command retries under unresolved environment mismatch.
-Preflight is user-opt-in at session start (`yes` / `no`); work selection follows. Do not require artifact writes for preflight output. Claude Context readiness runs after the preflight choice on fresh sessions.
+Preflight is user-opt-in at session start (`yes` / `no`); work selection follows. **Checkout identity is mandatory** even when preflight is declined — orchestrate captures current branch and repo root via `checkout-contract.sh` and passes them to every execution Task. Preflight is **environment-only** (env copies, `mise exec --`, `pnpm install`, indexing); it does not choose branches or checkouts. Preflight is **repair-first** with one auto-retry before a single hard-block message — no multi-option menus. Trust **`worktree-env`** completion evidence; do not re-run the same setup task without canonical contradiction. Do not require artifact writes for preflight output. Claude Context readiness runs after the preflight choice on fresh sessions. Smoke harness: `docs/smoke/preflight-bootstrap-validation.md`.
 
 **Senior-dev escalation (operator-triggered, user confirmation required):** When developer reports `STAGE_STUCK` and the operator asks to escalate, orchestrate stops, asks the user to confirm, then invokes `senior-dev`. **Exception:** for **`Difficulty: hard`**, after all stages pass the final verifier, orchestrate invokes `senior-dev` for **scheduled post-implementation review** without that confirmation (not the same as mid-stage escalation).
 
@@ -153,14 +164,14 @@ Provider-level `timeout` (e.g. 300000ms) and per-model **`temperature` / `top_p`
 | --- | --- | --- |
 | Planning (primary) | `architect`, `plan` | DeepSeek V4 Flash |
 | Scoped planning | `strategist` | DeepSeek V4 Pro |
-| Orchestration | `orchestrate` | MiniMax M3 |
+| Orchestration | `orchestrate` | DeepSeek V4 Flash |
 | Primary implementation | `developer`, `frontend-dev`, `build` | MiniMax M3 |
 | Design / prototypes | `designer`, `ux-dev` | Gemini 3 Flash |
 | Senior / security depth | `senior-dev`, `security-reviewer` | DeepSeek V4 Pro |
 | Fast utility | `debugger`, `helper`, `refactor`, `verifier`, `review`, `performance-reviewer` | DeepSeek V4 Flash |
 | Teaching | `mentor` | Qwen3.7 Max |
 | Vision | `vision` | Qwen3 VL |
-| Writing / docs | `scribe`, `document`, `doc-reviewer`, `stack-bootstrap`, `worktree-env` | GPT-5 Nano |
+| Writing / docs | `scribe`, `document`, `doc-reviewer`, `stack-bootstrap`, `worktree-env`, `preflight` | GPT-5 Nano |
 
 Runtime authority: `opencode.json`. Agent frontmatter `model:` should match for changed agents.
 
@@ -184,10 +195,11 @@ Runtime authority: `opencode.json`. Agent frontmatter `model:` should match for 
 
 Primaries and execution agents should use MCP only when it reduces uncertainty:
 
-- **`claude-context`**: Semantic code search in workspace. Use during planning (architect, **strategist**, debugger, refactor, review, document, designer). Discovery-heavy agents must run a readiness gate first (`get_indexing_status`; if needed `index_codebase`) and may fall back to bash/glob only when MCP is unavailable or indexing still fails after retry, with `MCP_FALLBACK` recorded in output. `orchestrate` also runs a lightweight readiness check on fresh startup even when full preflight is skipped.
+- **`claude-context`**: Semantic code search keyed by **absolute path** (not only the OpenCode workspace). Pass the absolute path of the repo under investigation to `get_indexing_status`, `index_codebase`, and `search_code`. From the **spec repo**, resolve sibling impl paths via `bin/project/spec/lib/resolve_impl_path.sh` (`../<repo-basename>` beside spec). Use during planning (architect, **strategist**, debugger, refactor, review, document, designer). Discovery-heavy agents must run a readiness gate first (`get_indexing_status` for the target path; if needed `index_codebase`) and may fall back to bash/glob (`rg`, `find` on the sibling path) only when MCP is unavailable or indexing still fails after retry, with `MCP_FALLBACK` recorded in output. `orchestrate` also runs a lightweight readiness check on fresh startup even when full preflight is skipped.
 - **`context7`**: Up-to-date docs for 9000+ external libraries. Use when framework/library API behavior is uncertain. Limit to 3 calls per question.
 - **`docs-mcp-server`**: Internal docs, prototypes, linked repos, architecture notes.
 - **`dash-api`**: API/library contract lookup when behavior is unclear.
+- **`cloudflare-api`**: Live Cloudflare account operations — DNS records, zone settings, Workers, and other API-backed changes when the task requires current account state or mutations. Not for general Cloudflare documentation (use `context7` instead). Prefer read-only verification first; confirm zone, record name, type, and TTL before create/update/delete DNS records.
 
 If a user says "look at the prototype", check `docs-mcp-server` first and record what was used.
 
@@ -213,6 +225,10 @@ Use templates in:
 Use this when dispatching execution:
 
 ```text
+impl_repo_path: <absolute verified git root>
+expected_branch: <current verified branch>
+is_linked_worktree: true|false
+branch_policy: do not create, switch, checkout, or rename branches unless user explicitly requests in this turn
 Artifact: .plan/<type>.<slug>.md
 Stage IDs: <stage-id-list>
 Scope in: <paths/components>
@@ -232,22 +248,11 @@ Constraints: approved paths only; markdown or .env.example only
 
 ## Troubleshooting: CRLF / `env: bash\r`
 
-On macOS/Linux, **CRLF** line endings in `bin/*` shell scripts break the shebang (`env: bash\r: No such file or directory`). OpenCode templates are LF; spec-repo copies are normalized on every **`sync_spec_tooling.sh`** run (`strip_crlf` after install).
+On macOS/Linux, **CRLF** line endings in shell scripts break the shebang (`env: bash\r: No such file or directory`). OpenCode config scripts use LF.
 
-**Agents:** Do not fix CRLF file-by-file with sed/Python. Run one of:
+**Agents:** Do not fix CRLF file-by-file with sed/Python. Project automation runs from `OPENCODE_CONFIG_DIR` via **`opencode-run`** — update the config checkout if scripts fail with `env: bash\r`.
 
-```bash
-# From spec repo (when ./bin/* fails)
-bash bin/feature-upgrade <slug>
-"$HOME/.config/opencode/bin/stack/sync_spec_tooling.sh" "$(pwd)"
-
-# From project parent (wrapper syncs tooling before exec)
-feature-upgrade <slug>
-```
-
-**Prevention:** Spec repos receive [`.gitattributes`](../templates/spec-repo/.gitattributes) on sync so Git keeps `bin/**` as LF. Re-run **`setup-project`** or **`sync_spec_tooling.sh`** after pulling OpenCode config updates that touch `templates/spec-repo/bin/`.
-
-Config-repo CI runs `scripts/check-crlf.sh` on `bin/`, `scripts/`, `templates/`, and `.gitattributes`.
+**Prevention:** Spec repos receive [`.gitattributes`](../templates/spec-repo/.gitattributes) on align for doc paths. Config-repo CI runs `scripts/check-crlf.sh` on `bin/`, `bin/project/`, `scripts/`, `templates/`, and `.gitattributes`.
 
 ## Smoke Checklist
 

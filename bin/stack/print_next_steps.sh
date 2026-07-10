@@ -23,10 +23,10 @@ if [[ "$CHECK_CODE" -eq 3 ]]; then
   echo "Shell bootstrap complete."
   if [[ "$LINKED" -gt 0 ]]; then
     echo ""
-    echo "  Done: spec tooling synced; ${LINKED} implementation repo(s) linked."
+    echo "  Done: spec docs aligned; ${LINKED} implementation repo(s) linked."
   else
     echo ""
-    echo "  Done: spec tooling synced."
+    echo "  Done: spec docs aligned."
   fi
   echo "  Next (OpenCode): architect → setup-project — fill application_role and"
   echo "  capabilities in docs/agents/repos.md (normal on first run)."
@@ -41,7 +41,7 @@ fi
 echo "Stack bootstrap complete."
 if [[ "$LINKED" -gt 0 ]]; then
   echo ""
-  echo "  Linked ${LINKED} implementation repo(s); registry and tooling are ready."
+  echo "  Linked ${LINKED} implementation repo(s); registry and docs are ready."
 fi
 
 echo ""
@@ -56,5 +56,5 @@ echo "  # Or if OpenCode bin/ is on PATH:"
 echo "  setup-project --check-only \"${PARENT}\""
 echo ""
 echo "Pipeline: docs/FEATURE-PIPELINE.md"
-echo "  grill-me → to-prd → bin/fanout → issue-expand → orchestrate → feature-complete"
-echo "  PRD edits: bin/feature-upgrade <slug> (spec) or feature-upgrade <slug> (project parent)"
+echo "  grill-me → to-prd → fanout → issue-expand (spec) → orchestrate (per impl) → sign-off (spec option 4) → feature-complete"
+echo "  PRD edits: opencode-run spec feature-upgrade <slug> (spec) or feature-upgrade <slug> (project parent)"

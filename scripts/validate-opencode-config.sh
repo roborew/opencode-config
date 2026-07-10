@@ -23,18 +23,35 @@ for f in agents/*.md; do
 done
 
 echo "Checking skills referenced in agents exist..."
-# Extract quoted skill names from permission.skill lines in agents
-while IFS= read -r line; do
-  # match "skillname": "allow"
-  if [[ "$line" =~ \"([a-z0-9-]+)\"[[:space:]]*:[[:space:]]*\"allow\" ]]; then
-    sk="${BASH_REMATCH[1]}"
-    if [[ "$sk" == "*" ]]; then continue; fi
-    if [[ ! -f "skills/$sk/SKILL.md" ]]; then
-      echo "  MISSING skill: skills/$sk/SKILL.md (referenced in agents)"
-      ERR=1
-    fi
-  fi
-done < <(grep -h 'skill:' agents/*.md 2>/dev/null || true)
+if ! python3 - <<'PY'
+from pathlib import Path
+import re
+import sys
+
+root = Path(".")
+missing = []
+
+for agent in sorted((root / "agents").glob("*.md")):
+    text = agent.read_text()
+    parts = text.split("---", 2)
+    if len(parts) < 3:
+        continue
+    frontmatter = parts[1]
+    for match in re.finditer(r'"([a-z0-9-]+)"\s*:\s*"allow"', frontmatter):
+        skill = match.group(1)
+        if skill == "*":
+            continue
+        if not (root / "skills" / skill / "SKILL.md").is_file():
+            missing.append((agent, skill))
+
+for agent, skill in missing:
+    print(f"  MISSING skill: skills/{skill}/SKILL.md (referenced in {agent})")
+
+sys.exit(1 if missing else 0)
+PY
+then
+  ERR=1
+fi
 
 echo "Checking scribe write-only (edit: false)..."
 scribe_fm=$(awk '/^---$/{n++; if(n==2) exit} n==1' agents/scribe.md 2>/dev/null || true)
@@ -55,6 +72,32 @@ fi
 echo "Checking existing_issue unit tests..."
 if ! python3 -m unittest templates/spec-repo/bin/lib/test_existing_issue.py -q; then
   echo "  FAILED: existing_issue tests"
+  ERR=1
+fi
+
+echo "Checking checkout guardrails in orchestrate and execution agents..."
+GUARDRAIL_FILES="agents/orchestrate.md skills/orchestrate-execution/SKILL.md agents/developer.md agents/frontend-dev.md"
+for needle in "Checkout identity gate" "CHECKOUT_CONTRACT_FAILED" "checkout-contract.sh"; do
+  if ! grep -q "$needle" $GUARDRAIL_FILES 2>/dev/null; then
+    echo "  MISSING guardrail reference: $needle"
+    ERR=1
+  fi
+done
+
+if ! grep -qE 'git[[:space:]]+switch' scripts/block-dangerous-git.sh 2>/dev/null; then
+  echo "  MISSING: git switch block in block-dangerous-git.sh"
+  ERR=1
+fi
+
+if [[ -n "${GH_PROJECT:-}" ]] && command -v gh >/dev/null 2>&1; then
+  echo "Checking GH_PROJECT scope (warn only)..."
+  if ! gh auth status 2>&1 | grep -q 'project'; then
+    echo "  WARN: GH_PROJECT is set but gh token may lack project scope — run: gh auth refresh -s project"
+  fi
+fi
+
+if [[ ! -f skills/github-issue-run/lib/checkout-contract.sh ]]; then
+  echo "  MISSING: skills/github-issue-run/lib/checkout-contract.sh"
   ERR=1
 fi
 

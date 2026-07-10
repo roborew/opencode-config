@@ -15,8 +15,8 @@
 				"defaultModel": "openrouter/deepseek/deepseek-v4-flash"
 			},
 			"improve-codebase-architecture": {
-				"description": "Deepening findings doc via LANGUAGE.md",
-				"defaultModel": "openrouter/deepseek/deepseek-v4-pro"
+				"description": "Periodic codebase audit (HTML + optional security); remediation via to-issues → orchestrate",
+				"defaultModel": "openrouter/anthropic/claude-opus-4.8"
 			},
 			"fanout-issues": {
 				"description": "Spec-repo cross-repo child issue fanout",

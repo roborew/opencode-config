@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# Hydrate tmp/issue-expand-bundle.md for architect issue-expand (any feature slug).
+# Run from an implementation repo via opencode-run with docs/agents/issue-tracker.md (SPEC_REPO).
+set -euo pipefail
+SLUG="${1:?feature slug required (kebab-case, same as feature:<slug> label)}"
+OUT="tmp/issue-expand-bundle.md"
+mkdir -p tmp
+
+# shellcheck source=../lib/repo-context.sh disable=SC1091
+source "$(cd "$(dirname "$0")/../lib" && pwd)/repo-context.sh"
+opencode_project_init impl
+# shellcheck source=lib/fetch_spec_prd.sh disable=SC1091
+source "${BIN_DIR}/lib/fetch_spec_prd.sh"
+
+IMPL_REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+TRACKER="docs/agents/issue-tracker.md"
+SPEC_REPO=""
+if [[ -f "$TRACKER" ]]; then
+  SPEC_REPO=$(read_spec_repo_from_file "$TRACKER" 2>/dev/null || true)
+fi
+[[ -n "$SPEC_REPO" ]] || {
+  echo "ERROR: $TRACKER must define SPEC_REPO. Run setup-project from project parent." >&2
+  exit 2
+}
+
+PRD_PATH="docs/prd/${SLUG}.md"
+PARENT_URL=""
+PRD_BODY=""
+TICKETS_JSON="[]"
+PRD_SOURCE="_not loaded_"
+
+ISSUES_JSON=$(gh issue list --repo "$IMPL_REPO" --label "feature:${SLUG}" --state all --limit 100 \
+  --json number,title,state,body,labels 2>/dev/null || echo "[]")
+
+if PRD_BODY=$(fetch_spec_prd_markdown "$SPEC_REPO" "$SLUG" "$TRACKER"); then
+  PRD_SOURCE="${FETCH_SPEC_PRD_SOURCE:-unknown}"
+  PARENT_URL=$(echo "$PRD_BODY" | sed -n '/^---$/,/^---$/p' | yq -r '.parent_issue // ""' 2>/dev/null || true)
+  TICKETS_JSON=$(echo "$PRD_BODY" | sed -n '/^---$/,/^---$/p' | yq -o=json '.tickets // []' 2>/dev/null || echo "[]")
+else
+  echo "WARN: could not load PRD from ${SPEC_REPO}/${PRD_PATH} (tried local sibling, SPEC_PRD_REF, spec git branch, default branch, develop, main)" >&2
+  echo "WARN: continuing from GitHub child issues only — set SPEC_PRD_REF: develop in ${TRACKER} or keep spec repo checked out beside impl." >&2
+  while IFS= read -r body; do
+    [[ -z "$body" ]] && continue
+    url=$(parent_prd_url_from_text "$body")
+    if [[ -n "$url" ]]; then
+      PARENT_URL="$url"
+      break
+    fi
+  done < <(echo "$ISSUES_JSON" | jq -r '.[].body // empty')
+fi
+
+{
+  echo "# Issue-expand bundle: ${SLUG}"
+  echo
+  echo "- **Implementation repo:** ${IMPL_REPO}"
+  echo "- **Spec repo:** ${SPEC_REPO}"
+  echo "- **PRD path:** ${PRD_PATH}"
+  echo "- **PRD source:** ${PRD_SOURCE}${FETCH_SPEC_PRD_REF:+ (ref: ${FETCH_SPEC_PRD_REF})}"
+  echo "- **Parent PRD issue:** ${PARENT_URL:-_unknown_}"
+  echo
+  echo "## PRD tickets (frontmatter)"
+  echo '```json'
+  echo "$TICKETS_JSON" | jq .
+  echo '```'
+  echo
+  echo "## PRD document"
+  if [[ -n "$PRD_BODY" ]]; then
+    echo "$PRD_BODY"
+  else
+    echo "_PRD file not loaded — use child issues below and Parent PRD issue body._"
+  fi
+  echo
+  if [[ -n "$PARENT_URL" ]]; then
+    echo "## Parent PRD issue (GitHub)"
+    gh issue view "$PARENT_URL" --json title,body,url 2>/dev/null \
+      | jq -r '"Title: \(.title)\nURL: \(.url)\n\n\(.body)"' || echo "_Could not load parent._"
+    echo
+  fi
+  echo "## Child issues in ${IMPL_REPO}"
+  echo "$ISSUES_JSON" | jq -r '.[] | "### #\(.number) \(.title) (\(.state))\n\n\(.body)\n"'
+  echo
+  echo "## Readiness hints"
+  echo "$ISSUES_JSON" | jq -r '.[] | select((.body | test("## Implementation plan"; "") | not) or (.body | test("_Add files, TDD order"; ""))) | "- #\(.number): missing or placeholder Implementation plan"'
+  echo "$ISSUES_JSON" | jq -r '.[] | select(.body | test("opencode-task-json") | not) | "- #\(.number): missing opencode-task-json"'
+  echo "$ISSUES_JSON" | jq -r '
+    .[]
+    | select(.body | test("\"stages\"\\s*:\\s*\\["; "") | not)
+    | "- #\(.number): no stages[] yet — run issue-expand"'
+  echo
+  echo "## Local CONTEXT.md"
+  if [[ -f CONTEXT.md ]]; then cat CONTEXT.md; else echo "_No CONTEXT.md._"; fi
+} >"$OUT"
+
+echo "Wrote $OUT"

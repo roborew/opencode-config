@@ -20,9 +20,21 @@
       "git reset --hard*": "deny",
       "git clean -fd*": "deny",
       "git clean -f *": "deny",
+      "git branch -d *": "deny",
       "git branch -D *": "deny",
+      "git branch -m *": "deny",
+      "git branch -M *": "deny",
+      "git branch [!-]*": "deny",
       "git checkout .": "deny",
-      "git restore .": "deny"
+      "git restore .": "deny",
+      "git switch *": "deny",
+      "git checkout develop": "deny",
+      "git checkout main": "deny",
+      "git checkout master": "deny",
+      "git checkout -b *": "deny",
+      "git checkout -B *": "deny",
+      "git switch -c *": "deny",
+      "git switch -C *": "deny"
     },
     "edit": {
       "*": "allow",
@@ -102,6 +114,9 @@
             "temperature": 0.2,
             "top_p": 0.9
           }
+        },
+        "anthropic/claude-opus-4.8": {
+          "name": "Claude Opus 4.8"
         }
       }
     }
@@ -145,6 +160,12 @@
         "-y",
         "@zilliz/claude-context-mcp@latest"
       ]
+    },
+    "cloudflare-api": {
+      "type": "remote",
+      "url": "https://mcp.cloudflare.com/mcp",
+      "enabled": true,
+      "oauth": {}
     }
   },
   "agent": {
@@ -152,9 +173,14 @@
       "model": "openrouter/deepseek/deepseek-v4-flash",
       "steps": 30
     },
+    "architecture-auditor": {
+      "mode": "subagent",
+      "model": "openrouter/anthropic/claude-opus-4.8",
+      "steps": 35
+    },
     "orchestrate": {
-      "model": "openrouter/minimax/minimax-m3",
-      "steps": 50
+      "model": "openrouter/deepseek/deepseek-v4-flash",
+      "steps": 100
     },
     "plan": {
       "model": "openrouter/deepseek/deepseek-v4-flash",
@@ -219,6 +245,11 @@
       "model": "openrouter/openai/gpt-5-nano",
       "steps": 10
     },
+    "preflight": {
+      "mode": "subagent",
+      "model": "openrouter/openai/gpt-5-nano",
+      "steps": 15
+    },
     "verifier": {
       "mode": "subagent",
       "model": "openrouter/deepseek/deepseek-v4-flash",
@@ -231,7 +262,7 @@
     },
     "security-reviewer": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v4-pro",
+      "model": "openrouter/anthropic/claude-opus-4.8",
       "steps": 15
     },
     "performance-reviewer": {

@@ -14,12 +14,14 @@ Stage-based **Architect → Orchestrate → subagents** pipeline with model rout
 | **`OPENCODE_CONFIG_DIR`** (default `~/.config/opencode` on macOS) | OpenCode loads `opencode.json`, agents, skills, and [rules/](rules/)                    |
 | **GitHub CLI** (`gh`) authenticated                               | Issues, `setup-project`, fanout, PR workflows                                             |
 | **`GH_ORG`** (or `--org`) for stack bootstrap                     | GitHub **owner** in `owner/repo` — your user login or org, not the app slug               |
+| **`GH_PROJECT`** (optional) in `~/.opencode-agent-env`            | Org-wide project board — PRD parent + child issues registered at publish/fanout           |
 | **Sibling clones** before spec bootstrap                          | `setup-project` creates/syncs **`<app>-spec`** and links repos that already exist on disk |
 
 
 Optional but recommended:
 
 - Add OpenCode CLI tools to your shell: `export PATH="$OPENCODE_CONFIG_DIR/bin:$PATH"`
+- Org project board: `export GH_PROJECT="https://github.com/orgs/RoborewDev/projects/1"` in `~/.opencode-agent-env` — see [docs/GITHUB-PROJECT-BOARD.md](docs/GITHUB-PROJECT-BOARD.md)
 - Label sync across repos: `gh secret set LABEL_SYNC_PAT --repo <owner>/<app>-spec` (see [templates/spec-repo/.github/workflows/sync-labels.yml](templates/spec-repo/.github/workflows/sync-labels.yml))
 - Consistent agent shell: [scripts/agent-run.zsh](scripts/agent-run.zsh) and `~/.opencode-agent-env` for secrets (see RUNBOOK)
 
@@ -82,10 +84,12 @@ What this does:
 
 - Creates or syncs **`myapp-spec`** from [templates/spec-repo/](templates/spec-repo/)
 - Updates **`docs/agents/repos.md`** with discovered siblings
-- Runs **`link-spec-repo`** wiring in each local implementation repo (issue tracker, synced `bin/*`, templates)
-- Commits spec tooling when there are changes (push when ready)
+- Wires **`docs/agents/issue-tracker.md`** in each implementation repo (links to spec)
+- Aligns GitHub templates and doc scaffolding (no automation scripts copied into repos)
 
-**Re-runs are safe** — idempotent tooling refresh and re-link; an existing spec repo **stays on its current branch** unless you pass `--keep-branch` explicitly on first create.
+Project automation runs from central config via **`opencode-run`** (e.g. `opencode-run spec fanout <slug>`). Application repos may use `bin/` for **app-specific** scripts only.
+
+**Re-runs are safe** — idempotent doc/registry alignment and re-link; an existing spec repo **stays on its current branch** unless you pass `--keep-branch` explicitly on first create.
 
 Useful flags:
 
@@ -184,13 +188,13 @@ For a repo that later joins a stack, run [Existing repositories](#existing-repos
 1. **Install this config** (above).
 2. Place clones as **siblings** under one parent (e.g. move `myapp-web` and `myapp-api` under `~/code/myapp/`).
 3. From the parent, run **`setup-project`** (same as [shell bootstrap](#2-shell-bootstrap-once-per-stack)). Existing spec content (PRDs, ADRs, prototypes) is preserved; tooling and registry links are refreshed.
-4. Open **`myapp-spec` only** in OpenCode → **architect → option 7 (Setup / bootstrap stack)**. Do not repeat setup in impl repos; stack-bootstrap updates them from spec.
+4. Open **`myapp-spec` only** in OpenCode → **architect → option 8 (Setup / bootstrap stack)**. Do not repeat setup in impl repos; stack-bootstrap updates them from spec.
 
 ### Add a new implementation repo to a stack
 
 1. Create and clone `myapp-new-surface` next to existing siblings.
 2. Re-run from parent: `setup-project` (links the new repo, updates registry).
-3. In **spec only**: **architect → option 7** to register `application_role`, capabilities, and run **stack-bootstrap** on the new repo.
+3. In **spec only**: **architect → option 8** to register `application_role`, capabilities, and run **stack-bootstrap** on the new repo.
 
 ### Legacy `.plan/` and old `docs/agents/`
 
@@ -198,9 +202,9 @@ During **setup-project**, architect scans implementation repos for `.plan/featur
 
 ### Upgrade OpenCode templates later
 
-Re-run **`setup-project`** from the project parent to sync `bin/*` and templates. Commit and push spec (and impl) repos when prompted.
+Re-run **`setup-project`** from the project parent to align docs and GitHub templates. Use **`opencode-assess-stack --fix .`** once to remove legacy copied `bin/` tooling from older stacks.
 
-PRD ticket edits after publish: `feature-upgrade <slug>` from the project parent or `bin/feature-upgrade <slug>` in spec.
+PRD ticket edits after publish: `feature-upgrade <slug>` from the project parent or `opencode-run spec feature-upgrade <slug>` in spec.
 
 ---
 
@@ -222,27 +226,24 @@ tmp/
 
 ### Product (spec repo)
 
-`grill-me` → `to-prd` → human approves PRD → architect runs fanout (**fanout-issues** skill)
+`grill-me` → `to-prd` → human approves PRD → fanout → **issue-expand** (all impl siblings) → gates → execution handoff(s) per impl repo
 
 ### Implementation (per repo, dependency order)
 
-1. **`architect`** (impl repo) → **option 1** or targeted **to-issues** → planning gates → ends with the canonical table handoff naming the feature, slug, queue source, readiness status, and copy/paste first message (`feature:<slug>`).
-2. **`/new`** → **`orchestrate`** → paste or type the **first message** from that handoff (usually `feature:<slug>`). See [Session handoffs](#session-handoffs-architect--orchestrate).
-3. When orchestrate reports queue exhausted (+ PR URL): **new session** → **`architect`** (impl repo) → **option 5** or *ready for review* with `feature:<slug>` and PR link → **Mode F** two-phase sign-off: **Phase 1** verify vs PRD/tickets and close issues (`state:done`); **Phase 2** mandatory changelog (+ optional guides) written and pushed to the feature PR via **developer**.
-4. **Human:** review and **merge** the impl-repo PR on GitHub after Mode F Phase 2 (orchestrate may have opened it via `feature-finish-pr.sh`; use **`ship`** only if PR was skipped).
-5. When **every** impl repo for the feature is signed off: **`architect`** in **spec** → **option 3** (**feature-complete**) → human confirms closing the spec parent PRD issue.
+1. **`/new`** → **`orchestrate`** (impl repo) → paste **first message** from spec handoff (`feature:<slug>`).
+2. When orchestrate reports queue exhausted (+ PR URL): **new session** → **`architect`** in **spec** → **option 4** with `feature:<slug>`, `impl_repo`, `impl_repo_path`, and PR URL → **Mode F** sign-off.
+3. **Human:** review and **merge** the impl-repo PR on GitHub after Mode F Phase 2.
+4. When **every** impl repo for the feature is signed off: **`architect`** in **spec** → **option 3** (**feature-complete**).
 
-**Legacy path:** architect **option 2** (local `.plan`) → orchestrate on artifact path → architect **option 5** Mode B (review + docs + `*.completed.md` archive).
+**Legacy path:** architect **option 1** (targeted `.plan`) → orchestrate on artifact path → architect **option 4** Mode B (review + docs + `*.completed.md` archive).
 
 ### Session handoffs (architect ↔ orchestrate)
 
-OpenCode can switch agents in one session, but **architect (Qwen) + many tools → orchestrate (MiniMax)** often breaks if the full tool transcript is replayed. Use **GitHub as the handoff**, not chat memory.
-
 | Step | Session | Agent | You do |
 |------|---------|-------|--------|
-| Plan + expand | A (planning) | **architect** | Option 1, slug, approve issue bodies in chat |
-| Execute backlog | **B (new)** | **orchestrate** | `/new`, then: `feature:<slug>` — start first runnable issue |
-| Sign-off per impl repo | **C (new)** | **architect** | Option 5 or paste the orchestrate **Copy/paste sign-off script** for the exact `feature:<slug>` + PR |
+| Plan + expand | A (spec) | **architect** | Option 1 — approve issue bodies; receive per-repo handoffs |
+| Execute backlog | **B (new, per impl)** | **orchestrate** | Open impl repo; `/new`; `feature:<slug>` |
+| Sign-off per impl repo | **C (new, spec)** | **architect** | Option 4 — paste orchestrate sign-off script with impl_repo + PR |
 | Close feature (multi-repo) | **D (spec)** | **architect** | Option 3 **feature-complete** after all impl repos |
 
 Optional same-session path: architect ends with a short table **HANDOFF** block → you run **`/compact`** → switch to orchestrate → kickoff with `feature:<slug>`. If MiniMax returns duplicate `tool_call` errors, use **`/new`** instead.
@@ -253,10 +254,10 @@ Optional same-session path: architect ends with a short table **HANDOFF** block 
 |--------|-----|
 | Implement stages, edit code, run tests | **`developer`** / **`frontend-dev`** (Task from **orchestrate**) |
 | Per-stage / per-issue verification | **`verifier`** |
-| `git commit` on feature branch (`Refs:` / `Closes:` issue #) | Implementation subagents (orchestrate requires evidence in completion report) |
+| `git commit` on current feature branch (`Refs:` / `Closes:` issue #) | Implementation subagents on **`expected_branch`** from checkout contract (orchestrate requires evidence in completion report) |
 | Issue labels `state:in-progress` → `state:ready-for-review` | **orchestrate** via **`developer`** + `issue-state-transition.sh` |
 | Final push + open ready-for-review PR after queue empty and CodeRabbit fixes are local | **orchestrate** via **`developer`** + `feature-finish-pr.sh` (skip with `ORCHESTRATE_AUTO_PR=0`) |
-| Code/PR review vs tickets + PRD; `state:done` + close issues | **architect** **Mode F Phase 1** (option 5) — not orchestrate |
+| Code/PR review vs tickets + PRD; `state:done` + close issues | **architect** **Mode F Phase 1** (spec option 4) — not orchestrate |
 | Changelog + sign-off docs on feature PR | **architect** **Mode F Phase 2** (`document` → `scribe` → **developer** push) |
 | Remediation after failed sign-off | **architect** publishes fixes (**to-issues** or review plan) → **new orchestrate session** |
 | Merge PR on GitHub | **You** (human) — after Mode F Phase 2 |
@@ -279,6 +280,8 @@ Orchestrate **does not** run final product sign-off, write changelog/docs for Gi
 | Spec repo template layout                                     | [templates/spec-repo/](templates/spec-repo/)                                                                             |
 | Shared rules (loaded via `instructions`)                      | [rules/](rules/)                                                                                                         |
 | Helper scripts (secrets scan, session context, format, tests) | [scripts/](scripts/)                                                                                                     |
+| Project automation (fanout, issue-expand, feature-check) | `opencode-run` — see [bin/opencode-run](bin/opencode-run) |
+| Stack cleanup (remove legacy copied bin/) | `opencode-assess-stack` |
 | Git / SQL guardrails (scripts)                                | [scripts/block-dangerous-git.sh](scripts/block-dangerous-git.sh), [scripts/preflight-git.sh](scripts/preflight-git.sh) |
 
 
@@ -303,9 +306,11 @@ Global **`instructions`** pull in [rules/](rules/). Global **`permission`** in `
 
 **`grill-me`** (architect Mode A) embeds the [grill-with-docs](https://github.com/mattpocock/skills/tree/main/skills/engineering/grill-with-docs) flow: domain glossary + ADRs persisted via `scribe`.
 
+**`improve-codebase-architecture`** (architect impl option 8) adapts Matt Pocock's [improve-codebase-architecture](https://github.com/mattpocock/skills/tree/main/skills/engineering/improve-codebase-architecture) as an Opus-backed periodic codebase audit: HTML architecture report, optional security pass, and optional `feature:<audit-slug>` remediation tickets via `to-issues` for `orchestrate`.
+
 **CodeRabbit** (`skills/code-review`, from [coderabbitai/skills](https://github.com/coderabbitai/skills)): orchestrate runs **one** **CodeRabbit gate** via `review` after **all** stages/issues pass final verifier (`medium`/`hard`) — before difficulty gates and architect handoff (GitHub: after the full `feature:<slug>` queue, not per issue). Requires CodeRabbit CLI + auth.
 
-**Git guardrails:** `opencode.json` in this repo does **not** define PreToolUse hooks (host-dependent). Use `scripts/preflight-git.sh '<command>'` before risky git invocations, or wrap tool calls with `scripts/block-dangerous-git.sh` where your runtime supports stdin JSON hooks.
+**Git guardrails:** `opencode.json` denies branch mutation commands (`git switch`, `git checkout -b`, protected-branch checkouts) for execution agents. `scripts/block-dangerous-git.sh` blocks the same patterns for hook-style validation. Orchestrate runs **`checkout-contract.sh`** every session to capture the current branch; subagents must not create or switch branches. Use `scripts/preflight-git.sh '<command>'` before risky git invocations, or wrap tool calls with `scripts/block-dangerous-git.sh` where your runtime supports stdin JSON hooks.
 
 ## Desktop / shell environment
 

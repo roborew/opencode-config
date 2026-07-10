@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Publish the parent [PRD] GitHub issue (to-prd skill). Child tickets use opencode-run spec fanout only.
+set -euo pipefail
+SLUG="${1:?slug required}"
+TITLE="${2:?title required}"
+BODY_FILE="${3:?body file required}"
+
+# shellcheck source=../lib/repo-context.sh disable=SC1091
+source "$(cd "$(dirname "$0")/../lib" && pwd)/repo-context.sh"
+opencode_project_init spec
+
+PRD_PATH="${ROOT}/docs/prd/${SLUG}.md"
+PRD_IO="${BIN_DIR}/lib/prd_io.py"
+# shellcheck source=lib/github_project.sh
+source "${BIN_DIR}/lib/github_project.sh"
+
+[[ -f "$BODY_FILE" ]] || { echo "missing body file: $BODY_FILE" >&2; exit 2; }
+[[ -f "$PRD_PATH" ]] || { echo "missing PRD file: $PRD_PATH" >&2; exit 2; }
+[[ -f "$PRD_IO" ]] || { echo "missing $PRD_IO" >&2; exit 8; }
+
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+for label in "prd" "state:ready-for-agent" "category:feature" "feature:${SLUG}"; do
+  gh label create "$label" --repo "$REPO" 2>/dev/null || true
+done
+
+URL=$(gh issue create \
+  --repo "$REPO" \
+  --title "$TITLE" \
+  --body-file "$BODY_FILE" \
+  --label "prd,state:ready-for-agent,category:feature,feature:${SLUG}" \
+  | tail -1)
+
+github_project_add_issue "$URL"
+python3 "$PRD_IO" set "$PRD_PATH" parent_issue "$URL"
+
+echo "Published parent PRD issue for ${SLUG} on ${REPO}: ${URL}"
+echo "Updated parent_issue in ${PRD_PATH}"

@@ -51,3 +51,6 @@
 - name: prd
   color: 8a2be2
   description: Parent PRD issue; links to PRD doc in this repo
+- name: prd-task
+  color: 1d76db
+  description: Cross-repo PRD child ticket; auto-add to org project board

@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-paths=(bin scripts templates .gitattributes)
+paths=(bin bin/project scripts templates .gitattributes)
 
 bad=()
 for base in "${paths[@]}"; do

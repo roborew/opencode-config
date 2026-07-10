@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# Validate PRD + child GitHub issues for a feature slug (all repos in PRD tickets).
+# Usage: opencode-run spec feature-check <slug> [--level fanout|expand|orchestrate]
+set -euo pipefail
+SLUG="${1:?slug required}"
+shift || true
+LEVEL="expand"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --level) LEVEL="${2:?}"; shift 2 ;;
+    *) echo "unknown arg: $1" >&2; exit 2 ;;
+  esac
+done
+
+# shellcheck source=../lib/repo-context.sh disable=SC1091
+source "$(cd "$(dirname "$0")/../lib" && pwd)/repo-context.sh"
+opencode_project_init spec
+
+PRD_PATH="${ROOT}/docs/prd/${SLUG}.md"
+VALIDATE_PRD="${BIN_DIR}/lib/validate_prd_frontmatter.py"
+VALIDATE_BODY="${BIN_DIR}/lib/validate_issue_body.py"
+VALIDATE_TICKETS="${BIN_DIR}/lib/validate_tickets.py"
+PRD_IO="${BIN_DIR}/lib/prd_io.py"
+REGISTRY="${ROOT}/docs/agents/repos.md"
+
+[[ -f "$PRD_PATH" ]] || { echo "ERROR: missing $PRD_PATH" >&2; exit 2; }
+[[ -f "$VALIDATE_BODY" ]] || { echo "ERROR: missing validate_issue_body.py" >&2; exit 8; }
+[[ -f "$PRD_IO" ]] || { echo "ERROR: missing prd_io.py" >&2; exit 8; }
+
+python3 "$VALIDATE_PRD" "$PRD_PATH" || exit 6
+[[ -f "$REGISTRY" ]] || { echo "ERROR: missing $REGISTRY" >&2; exit 3; }
+
+TMP=$(mktemp)
+python3 "$PRD_IO" tickets_json "$PRD_PATH" >"$TMP"
+TICKET_COUNT=$(jq 'length' "$TMP")
+[[ "$TICKET_COUNT" -gt 0 ]] || { echo "ERROR: PRD has no tickets[] — use tickets frontmatter or legacy slices" >&2; exit 4; }
+
+echo "==> feature-check: ${SLUG} (level=${LEVEL}, tickets=${TICKET_COUNT})"
+python3 "$VALIDATE_TICKETS" "$REGISTRY" <"$TMP" || exit 6
+
+FAIL=0
+MISSING_ISSUES=0
+DUPLICATE_ISSUES=0
+EXISTING="${BIN_DIR}/lib/existing_issue.py"
+
+find_issue() {
+  local repo="$1" title="$2" task_id="$3"
+  local nums=()
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && nums+=("$line")
+  done < <(python3 "$EXISTING" find-all "$repo" "$SLUG" "$title" "$task_id")
+  if [[ ${#nums[@]} -gt 1 ]]; then
+    echo "FAIL: duplicate issues for ${task_id} on ${repo}: #$(IFS=' #'; echo "${nums[*]}")"
+    DUPLICATE_ISSUES=$((DUPLICATE_ISSUES + 1))
+    FAIL=1
+    echo "${nums[0]}"
+    return
+  fi
+  if [[ ${#nums[@]} -eq 1 ]]; then
+    echo "${nums[0]}"
+    return
+  fi
+  echo ""
+}
+
+while IFS= read -r row; do
+  TID=$(echo "$row" | jq -r '.id')
+  REPO=$(echo "$row" | jq -r '.repo')
+  TITLE=$(echo "$row" | jq -r '.title')
+  NUM=$(find_issue "$REPO" "$TITLE" "$TID")
+  if [[ -z "$NUM" ]]; then
+    echo "FAIL: no GitHub issue for ticket ${TID} on ${REPO}"
+    MISSING_ISSUES=$((MISSING_ISSUES + 1))
+    FAIL=1
+    continue
+  fi
+  BODY_FILE=$(mktemp)
+  gh issue view "$NUM" --repo "$REPO" --json body -q .body >"$BODY_FILE"
+  if python3 "$VALIDATE_BODY" --level "$LEVEL" --task-id "$TID" --file "$BODY_FILE"; then
+    echo "OK: ${REPO}#${NUM} (${TID})"
+  else
+    echo "FAIL: ${REPO}#${NUM} (${TID})"
+    FAIL=1
+  fi
+  rm -f "$BODY_FILE"
+done < <(jq -c '.[]' "$TMP")
+
+rm -f "$TMP"
+
+if [[ "$MISSING_ISSUES" -gt 0 ]]; then
+  echo "HINT: run opencode-run spec fanout ${SLUG} from spec repo to create missing issues" >&2
+fi
+if [[ "$DUPLICATE_ISSUES" -gt 0 ]]; then
+  echo "HINT: run opencode-run spec fanout-audit ${SLUG}; close duplicate issues before re-running fanout" >&2
+fi
+
+if [[ "$FAIL" -eq 0 ]]; then
+  echo "PASS: all tickets meet level=${LEVEL}"
+  exit 0
+fi
+echo "FAIL: see docs/FEATURE-PIPELINE.md" >&2
+exit 1

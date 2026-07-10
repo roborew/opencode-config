@@ -44,7 +44,7 @@ Senior-dev is **not** auto-invoked for mid-stage work without operator request +
 If a subagent reports `ENV_BLOCKED`:
 
 1. Stop current stage immediately.
-2. **Bootstrap (no artifact yet):** If **worktree-env** or **developer** preflight-only reports Blocked, do **not** invoke `helper`/`scribe` for artifact amendments—ask the user to remediate (see `skills/worktree-env/SKILL.md` for symlink issues), then re-Task **`worktree-env`** (if applicable) and **`developer`** (preflight) when the user confirms.
+2. **Bootstrap (no artifact yet):** If **worktree-env** or **`preflight`** reports Blocked **after** the repair-first flow in **`orchestrate-execution`** has completed (including one auto-retry where applicable), do **not** invoke `helper`/`scribe` for artifact amendments. Report **one** `recommended_env_fix` — no multi-option menus. Do **not** re-Task **`worktree-env`** if it already returned `worktree_env: ok` with canonical evidence unless canonical verification contradicts that report. Re-run the full env gate only when the user confirms remediation or asks to rerun preflight (clear `worktree_env_checked` / `preflight_repair_attempted`).
 3. **Mid-stage execution:** Invoke `helper` to produce a minimal recovery/update strategy; use `scribe` to amend artifact `IterationNotes` and next-step tasks.
 4. Ask user for explicit environment remediation confirmation before retry.
 

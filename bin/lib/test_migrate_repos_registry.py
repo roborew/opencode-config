@@ -103,6 +103,21 @@ class SchemaMigrationTests(unittest.TestCase):
         self.assertFalse(m.needs_schema_migration(repos))
 
 
+class MinimalParserTests(unittest.TestCase):
+    def test_block_list_capabilities_without_pyyaml(self) -> None:
+        body = """repos:
+  - repo: myorg/my-web
+    application_role: User-facing web application
+    agent_owner: frontend-dev
+    capabilities:
+      - billing UI
+  - name: myorg/my-api
+    role: target
+"""
+        repos = m._parse_repos_minimal(body)
+        self.assertEqual(repos[0]["capabilities"], ["billing UI"])
+
+
 class MainIntegrationTests(unittest.TestCase):
     def _run_migrate(self, content: str) -> tuple[int, str, Path]:
         tmp = tempfile.NamedTemporaryFile(suffix=".md", delete=False)

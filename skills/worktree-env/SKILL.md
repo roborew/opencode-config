@@ -1,8 +1,8 @@
 ---
 name: worktree-env
-description: "Linked git worktree: symlink .env and .env.local from main checkout (bash/ln only)"
+description: "Linked git worktree: copy .env and .env.local from main checkout (bash/cp only)"
 modelTier: "fast"
-roleReminder: "Only create/replace root env files as symlinks when in a linked worktree; otherwise skip. One report and stop."
+roleReminder: "Only create root env files as copies when in a linked worktree; otherwise skip. Idempotent — report ok_existing when a regular file already exists. One report and stop."
 ---
 
 ## Skill reference (optional load)
@@ -11,16 +11,17 @@ Load when the parent (`orchestrate`) delegates worktree env setup before preflig
 
 ## Purpose
 
-When the workspace is a **linked git worktree**, ensure repo-root env files (default **`.env`**, **`.env.local`**) are **symlinks** to the **main checkout** so secrets stay in one place. Use **`bash` + `ln` only** (no edit/write tools for secret contents).
+When the workspace is a **linked git worktree**, ensure repo-root env files (default **`.env`**, **`.env.local`**) are **copies** of the main checkout files so each worktree can customize settings (e.g. a separate database) without affecting other checkouts. Use **`bash` + `cp` only** (no edit/write tools for secret contents).
 
 Override the file list with space-separated **`WORKTREE_ENV_FILES`** (e.g. `WORKTREE_ENV_FILES=".env .env.local .env.development"`).
 
 ## Hard Rules
 
 1. Do not read or print the contents of env files.
-2. Do not modify env files in the main checkout—only create or replace symlinks **in the current worktree root**.
-3. If a target env file in the worktree exists as a **regular file** (not a symlink), **stop Blocked** for that file—do not delete or overwrite without user action.
-4. Emit exactly one final report to the parent, then stop.
+2. Do not modify env files in the main checkout—only create or replace copies **in the current worktree root**.
+3. If a target env file in the worktree already exists as a **regular file** (not a symlink), report `ok_existing` for that file—do not overwrite (the user may have customized it).
+4. Emit exactly one final report to the parent with **canonical evidence**, then stop.
+5. **Idempotent:** If the worktree already has a regular file at the target path, report `ok_existing` and do not recopy.
 
 ## Detection
 
@@ -32,7 +33,7 @@ Run from **repository root** (`git rev-parse --show-toplevel`); `cd` there first
    - If **`PREFLIGHT_MAIN_REPO_ROOT`** is set and non-empty: `main_root="${PREFLIGHT_MAIN_REPO_ROOT%/}"`.
    - Else: `common=$(git rev-parse --path-format=absolute --git-common-dir)`; `main_root=$(dirname "$common")"`. (Assumes common dir is `<repo>/.git`; document in report if `separate-git-dir` breaks this.)
 4. **Worktree root:** `wt_root=$(git rev-parse --show-toplevel)`.
-5. **Files to link:** `${WORKTREE_ENV_FILES:-.env .env.local}` (space-separated basenames only).
+5. **Files to copy:** `${WORKTREE_ENV_FILES:-.env .env.local}` (space-separated basenames only).
 
 ## Actions (linked worktree only)
 
@@ -40,29 +41,31 @@ For each basename `f` in the file list:
 
 - `source="${main_root}/${f}"`; `target="${wt_root}/${f}"`.
 - If **`source`** is not a readable path: **skip** this file (`skipped_missing_source` for `f`); continue other files.
-- If **`target`** exists and is **not** a symlink: **Blocked** — `recommended_env_fix`: move or remove the real file at `target` in the worktree (after backing up secrets), then re-run this task.
-- If **`target`** is missing, or is a symlink with the wrong target: run **`ln -sfn "$source" "$target"`** via bash (absolute `source` avoids fragile relative links).
-- If **`target`** already symlink and resolves to **`source`**: pass for this file (no `ln` needed).
+- If **`target`** exists and is a **regular file** (`test -f` and not `test -L`): report `ok_existing` for this file (no `cp` needed).
+- If **`target`** is missing, or is a **symlink** (legacy layout): run **`cp -f "$source" "$target"`** via bash. `cp` replaces symlinks with a regular-file copy.
+- If **`cp`** fails: report `failed_cp` with command evidence — do not report success.
 
-Verify each linked file with: `test -L "$target"` and compare `readlink` / canonical paths to `source` as appropriate for the OS (macOS: `readlink`; GNU `readlink -f` if available).
+**Post-action verification (required for every copied file):** run `test -f "$target"` and `test ! -L "$target"`. If `cp` ran but verification fails, report `failed_cp` with command evidence — do not report success.
 
-**Overall status:** `ok` if no file is Blocked; any Blocked file → `worktree_env: blocked_regular_file` or `failed_ln` and stop.
+**Overall status:** `ok` if no file has `failed_cp`; any `failed_cp` → `worktree_env: failed_cp`.
 
 ## Permissions (OpenCode)
 
-- **Prefer `ln` via `bash` only** (no `edit` tool on `.env`). Global `opencode.json` may deny edits to `.env`; many stacks still allow symlink creation through **bash**—try that first.
-- If `ln` is **denied by the sandbox**, add under **`agents/worktree-env.md`** `permission.edit` with `"*": deny` and `".env": allow` at repo root (mirror `scribe` patterns), then retry—or run the same `ln` command manually in a terminal.
+- **Prefer `cp` via `bash` only** (no `edit` tool on `.env`). Global `opencode.json` may deny edits to `.env`; many stacks still allow file copy through **bash**—try that first.
+- **`external_directory`:** main checkout paths must be **allow** (not `ask`) so `cp` can read sources outside the worktree root without mid-session prompts.
+- If `cp` is **denied by the sandbox**, add under **`agents/worktree-env.md`** `permission.edit` with `"*": deny` and `".env": allow` at repo root (mirror `scribe` patterns), then retry—or run the same `cp` command manually in a terminal.
 
 ## Output (structured)
 
 Return to parent:
 
-- `worktree_env`: `ok` | `skipped_not_git` | `skipped_not_linked_worktree` | `blocked_regular_file` | `failed_ln`
-- `files`: per-file `{ name, status: ok | skipped_missing_source | blocked_regular_file | failed_ln, source, target }` (paths only, not contents)
-- `commands_run`: brief list
-- `recommended_env_fix`: one line if Blocked or failed
-- If Blocked or `failed_ln`, include `blocker_code: ENV_BLOCKED` only when the user cannot proceed to preflight without fixing this (orchestrate may still run preflight verification after manual fix)
+- `worktree_env`: `ok` | `skipped_not_git` | `skipped_not_linked_worktree` | `failed_cp`
+- `wt_root`, `main_root`: absolute paths
+- `files`: per-file `{ name, status: ok | ok_existing | skipped_missing_source | failed_cp, source, target, is_regular_file }` (paths only, not contents)
+- `commands_run`: brief list (`cp`, `test -f`, `test ! -L`, etc.)
+- `recommended_env_fix`: one line if failed
+- If `failed_cp`, include `blocker_code: ENV_BLOCKED` only when the user cannot proceed to preflight without fixing this (orchestrate may still run preflight verification after manual fix)
 
 ## On success
 
-Status ready for **`developer`** preflight: worktree `.env` symlink is in place or not required.
+Status ready for **`preflight`** agent: worktree env copies are in place or not required. Parent should set `worktree_env_checked: true` and store this report as `worktree_env_evidence` — do not expect a second **`worktree-env`** invocation in the same bootstrap unless canonical verification later contradicts this evidence.

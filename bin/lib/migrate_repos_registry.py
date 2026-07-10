@@ -93,7 +93,7 @@ def _parse_repos_minimal(body: str) -> list[dict]:
             continue
         if current is None:
             continue
-        m_kv = re.match(r"^\s{4}(\w+):\s*(.+)$", line)
+        m_kv = re.match(r"^\s{4}(\w+):\s*(.*)$", line)
         if m_kv:
             key, val = m_kv.group(1), m_kv.group(2).strip().strip('"').strip("'")
             if key in ("capabilities", "non_goals", "default_test_commands", "integration_contracts"):

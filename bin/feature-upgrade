@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Wrapper: run spec repo bin/feature-upgrade from project parent (finds *-spec).
+# Wrapper: run spec feature-upgrade from project parent (finds *-spec).
 #
 # Usage:
 #   feature-upgrade <slug>                 # from project parent (finds *-spec)
@@ -16,7 +16,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-OC="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
+OC="${OPENCODE_CONFIG_DIR:-${OPENCODE_CONFIG:-$HOME/.config/opencode}}"
+RUN="${OC}/bin/opencode-run"
 
 if [[ -z "$SPEC_PATH" ]]; then
   PARENT="$(pwd)"
@@ -32,9 +33,4 @@ fi
   exit 2
 }
 
-if [[ -x "${OC}/bin/stack/sync_spec_tooling.sh" ]]; then
-  echo "==> Syncing spec tooling from OpenCode templates..."
-  "${OC}/bin/stack/sync_spec_tooling.sh" "$SPEC_PATH" || true
-fi
-
-exec "${SPEC_PATH}/bin/feature-upgrade" "$SLUG"
+exec "$RUN" --cwd "$SPEC_PATH" spec feature-upgrade "$SLUG"

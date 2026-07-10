@@ -1,29 +1,43 @@
 #!/usr/bin/env bash
 # Emit JSON for the next runnable OpenCode child issue in the current repo, or nothing.
 # Runnable = open, has state:ready-for-agent + feature:<slug>, and every **Blocked by:** #n is CLOSED.
-# Usage: next-runnable-issue.sh <feature_slug_without_prefix>
+# GitHub filters server-side: both --label flags are ANDed (only matching issues are returned).
+# Usage: next-runnable-issue.sh <feature_slug_without_prefix> [--repo OWNER/REPO]
 set -euo pipefail
 SLUG="${1:?feature slug required}"
-REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+shift || true
+REPO="${GH_REPO:-}"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --repo)
+      REPO="${2:?}"
+      shift 2
+      ;;
+    *)
+      echo "unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+[[ -n "$REPO" ]] || REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 FEAT="feature:${SLUG}"
 OC="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
 PARSE_META="${OC}/templates/spec-repo/bin/lib/extract_task_meta.py"
 
-RAW=$(gh issue list --repo "$REPO" -L 200 --label "$FEAT" --label state:ready-for-agent --state open --json number,title,body 2>/dev/null || true)
-[[ -n "$RAW" ]] || exit 1
-LIST=$(echo "$RAW" | jq 'sort_by(.number)')
-[[ "$LIST" != "[]" ]] || exit 1
-
 is_blocked_open() {
   local body="$1"
-  local line
-  line=$(echo "$body" | grep '^\*\*Blocked by:\*\*' | head -1 || true)
-  [[ -n "$line" ]] || return 1
-  if echo "$line" | grep -q '(none)'; then
+  local block_section deps
+  block_section=$(printf '%s' "$body" | awk '/^## Blocked by$/{found=1; next} found && /^## /{exit} found{print}' || true)
+  if [[ -z "$block_section" ]]; then
+    local line
+    line=$(printf '%s' "$body" | grep '^\*\*Blocked by:\*\*' | head -1 || true)
+    block_section="$line"
+  fi
+  [[ -n "$block_section" ]] || return 1
+  if printf '%s' "$block_section" | grep -qiE '\bnone\b|\(none\)'; then
     return 1
   fi
-  local deps
-  deps=$(echo "$line" | grep -oE '#[0-9]+' | tr -d '#' || true)
+  deps=$(printf '%s' "$block_section" | grep -oE '#[0-9]+' | tr -d '#' || true)
   [[ -n "$deps" ]] || return 1
   local d st
   while IFS= read -r d; do
@@ -37,24 +51,41 @@ is_blocked_open() {
 }
 
 extract_meta() {
-  local body="$1"
+  local body="$1" title="$2"
   if [[ -f "$PARSE_META" ]]; then
-    echo "$body" | python3 "$PARSE_META" 2>/dev/null || echo null
+    local out
+    out=$(printf '%s' "$body" | python3 "$PARSE_META" --title "$title" --feature-slug "$SLUG" 2>/dev/null || true)
+    [[ -n "$out" ]] || out=null
+    echo "$out"
   else
-    echo "$body" | sed -n '/```opencode-task-yaml/,/```/p;/```opencode-task-json/,/```/p' | sed '1d;$d' | jq -c . 2>/dev/null || echo null
+    printf '%s' "$body" | sed -n '/```opencode-task-yaml/,/```/p;/```opencode-task-json/,/```/p' | sed '1d;$d' | jq -c . 2>/dev/null || echo null
   fi
 }
 
-while IFS= read -r row; do
-  body=$(echo "$row" | jq -r .body)
+# Phase 1: GitHub returns only issues matching feature:<slug> AND state:ready-for-agent (number + title).
+# Phase 2: fetch full body per candidate until the first runnable issue is found.
+# Returns ONE issue per call (orchestrator loops until exit 1). queue_remaining = label-matched count.
+STUBS_FILE=$(mktemp)
+trap 'rm -f "$STUBS_FILE"' EXIT
+gh issue list --repo "$REPO" -L 200 --label "$FEAT" --label state:ready-for-agent --state open \
+  --json number,title 2>/dev/null | jq -c 'sort_by(.number) | .[]' >"$STUBS_FILE" || true
+QUEUE_REMAINING=$(wc -l <"$STUBS_FILE" | tr -d ' ')
+[[ "$QUEUE_REMAINING" -gt 0 ]] || exit 1
+
+while IFS= read -r stub; do
+  [[ -n "$stub" ]] || continue
+  number=$(printf '%s' "$stub" | jq -r .number)
+  title=$(printf '%s' "$stub" | jq -r .title)
+  row=$(gh issue view "$number" --repo "$REPO" --json number,title,body 2>/dev/null || true)
+  [[ -n "$row" ]] || continue
+  body=$(printf '%s' "$row" | jq -r .body)
   if is_blocked_open "$body"; then
     continue
   fi
-  meta=$(extract_meta "$body")
-  jq -nc --argjson row "$row" --argjson meta "${meta}" \
-    --arg rep "$REPO" \
-    '{number: $row.number, title: $row.title, body: $row.body, opencode_meta: $meta, repo: $rep}'
+  meta=$(extract_meta "$body" "$title")
+  printf '%s' "$row" | jq -c --argjson meta "${meta}" --arg rep "$REPO" --argjson queue "$QUEUE_REMAINING" \
+    '{queue_remaining: $queue, number: .number, title: .title, body: .body, opencode_meta: $meta, repo: $rep}'
   exit 0
-done < <(echo "$LIST" | jq -c '.[]')
+done <"$STUBS_FILE"
 
 exit 1

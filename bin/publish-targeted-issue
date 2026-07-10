@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  bin/publish-targeted-issue --title TITLE --body-file PATH [--repo OWNER/REPO]
+                             [--feature-slug SLUG] [--label LABEL ...]
+
+Creates one targeted/ad-hoc GitHub issue with duplicate guards.
+Use opencode-run spec fanout for PRD child issues and opencode-run spec publish-prd-issue for PRD parents.
+Use --body-file - to read the issue body from stdin.
+USAGE
+}
+
+repo=()
+title=""
+body_file=""
+feature_slug=""
+labels=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --repo)
+      [[ $# -ge 2 ]] || { echo "missing value for --repo" >&2; exit 2; }
+      repo=(--repo "$2")
+      shift 2
+      ;;
+    --title)
+      [[ $# -ge 2 ]] || { echo "missing value for --title" >&2; exit 2; }
+      title="$2"
+      shift 2
+      ;;
+    --body-file)
+      [[ $# -ge 2 ]] || { echo "missing value for --body-file" >&2; exit 2; }
+      body_file="$2"
+      shift 2
+      ;;
+    --feature-slug)
+      [[ $# -ge 2 ]] || { echo "missing value for --feature-slug" >&2; exit 2; }
+      feature_slug="${2#feature:}"
+      shift 2
+      ;;
+    --label)
+      [[ $# -ge 2 ]] || { echo "missing value for --label" >&2; exit 2; }
+      labels+=("$2")
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "unknown argument: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+[[ -n "$title" ]] || { echo "--title is required" >&2; exit 2; }
+[[ -n "$body_file" ]] || { echo "--body-file is required" >&2; exit 2; }
+
+cleanup_body=""
+if [[ "$body_file" == "-" ]]; then
+  cleanup_body="$(mktemp)"
+  cat > "$cleanup_body"
+  body_file="$cleanup_body"
+  trap '[[ -n "${cleanup_body:-}" ]] && rm -f "$cleanup_body"' EXIT
+fi
+
+[[ -f "$body_file" ]] || { echo "body file not found: $body_file" >&2; exit 2; }
+
+OC="${OPENCODE_CONFIG:-$(cd "$(dirname "$0")/.." && pwd)}"
+EMBED_META="${OC}/bin/project/spec/lib/extract_task_meta.py"
+if [[ -f "$EMBED_META" ]] && ! grep -qE 'opencode-task-(yaml|json)' "$body_file"; then
+  enriched_body="$(mktemp)"
+  python3 "$EMBED_META" --embed --title "$title" ${feature_slug:+--feature-slug "$feature_slug"} --in "$body_file" --out "$enriched_body"
+  if [[ -n "${cleanup_body:-}" ]]; then
+    mv "$enriched_body" "$cleanup_body"
+    enriched_body=""
+  else
+    body_file="$enriched_body"
+    trap '[[ -n "${enriched_body:-}" ]] && rm -f "$enriched_body"' EXIT
+  fi
+fi
+
+if grep -Eiq '(^|[^a-z])(prd|fanout)[_-]?(ticket|issue|parent)|parent_prd|prd_ticket_id' "$body_file"; then
+  echo "refusing PRD/fanout-looking issue body; use opencode-run spec fanout or opencode-run spec publish-prd-issue" >&2
+  exit 2
+fi
+
+if [[ -n "$feature_slug" ]]; then
+  labels+=("feature:$feature_slug")
+fi
+
+# task_id read after optional yaml embed above
+task_id="$(python3 - "$body_file" <<'PY'
+import pathlib
+import re
+import sys
+
+body = pathlib.Path(sys.argv[1]).read_text()
+match = re.search(r"(?m)^\s*task_id\s*:\s*['\"]?([^'\"\n]+)", body)
+print(match.group(1).strip() if match else "")
+PY
+)"
+
+list_args=(issue list "${repo[@]}" --state all --limit 200 --json number,title,body)
+if [[ -n "$feature_slug" ]]; then
+  list_args+=(--label "feature:$feature_slug")
+fi
+
+existing="$(gh "${list_args[@]}")"
+
+python3 - "$title" "$task_id" "$existing" <<'PY'
+import json
+import re
+import sys
+
+title = sys.argv[1]
+task_id = sys.argv[2]
+issues = json.loads(sys.argv[3])
+
+for issue in issues:
+    if issue.get("title") == title:
+        print(f"duplicate issue title exists: #{issue.get('number')} {title}", file=sys.stderr)
+        sys.exit(10)
+    body = issue.get("body") or ""
+    if task_id and re.search(rf"(?m)^\s*task_id\s*:\s*['\"]?{re.escape(task_id)}(?:['\"])?\s*$", body):
+        print(f"duplicate task_id exists: #{issue.get('number')} {task_id}", file=sys.stderr)
+        sys.exit(10)
+PY
+
+create_args=(issue create "${repo[@]}" --title "$title" --body-file "$body_file")
+for label in "${labels[@]}"; do
+  create_args+=(--label "$label")
+done
+
+gh "${create_args[@]}"

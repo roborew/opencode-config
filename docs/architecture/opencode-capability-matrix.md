@@ -4,8 +4,9 @@
 |------------|-------------|----------|-------------------|-------------------|------|
 | Feature / plan | `architect` | `architect-plan`, `architect-review` | Parent: sub-skills by mode; **Task** children: `load: full`, `minimal`, or `auto` per [`agents/architect.md`](../../agents/architect.md) | `.plan/<type>.<slug>.md` via `scribe` | User → `orchestrate` |
 | Stage execution | `orchestrate` | `orchestrate-execution`, `orchestrate-recovery` | Parent: sub-skills by situation; **Task** children: `load: full`, `minimal`, or `auto` per [`agents/orchestrate.md`](../../agents/orchestrate.md) | Graded stages, completion prompt | `verifier` |
-| Worktree env symlinks (opt-in) | `worktree-env` | `worktree-env` | Parent: `load: full` when user opts into preflight at bootstrap | Symlink report (`.env`, `.env.local`) | `developer` + `preflight` |
-| Backend / generic code | `developer` | `developer`, `preflight` | `auto` (tiered triggers in agent; parent overrides) | Completion report | `verifier` |
+| Worktree env copies (opt-in) | `worktree-env` | `worktree-env` | Parent: `load: full` once per bootstrap; trust canonical evidence | Copy report with `wt_root`, `main_root`, per-file `is_regular_file` | `preflight` (verify only) |
+| Env bootstrap / repair (opt-in) | `preflight` | `preflight` | Parent: `load: full` on preflight Task | `Ready` or one `recommended_env_fix`; repair pass for deps/runtime/indexing | `orchestrate` sets `env_gate_passed` |
+| Backend / generic code | `developer` | `developer` | `auto` (tiered triggers in agent; parent overrides) | Completion report | `verifier` |
 | Frontend | `frontend-dev` | `frontend-dev` | `auto` | Completion report | `verifier` |
 | HTML prototype | `ux-dev` | `ux-dev` | `auto` | `.prototype/<slug>/` | `verifier` |
 | Review (planning) | `review` | `review` + optional `security-reviewer`, `performance-reviewer`, `doc-reviewer` | `auto` (effective `load: full` for `review`; specialists default `load: full`) | Review markdown to parent | Architect + `scribe` |
@@ -14,10 +15,10 @@
 | Docs generation | `document` | `document` | `auto` | Content to `scribe` | Architect |
 | Ship / hotfix / TDD | (user-chosen agent with skill allowed) | `ship`, `hotfix`, `debug-fix`, `tdd` | User-chosen | Git / PR | User confirms each step |
 
-Other read-only specialists (`debugger`, `refactor`, `designer`, `strategist`, `helper`, `senior-dev`, `mentor`, `vision`, `scribe`) define **Execution readiness** and **Auto-load triggers** in their agent files; parents still pass `load: full|minimal|auto` on every Task. **`worktree-env`** is a narrow startup subagent (bash/git + `worktree-env` skill only).
+Other read-only specialists (`debugger`, `refactor`, `designer`, `strategist`, `helper`, `senior-dev`, `mentor`, `vision`, `scribe`) define **Execution readiness** and **Auto-load triggers** in their agent files; parents still pass `load: full|minimal|auto` on every Task. **`worktree-env`** and **`preflight`** are narrow startup subagents (bash + single skill only; no app-code edits).
 
 ## Preserved strengths
 
 - Per-agent model routing in `opencode.json`.
-- MCP: `context7`, `docs-mcp-server`, `dash-api`, `claude-context` (command path unchanged).
+- MCP: `context7`, `docs-mcp-server`, `dash-api`, `claude-context` (command path unchanged), `cloudflare-api` (OAuth, DNS/zone/API ops).
 - `strategist`, `preflight`, architect plan/review split.
