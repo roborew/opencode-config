@@ -34,11 +34,14 @@ if [[ "$CHECK_ONLY" == "true" ]]; then
     shopt -s nullglob
     for prd in "$SPEC"/docs/prd/*.md; do
       [[ "$(basename "$prd")" == "_template.md" ]] && continue
-      count=$(yq '.tickets // [] | length' "$prd" 2>/dev/null || echo 0)
-      [[ "${count:-0}" -gt 0 ]] || continue
-      slug=$(yq -r '.slug // ""' "$prd" 2>/dev/null || basename "$prd" .md)
+      # PRDs are markdown with YAML frontmatter; plain yq sees body --- as extra docs.
+      count=$(yq --front-matter=extract '.tickets // [] | length' "$prd" 2>/dev/null | head -n1)
+      [[ "${count:-0}" =~ ^[0-9]+$ ]] || count=0
+      [[ "$count" -gt 0 ]] || continue
+      slug=$(yq --front-matter=extract -r '.slug // ""' "$prd" 2>/dev/null | head -n1)
+      [[ -n "$slug" ]] || slug=$(basename "$prd" .md)
       echo "--> validating tickets in $slug"
-      yq -o=json '.tickets' "$prd" | python3 "$VALIDATE" "$REGISTRY" || exit 6
+      yq --front-matter=extract -o=json '.tickets' "$prd" | python3 "$VALIDATE" "$REGISTRY" || exit 6
     done
   fi
   if [[ -d "$SPEC/.opencode" ]]; then
@@ -73,9 +76,11 @@ if command -v yq >/dev/null 2>&1 && [[ -f "$VALIDATE" ]]; then
   for prd in "$SPEC"/docs/prd/*.md; do
     base=$(basename "$prd")
     [[ "$base" == "_template.md" ]] && continue
-    count=$(yq '.tickets // [] | length' "$prd" 2>/dev/null || echo 0)
-    [[ "${count:-0}" -gt 0 ]] || continue
-    if ! yq -o=json '.tickets' "$prd" | python3 "$VALIDATE" "$REGISTRY"; then
+    # PRDs are markdown with YAML frontmatter; plain yq sees body --- as extra docs.
+    count=$(yq --front-matter=extract '.tickets // [] | length' "$prd" 2>/dev/null | head -n1)
+    [[ "${count:-0}" =~ ^[0-9]+$ ]] || count=0
+    [[ "$count" -gt 0 ]] || continue
+    if ! yq --front-matter=extract -o=json '.tickets' "$prd" | python3 "$VALIDATE" "$REGISTRY"; then
       PRD_ERRORS=$((PRD_ERRORS + 1))
     fi
   done
