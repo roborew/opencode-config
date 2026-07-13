@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
-# DEPRECATED for impl Mode F sign-off — use mode-f-accept-issues.sh (label only).
-# Still used by legacy paths; Spec feature-complete uses close-feature-issues.sh at merge.
-# Mode F sign-off: transition feature:<slug> issues to state:done and close them.
-# Only closes issues that currently have state:ready-for-review.
-# Usage: mode-f-close-issues.sh <kebab-slug> [pr_url_for_comment] [--repo OWNER/NAME]
+# Mode F Phase 1: transition feature:<slug> issues to state:done (accepted) but leave OPEN.
+# Only accepts issues that currently have state:ready-for-review.
+# Usage: mode-f-accept-issues.sh <kebab-slug> [pr_url_for_comment] [--repo OWNER/NAME]
 set -euo pipefail
 
 SLUG="${1:?kebab slug required}"
@@ -46,12 +44,11 @@ if [[ -z "$REPO" ]]; then
   exit 1
 fi
 
-COMMENT="Architect Mode F sign-off."
+COMMENT="Architect Mode F accepted (state:done; issue stays open until Spec merge)."
 [[ -n "$PR_URL" ]] && COMMENT="${COMMENT} PR: ${PR_URL}"
 
 owner="${REPO%%/*}"
 name="${REPO##*/}"
-# gh api -f on GET /issues is interpreted as POST body (422); use query string.
 label_q="$(printf '%s' "$LABEL" | jq -sRr @uri)"
 if ! issues_json="$(gh api "repos/${owner}/${name}/issues?labels=${label_q}&state=open" \
   --paginate \
@@ -64,24 +61,29 @@ if [[ "$count" -eq 0 ]]; then
   exit 0
 fi
 
-closed=0
+accepted=0
 skipped=0
 
 while IFS= read -r num; do
   [[ -z "$num" ]] && continue
   labels="$(echo "$issues_json" | jq -r --argjson n "$num" '.[] | select(.number == $n) | [.labels[].name] | join(",")')"
+  if [[ "$labels" == *"state:done"* ]]; then
+    echo "SKIP: ${REPO}#${num} (already state:done)" >&2
+    skipped=$((skipped + 1))
+    continue
+  fi
   if [[ "$labels" != *"state:ready-for-review"* ]]; then
     echo "SKIP: ${REPO}#${num} (not state:ready-for-review)" >&2
     skipped=$((skipped + 1))
     continue
   fi
   bash "$TRANSITION" "$REPO" "$num" "state:done"
-  gh issue close "$num" --repo "$REPO" --comment "$COMMENT"
-  echo "CLOSED: ${REPO}#${num}"
-  closed=$((closed + 1))
+  gh issue comment "$num" --repo "$REPO" --body "$COMMENT"
+  echo "ACCEPTED: ${REPO}#${num} (state:done, still open)"
+  accepted=$((accepted + 1))
 done < <(echo "$issues_json" | jq -r '.[].number')
 
-echo "SUMMARY: closed=${closed} skipped=${skipped} repo=${REPO} label=${LABEL}"
+echo "SUMMARY: accepted=${accepted} skipped=${skipped} repo=${REPO} label=${LABEL}"
 if [[ "$skipped" -gt 0 ]]; then
   exit 2
 fi

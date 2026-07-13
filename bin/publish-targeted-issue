@@ -5,10 +5,12 @@ usage() {
   cat <<'USAGE'
 Usage:
   bin/publish-targeted-issue --title TITLE --body-file PATH [--repo OWNER/REPO]
-                             [--feature-slug SLUG] [--label LABEL ...]
+                             [--feature-slug SLUG] [--parent-issue URL]
+                             [--label LABEL ...]
 
 Creates one targeted/ad-hoc GitHub issue with duplicate guards.
 Use opencode-run spec fanout for PRD child issues and opencode-run spec publish-prd-issue for PRD parents.
+Remediation tickets from impl Architect Phase R may use --parent-issue to link as PRD sub-issues.
 Use --body-file - to read the issue body from stdin.
 USAGE
 }
@@ -17,6 +19,7 @@ repo=()
 title=""
 body_file=""
 feature_slug=""
+parent_issue=""
 labels=()
 
 while [[ $# -gt 0 ]]; do
@@ -39,6 +42,11 @@ while [[ $# -gt 0 ]]; do
     --feature-slug)
       [[ $# -ge 2 ]] || { echo "missing value for --feature-slug" >&2; exit 2; }
       feature_slug="${2#feature:}"
+      shift 2
+      ;;
+    --parent-issue)
+      [[ $# -ge 2 ]] || { echo "missing value for --parent-issue" >&2; exit 2; }
+      parent_issue="$2"
       shift 2
       ;;
     --label)
@@ -137,4 +145,16 @@ for label in "${labels[@]}"; do
   create_args+=(--label "$label")
 done
 
-gh "${create_args[@]}"
+issue_url="$(gh "${create_args[@]}" --json url -q .url)"
+
+if [[ -n "$parent_issue" ]]; then
+  GITHUB_PROJECT_SH="${OC}/bin/project/spec/lib/github_project.sh"
+  if [[ -f "$GITHUB_PROJECT_SH" ]]; then
+    # shellcheck source=/dev/null
+    source "$GITHUB_PROJECT_SH"
+    github_project_link_subissue "$parent_issue" "$issue_url" || true
+    github_project_add_issue "$issue_url" || true
+  fi
+fi
+
+echo "$issue_url"

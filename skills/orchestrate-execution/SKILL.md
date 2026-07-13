@@ -375,7 +375,7 @@ When verifier passes for all stages, any required **CodeRabbit gate** has **`COD
 | Impl path | `<absolute path to impl git root>` |
 | Branch / base | `<branch>` -> `<base>` |
 | PR | `<pr_url>` or `<skip reason>` |
-| Sign-off owner | **spec** architect option 4 Mode F (GitHub feature) or Mode B (`.plan` artifact) |
+| Sign-off owner | **impl** architect option 4 Mode F Phase R (GitHub feature) or Mode B (`.plan` artifact) |
 
 ### Work completed
 | Task / stage | Status | Evidence | Notes / follow-up |
@@ -409,14 +409,14 @@ When verifier passes for all stages, any required **CodeRabbit gate** has **`COD
 ### Next steps
 | Order | Who | Action | Exact prompt / input |
 |-------|-----|--------|----------------------|
-| 1 | User | Start a new **spec** `architect` session (option 4) for this impl PR sign-off | `feature:<slug> impl_repo: owner/name impl_repo_path: /abs/path PR: <pr_url>` |
-| 2 | architect | Run Mode F sign-off, close accepted issues in impl repo, then documentation on feature branch | Review the table above; do not re-run orchestration unless remediation is required |
+| 1 | User | Start a new **impl** `architect` session (option 4) in **this repo** for Phase R PR feedback | `feature:<slug> PR: <pr_url>` |
+| 2 | architect | Run Mode F Phase R (PR comments, CI, remediation tickets); then Phase 1 accept + Phase 2 docs when Merge-ready | Review the table above; paste back to orchestrate only if Phase R publishes remediation |
 
 ### Copy/paste sign-off script
 ```text
 Orchestrate complete for <Display Name> (`feature:<slug>`).
 PR: <pr_url or skip reason>
-Please run architect sign-off for this exact feature. Review the Work completed, Gates and checks, CodeRabbit, and Key findings tables above. If accepted, proceed with Mode F/Mode B docs and final sign-off; if not accepted, publish remediation tasks for a new orchestrate session.
+Please run impl architect option 4 Phase R for this PR. Triage CodeRabbit/Kilo/CI comments and incomplete tickets. If remediation needed, publish tickets and I will return to orchestrate; if Merge-ready, accept issues (state:done, stay open) and complete docs.
 ```
 ````
 

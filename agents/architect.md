@@ -139,7 +139,7 @@ When more than one substantive step remains in this episode, use the **host sess
 - **Create up front:** After you know the chain for this turn or episode, create todos for each step. Include explicit items for every **`scribe`** Task (PRD, docs, delivery record) and **user handoff** (execution handoff message).
 - **Update after every Task:** Before starting the next Task or telling the user a step is done, refresh todos with **`merge: true`** — mark the step that just finished **completed**.
 - **Mode B:** Include separate todos for **`review`**, **`document`**, each **`scribe`** write, **`archive_plan`** when applicable.
-- **Mode F:** Include **`review`** → **`close_issues`** (developer + `github_issue_stage` contract) → **doc-scope gate** (user) → **`document`** → each **`scribe`** write → **`verify_scribe_paths`** (`test -f` / `ls`) → **`developer_commit_docs`** (developer + contract, push to feature branch) → optional **`archive_plan`** if `.plan` was executed. Do not declare finished while required steps are pending.
+- **Mode F:** Include **Phase R** (`review` + `strategist`) → **accept** (`mode-f-accept-issues.sh`) → doc-scope gate → **`document`** → each **`scribe`** write → docs commit → **Spec feature-complete** handoff.
 - **Single atomic step:** If only one Task remains for the whole reply, a minimal todo update is optional.
 
 ## Front door (two-mode — mandatory on greeting)
@@ -153,8 +153,8 @@ What are we planning?
 
 1. Product feature / PRD — grill-me → to-prd → human approves docs/prd/<slug>.md → fanout → issue-expand (each impl sibling) → readiness gates → execution handoff(s).
 2. Resync PRD to existing issues — edit PRD → you run opencode-run spec feature-upgrade <slug> (sync bodies + validate); then re-run issue-expand from spec option 1 (same session) if bodies need technical planning refresh.
-3. Feature complete — cross-repo rollup and close spec parent PRD issue (feature-complete).
-4. Impl sign-off — orchestrate complete handoff with slug + impl PR URL → architect-review Mode F (verify, close issues in impl repo, docs on feature branch).
+3. Feature complete — cross-repo rollup, merge gate (human or agent), close child issues + PRD parent (feature-complete).
+4. Cross-repo impl assist (rare) — remote Mode F when cwd is spec but handoff includes impl_repo + pr_url.
 5. Research spike — cache findings via Task **scribe** to `.research/<slug>.md` before PRD.
 6. Triage — batch transition issue state labels.
 7. Explore / understand — read-only map (zoom-out).
@@ -169,7 +169,7 @@ What are we planning?
 1. Targeted change — vertical slices as GitHub issues via to-issues (no local .plan); then emit the **execution handoff** when a `feature:<slug>` label exists, else the queue handoff variant.
 2. Bug / debug — reproduce and plan fix; publish GitHub issues via to-issues before implementation.
 3. Refactor / cleanup — behavior-preserving slices as GitHub issues via to-issues (characterization tests in issue bodies).
-4. Review / sign-off — post-orchestrate review, remediation issues via to-issues, or Mode F GitHub feature:<slug> sign-off vs PRD (prefer spec option 4 when cwd is spec).
+4. Review / sign-off — post-orchestrate PR feedback (Mode F Phase R), remediation loop, accept issues (state:done, stay open), docs on feature branch. **Primary entry after orchestrate PR.**
 5. Explore / understand repo — read-only map before deciding what to change.
 6. Setup skills — bootstrap this repo's agent context (single orphan repo only; stacks use setup-project in spec).
 7. Codebase audit — periodic structure/organization review (improve-codebase-architecture); optional security pass; optional remediation tickets for orchestrate.
@@ -180,11 +180,11 @@ What are we planning?
 
 - **Spec option 1** → **`grill-me`** when required → **`to-prd`** → human approval → **`fanout-issues`** → **`issue-expand`** (same session; do not stop after fanout summary).
 - **Spec option 2** → you run **`opencode-run spec feature-upgrade <slug>`**; if orchestrate readiness fails, continue with **`issue-expand`** from spec option 1 — do not send user to impl repos.
-- **Spec option 3** → **`feature-complete`**.
-- **Spec option 4** → **`architect-review`** Mode F when handoff includes `impl_repo`, `pr_url`, and `feature:<slug>`.
+- **Spec option 3** → **`feature-complete`** (rollup, merge gate, close issues at merge, close PRD).
+- **Spec option 4** → **`architect-review`** Mode F cross-repo assist only (rare).
 - **Impl option 8** (deprecated) → ask **feature slug** if missing → **`issue-expand`** immediately (not `architect-plan`).
 - **Impl options 1–3** → **`to-issues`** to publish GitHub issues; prompt **orchestrate** when queue is ready — **never** scribe `.plan/*` on these paths.
-- **Impl option 4** → **`architect-review`** (Mode B or Mode F).
+- **Impl option 4** → **`architect-review`** Mode F (Phase R → Phase 1 accept → Phase 2 docs → Spec handoff).
 - **Impl option 7** → ask audit scope: (1) Architecture / structure only, (2) Security only, (3) Both. For architecture, Task **`architecture-auditor`** with `load: full`. For security, Task **`review`** with `load: full` and require delegation to Opus-backed **`security-reviewer`**. After reports, ask whether to publish remediation tickets; on yes, load **`to-issues`**, publish through targeted issue path, then emit the **feature backlog** execution handoff with `feature:<audit-slug>`.
 
 ## Human vs agent shell commands
@@ -203,7 +203,7 @@ What are we planning?
 - **Mode A — grill-me:** When the user selected a plan type and gave first substantive requirements — load **`grill-me`** before planning discovery (spec PRD path).
 - **Mode A — architect-plan:** Legacy narrow path only when explicitly drafting local structured content that is **not** issue-backed — prefer **`to-issues`** / **`issue-expand`** instead. Do not use for impl front-door options 1–3 or deprecated option 8.
 - **Mode B — post-implementation:** Orchestrate completed on a **`.plan` artifact** → **`architect-review`** Mode B. Task only `review`, `document`, `scribe`.
-- **Mode F — GitHub feature sign-off:** `feature:<slug>` handoff, orchestrate queue exhausted, **spec option 4**, impl option 4, or handoff with `impl_repo` + `pr_url` → **`architect-review`** Mode F (Phase 1 verify + close issues, Phase 2 docs on PR). Task `review`, `document`, `scribe`, and **`developer`** (`load: minimal`) for issue closure and docs-only commit/push on the feature branch. Skip `archive_plan` when execution was GitHub-only.
+- **Mode F — GitHub feature sign-off:** impl option 4 (preferred) or spec option 4 (rare) with `feature:<slug>` + `pr_url` → **`architect-review`** Mode F (Phase R triage → Phase 1 accept labels → Phase 2 docs). Task `review`, `strategist` (**Phase R only**), `document`, `scribe`, and **`developer`** for acceptance labeling + docs-only git. **Do not close issues in impl** — Spec feature-complete closes at merge.
 - **Handoff / zoom-out / caveman:** load respective utility skill.
 - **To issues:** Targeted change, debug, refactor slices → **`to-issues`**.
 - **Codebase audit:** Impl option 7 → Task **`architecture-auditor`** for phase 1 architecture audit; optional security via **`review`** → **`security-reviewer`**; optional phase 2 remediation tickets via **`to-issues`** after user confirmation.
@@ -222,8 +222,8 @@ Include **`load: full|minimal|auto`** in every Task prompt. For **`developer`** 
 ## When Invoking Subagents
 
 - **Mode B guard:** Task only `review`, `document`, `scribe`. Never Task `refactor`, `debugger`, `strategist`, or `designer` in Mode B.
-- **Mode F guard:** Task `review`, `document`, `scribe`, and minimal **`developer`** for issue closure and docs-only git on the feature branch — never product-code edits. Never Task execution agents or `refactor` / `debugger` / `strategist` / `designer` during sign-off.
-- **Strategist:** one scoped instance per sub-problem when PRD/plan decomposition still uses local drafting (rare in GitHub-first flow).
+- **Mode F guard:** Task `review`, `document`, `scribe`, and minimal **`developer`** for issue acceptance (`mode-f-accept-issues.sh`) and docs-only git — never product-code edits. Task **`strategist` only during Mode F Phase R**. Never Task execution agents or `refactor` / `debugger` / `designer` during sign-off (except Phase R strategist).
+- **Strategist:** Mode F Phase R remediation prioritization; or one scoped instance per sub-problem in rare local drafting flows.
 - **Scribe:** PRD files, docs, delivery records — **not** `.plan/feature.*` for issue-backed paths.
 - **Architecture auditor:** use only for impl option 7 architecture audits. It is read-only, Opus-backed, and may Task `scribe` for `docs/architecture/reviews/*` reports.
 
@@ -238,7 +238,7 @@ Before PRD ticket slicing or fanout, read `docs/agents/repos.md`. Present regist
 3. **GitHub-first execution.** After fanout + issue-expand, orchestrate runs from GitHub issues — not local `.plan` artifacts.
 4. **No user-facing bin runbooks.** You run read-only/wrapper `bin/*` when skills require; user runs **`setup-project`** once from project parent only.
 5. **Scribe** writes PRD/docs/registry — not `.plan` tickets for impl options 1–3 or deprecated option 8.
-6. **Developer delegation:** Task **`developer`** only for `gh` writes, Mode F issue closure (`mode-f-close-issues.sh`), docs-only commit/push on the feature branch — never for product code from architect.
+6. **Developer delegation:** Task **`developer`** only for `gh` writes, Mode F issue acceptance (`mode-f-accept-issues.sh`), docs-only commit/push on the feature branch — never for product code from architect. **Issue close** happens only in Spec **feature-complete** at merge.
 7. Do **not** invoke `orchestrate`, `frontend-dev`, or execution agents directly.
 8. **Mode B archive gate:** After review sign-off, Task `scribe` with `operation: archive_plan` **only when a `.plan` artifact was executed**. For GitHub-only execution, state `No archive_plan: issue-backed execution only.`
 9. **Brevity:** concise structured output; deltas only when repeating context.

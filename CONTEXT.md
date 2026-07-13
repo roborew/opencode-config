@@ -33,8 +33,24 @@ One TDD slice within an issue's `stages[]` array; orchestrate dispatches `develo
 _Avoid_: Step, phase file
 
 **GitHub-as-source-of-truth**:
-Every planned unit of work exists as a GitHub issue before implementation; commits reference or close issues (`Refs:` / `Closes:`). No local `.plan/` work files in any repo.
+Every planned unit of work exists as a GitHub issue before implementation; commits reference issues (`Refs:`). Issues close at Spec merge via **feature-complete**. No local `.plan/` work files in any repo.
 _Avoid_: Plan file, local backlog
+
+**Phase R**:
+Impl architect Mode F step that triages post-PR feedback (hosted review comments, CI failures, incomplete tickets, user feedback) and publishes remediation sub-issues before acceptance.
+_Avoid_: Post-merge review only, spec sign-off
+
+**Remediation ticket**:
+A `remediation:` prefixed GitHub issue in an impl repo, linked as a PRD sub-issue, created during Phase R for orchestrate to execute.
+_Avoid_: Ad-hoc fix list, review sidecar only
+
+**Merge gate**:
+Spec feature-complete step where the user chooses manual PR merge or agent merge on their behalf, with protected-branch-safe head deletion.
+_Avoid_: Auto-merge, silent close
+
+**Close-at-merge**:
+Policy that impl repos only transition `state:*` labels; GitHub issue **close** happens in spec feature-complete when PRs merge.
+_Avoid_: Close on accept, progressive close in impl
 
 ## Relationships
 
@@ -42,7 +58,8 @@ _Avoid_: Plan file, local backlog
 - A **Targeted change** skips the PRD and creates issues directly in one **Implementation repo**
 - **Issue-expand** runs in an **Implementation repo** before orchestrate picks up the queue
 - **Orchestrate** runs **Stages** sequentially until the issue is ready-for-review
-- **Feature-complete** (spec repo) closes the spec parent issue after all impl repos finish
+- **Impl architect Mode F** runs Phase R → accept (`state:done`, open) → docs
+- **Feature-complete** (spec repo) closes child issues at merge, merges PRs, and closes the spec parent issue
 
 ## Example dialogue
 

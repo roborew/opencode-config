@@ -231,9 +231,8 @@ tmp/
 ### Implementation (per repo, dependency order)
 
 1. **`/new`** → **`orchestrate`** (impl repo) → paste **first message** from spec handoff (`feature:<slug>`).
-2. When orchestrate reports queue exhausted (+ PR URL): **new session** → **`architect`** in **spec** → **option 4** with `feature:<slug>`, `impl_repo`, `impl_repo_path`, and PR URL → **Mode F** sign-off.
-3. **Human:** review and **merge** the impl-repo PR on GitHub after Mode F Phase 2.
-4. When **every** impl repo for the feature is signed off: **`architect`** in **spec** → **option 3** (**feature-complete**).
+2. When orchestrate reports queue exhausted (+ PR URL): **new session** → **`architect`** in **the same impl repo** → **option 4** with `feature:<slug>` and PR URL → **Mode F Phase R** (remediation loop until Merge-ready → accept → docs).
+3. When **every** impl repo for the feature reports Mode F complete: **`architect`** in **spec** → **option 3** (**feature-complete**) — rollup, merge gate (human or agent), close issues, merge PRs, close PRD.
 
 **Legacy path:** architect **option 1** (targeted `.plan`) → orchestrate on artifact path → architect **option 4** Mode B (review + docs + `*.completed.md` archive).
 
@@ -243,8 +242,8 @@ tmp/
 |------|---------|-------|--------|
 | Plan + expand | A (spec) | **architect** | Option 1 — approve issue bodies; receive per-repo handoffs |
 | Execute backlog | **B (new, per impl)** | **orchestrate** | Open impl repo; `/new`; `feature:<slug>` |
-| Sign-off per impl repo | **C (new, spec)** | **architect** | Option 4 — paste orchestrate sign-off script with impl_repo + PR |
-| Close feature (multi-repo) | **D (spec)** | **architect** | Option 3 **feature-complete** after all impl repos |
+| Sign-off per impl repo | **C (new, impl)** | **architect** | Option 4 — Phase R → accept → docs |
+| Close feature (multi-repo) | **D (spec)** | **architect** | Option 3 **feature-complete** — merge gate + close |
 
 Optional same-session path: architect ends with a short table **HANDOFF** block → you run **`/compact`** → switch to orchestrate → kickoff with `feature:<slug>`. If MiniMax returns duplicate `tool_call` errors, use **`/new`** instead.
 
@@ -257,13 +256,13 @@ Optional same-session path: architect ends with a short table **HANDOFF** block 
 | `git commit` on current feature branch (`Refs:` / `Closes:` issue #) | Implementation subagents on **`expected_branch`** from checkout contract (orchestrate requires evidence in completion report) |
 | Issue labels `state:in-progress` → `state:ready-for-review` | **orchestrate** via **`developer`** + `issue-state-transition.sh` |
 | Final push + open ready-for-review PR after queue empty and CodeRabbit fixes are local | **orchestrate** via **`developer`** + `feature-finish-pr.sh` (skip with `ORCHESTRATE_AUTO_PR=0`) |
-| Code/PR review vs tickets + PRD; `state:done` + close issues | **architect** **Mode F Phase 1** (spec option 4) — not orchestrate |
-| Changelog + sign-off docs on feature PR | **architect** **Mode F Phase 2** (`document` → `scribe` → **developer** push) |
-| Remediation after failed sign-off | **architect** publishes fixes (**to-issues** or review plan) → **new orchestrate session** |
-| Merge PR on GitHub | **You** (human) — after Mode F Phase 2 |
-| Cross-repo rollup + close spec parent issue | **architect** + **feature-complete** in spec (human confirms parent close) |
+| Code/PR review vs tickets + PRD; `state:done` (issues stay open) | **impl architect** **Mode F Phase R + Phase 1** — not orchestrate |
+| Changelog + sign-off docs on feature PR | **impl architect** **Mode F Phase 2** (`document` → `scribe` → **developer** push) |
+| Remediation after PR feedback | **impl architect** Phase R publishes sub-issues → **new orchestrate session** |
+| Merge PR + close issues + close PRD | **spec feature-complete** — human or agent merge gate |
+| Cross-repo rollup | **architect** + **feature-complete** in spec |
 
-Orchestrate **does not** run final product sign-off, write changelog/docs for GitHub-only features, or close tickets as done — that is **architect** after you switch back.
+Orchestrate **does not** run final product sign-off, write changelog/docs for GitHub-only features, close tickets, or merge PRs — that is **impl architect Mode F** then **spec feature-complete**.
 
 ---
 

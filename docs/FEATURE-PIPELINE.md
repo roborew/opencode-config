@@ -10,15 +10,16 @@ Spec-driven path from PRD to orchestrate-ready GitHub issues. **Agents run `bin/
 | 2 | spec | **architect** (fanout-issues): creates child issues per repo (sub-issues + `prd-task` label + board) |
 | 3 | spec | **architect** (issue-expand, same session): codebase-backed plans per impl sibling, gates |
 | 4 | spec | User approves issue edits → **architect** emits per-repo execution handoff(s) |
-| 5 | impl | **orchestrate** (new session per repo) exhausts `feature:<slug>` queue → CodeRabbit → feature PR → sign-off handoff |
-| 6 | spec | **architect** option 4 Mode F sign-off (verify, close impl issues, docs on PR) |
-| 7 | spec | **feature-complete** after all impl repos signed off (closes PRD parent issue) |
+| 5 | impl | **orchestrate** (new session per repo) exhausts `feature:<slug>` queue → CodeRabbit → feature PR → impl architect handoff |
+| 6 | impl | **architect** option 4 Mode F: Phase R (PR feedback) → remediation loop → Phase 1 accept (`state:done`, open) → Phase 2 docs |
+| 7 | spec | **feature-complete**: rollup, merge gate, close child issues, merge PRs, close PRD parent |
 
 ### Session boundaries (recommended)
 
 - **Planning:** one **spec** architect session — grill-me → to-prd → fanout → issue-expand → gates → handoff(s).
 - **Execution:** **new** OpenCode session per impl repo → orchestrate with `feature:<slug>` (parallel OK when handoff says so).
-- **Review:** **new** session → **spec** architect option 4 (or impl option 4) with slug + impl PR URL from orchestrate.
+- **Review loop:** **new** session per impl repo → **impl** architect option 4 with slug + PR URL from orchestrate (Phase R until Merge-ready).
+- **Complete:** **spec** architect option 3 **feature-complete** after every impl repo reports Mode F done.
 
 Same-session handoff is optional (`/compact` after a short table HANDOFF block); use a new session if the provider errors on tool history.
 
@@ -27,21 +28,32 @@ Same-session handoff is optional (`/compact` after a short table HANDOFF block);
 | Label / state | Set by | Meaning |
 |---------------|--------|---------|
 | `state:in-progress` | orchestrate | Actively executing issue/stages |
-| `state:ready-for-review` | orchestrate (verifier PASS) | Implementation done; awaiting architect/human |
-| `state:done` | architect Mode F (Phase 1) | Accepted after review vs PRD/tickets |
-| Issue **closed** on GitHub | architect Mode F Phase 1 (via **developer** + `mode-f-close-issues.sh`) | Ticket complete |
+| `state:ready-for-review` | orchestrate (verifier PASS) | Implementation done; awaiting architect |
+| `state:done` | impl architect Mode F Phase 1 | Accepted; issue **stays open** until Spec merge |
+| Issue **closed** on GitHub | spec **feature-complete** at merge | Ticket complete |
 
-Orchestrate does **not** close issues as done or write sign-off docs. Per-issue commits happen locally during execution; do not push per issue. One **feature PR** is opened only after the queue is empty, the one-shot CodeRabbit CLI review has run, and CodeRabbit findings have been fixed locally (`feature-finish-pr.sh`). The final orchestrate response must be a concise table handoff: `impl_repo`, `impl_repo_path`, feature slug, PR URL, work completed, gates, CodeRabbit, key findings/risks, and exact **spec architect option 4** prompt.
+Orchestrate does **not** close issues or write sign-off docs. Per-issue commits happen locally during execution; do not push per issue. One **feature PR** is opened only after the queue is empty, the one-shot CodeRabbit CLI review has run, and CodeRabbit findings have been fixed locally (`feature-finish-pr.sh`). The final orchestrate response must point to **impl architect option 4 Phase R** with `impl_repo`, `impl_repo_path`, feature slug, PR URL, work completed, gates, CodeRabbit, and key findings/risks.
 
-#### Mode F — two-phase sign-off (GitHub-first, default)
+#### Mode F — three-phase sign-off (impl repo, default)
 
 | Phase | What happens |
 |-------|----------------|
-| **1 — Verification** | Collect issues + PR + PRD (`docs/prd/<slug>.md` in spec); **review** vs acceptance/tests; on Merge-ready → `state:done` + close issues in **impl** repo (orchestrate must not do this) |
-| **2 — Documentation** | Human chooses extra docs; **changelog required** (`docs/changelog/<date>-<slug>.md` in impl repo); optional guide/architecture; **scribe** writes; **developer** commits and pushes docs to the feature PR |
-| **Human** | Merge PR on GitHub after Phase 2 |
+| **R — PR feedback** | PR comments (CodeRabbit/Kilo/CI), incomplete tickets, user feedback → remediation sub-issues → orchestrate loop until Merge-ready |
+| **1 — Acceptance** | `review` vs PRD/tickets; on Merge-ready → `state:done` via `mode-f-accept-issues.sh` (**issues stay open**) |
+| **2 — Documentation** | Changelog required; optional guides; scribe + docs commit on feature PR → handoff to Spec |
 
-Skill detail: [skills/architect-review/SKILL.md](../skills/architect-review/SKILL.md). No `.plan` **`archive_plan`** unless a local plan was also executed.
+Skill detail: [skills/architect-review/SKILL.md](../skills/architect-review/SKILL.md).
+
+#### Feature complete — merge gate (spec repo)
+
+| Step | What happens |
+|------|----------------|
+| Rollup | All impl repos: issues `state:done` (open), PRs listed |
+| Merge gate | User chooses human merge or agent merge on their behalf |
+| Close + merge | Close child issues; merge PRs; delete head branches (never develop/main/master) |
+| PRD | Close parent + delivery record |
+
+Skill detail: [skills/feature-complete/SKILL.md](../skills/feature-complete/SKILL.md).
 
 #### Mode B — legacy `.plan`
 
@@ -49,14 +61,14 @@ After local plan execution: review → docs → **`archive_plan`** to `*.complet
 
 #### Remediation
 
-Review requests fixes → architect **to-issues** (GitHub path) or review sidecar → **orchestrate** again (prefer new session). Issues stay open until sign-off passes Phase 1.
+Phase R publishes remediation as PRD sub-issues in impl repo → **orchestrate** again (prefer new session). Issues stay open until Spec merge.
 
 ## Two execution modes
 
 | Mode | Where | Source of truth | Architect entry |
 |------|--------|-----------------|-----------------|
-| **Spec / GitHub** (default) | spec + impl repos | GitHub issues with `feature:<slug>` after fanout + issue-expand | Spec repo **option 1** (planning); impl **orchestrate** only |
-| **Legacy local plan** | single impl repo | `.plan/feature.<slug>.md` | Impl repo **option 1** (targeted change) |
+| **Spec / GitHub** (default) | spec + impl repos | GitHub issues with `feature:<slug>` after fanout + issue-expand | Spec option 1 (planning); impl orchestrate + impl option 4 |
+| **Legacy local plan** | single impl repo | `.plan/feature.<slug>.md` | Impl repo option 1 (targeted change) |
 
 Fanout alone is not enough for the stage loop — **issue-expand** is mandatory before orchestrate on the spec path. Orchestrate runs **orchestrate-readiness-check** at bootstrap and blocks if expansion is incomplete.
 
@@ -80,7 +92,8 @@ cd ~/code/APP && setup-project
 | Requirements | spec | User stories, product acceptance, repo tickets, blockers |
 | Technical planning | spec (issue-expand) | Context, stages, tests, `opencode-task-json` on GitHub issues |
 | Execution | impl | orchestrate stage loop, PR |
-| Sign-off | spec (Mode F) | Review vs PRD, close issues, docs on impl feature branch |
+| Review / accept / docs | impl (Mode F) | Phase R, `state:done` labels, docs on feature branch |
+| Merge / close | spec (feature-complete) | Merge gate, close issues, close PRD |
 
 ## Canonical issue body
 
@@ -108,3 +121,4 @@ Central in `OPENCODE_CONFIG_DIR` — invoke via **`opencode-run`** (never copied
 - [RUNBOOK.md](RUNBOOK.md)
 - [skills/issue-expand/SKILL.md](../skills/issue-expand/SKILL.md)
 - [skills/setup-project/SKILL.md](../skills/setup-project/SKILL.md)
+- [adr/0006-close-at-merge-and-phase-r.md](adr/0006-close-at-merge-and-phase-r.md)
