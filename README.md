@@ -40,6 +40,34 @@ Restart OpenCode after the first edit. Per-repo files (`opencode.md`, `CONTEXT.m
 
 ---
 
+## Claude Context indexing (host vs Docker server)
+
+`claude-context` speeds semantic discovery; OpenCode still works if it is off (agents fall back to bash/glob with `MCP_FALLBACK`).
+
+**Control:** `mcp.claude-context.enabled` in [`opencode.json`](opencode.json).
+
+| How you run OpenCode | Set host `enabled` to | Indexing backend |
+|----------------------|----------------------|------------------|
+| **Local only** — Desktop or CLI using this checkout as `OPENCODE_CONFIG_DIR`, no remote server | `true` | Host MCP (`npx` / local binary). Turn on when you want indexing. |
+| **Docker server** — Desktop/CLI attached to the [utilities OpenCode stack](https://github.com/roborew/opencode) (`opencode.home.internal:4097` / `127.0.0.1:4097`) | `false` | Container MCP + Milvus (server override forces `enabled: true` inside the image). |
+
+**Why the split:** With Desktop on Docker *and* host `enabled: true`, OpenCode can spawn many host `claude-context-mcp` processes (multi‑GB RAM) while the server already indexes via Milvus. Keep **one** side on.
+
+```json
+"claude-context": {
+  "type": "local",
+  "enabled": false,
+  "command": ["npx", "-y", "@zilliz/claude-context-mcp@latest"]
+}
+```
+
+- Docker / server mode (this repo’s usual pairing with the utilities stack): leave `"enabled": false` on the **host** checkout.
+- Local-only indexing: set `"enabled": true`, restart OpenCode Desktop/CLI.
+
+Agents already treat a missing MCP as optional — see [docs/RUNBOOK.md](docs/RUNBOOK.md#mcp-usage-policy).
+
+---
+
 ## Choose your setup path
 
 
@@ -273,6 +301,7 @@ Orchestrate **does not** run final product sign-off, write changelog/docs for Gi
 | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | Feature pipeline, two modes                                   | [docs/FEATURE-PIPELINE.md](docs/FEATURE-PIPELINE.md)                                                                     |
 | Pipeline, grading, MCP policy                                 | [docs/RUNBOOK.md](docs/RUNBOOK.md)                                                                                       |
+| Claude Context host vs Docker server                          | [Claude Context indexing](#claude-context-indexing-host-vs-docker-server)                                              |
 | Stack bootstrap skill                                         | [skills/setup-project/SKILL.md](skills/setup-project/SKILL.md)                                                           |
 | Per-repo bootstrap (orphan repo)                              | [skills/setup-skills/SKILL.md](skills/setup-skills/SKILL.md)                                                             |
 | Per-project context template                                  | [docs/templates/opencode.md.template](docs/templates/opencode.md.template)                                               |

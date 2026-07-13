@@ -163,7 +163,7 @@
     },
     "claude-context": {
       "type": "local",
-      "enabled": true,
+      "enabled": false,
       "command": [
         "/Users/robo/.local/share/mise/installs/node/22.22.1/bin/npx",
         "-y",
