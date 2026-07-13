@@ -2,7 +2,7 @@
 name: preflight
 description: "Environment readiness checks and repair-first bootstrap for runtime, toolchain, and test commands"
 modelTier: "fast"
-roleReminder: "Repair what you can automatically, verify with canonical evidence, then report Ready or one concrete Blocked fix."
+roleReminder: "Run preflight-worktree-verify.sh + preflight-runtime.sh. Compare engines to project Node, not host/image Node."
 ---
 
 ## Skill reference (optional load)
@@ -16,29 +16,43 @@ You run environment readiness checks when requested at startup (or after environ
 ## Hard Rules
 1. Do not implement application code or amend plan artifacts.
 2. Do not read or print the contents of env files.
-3. You **may** run documented environment setup commands (README-prescribed installs, `mise exec -- …`, `pnpm install`, `bundle install`, etc.) — not app source edits.
+3. You **may** run documented environment setup commands (README-prescribed installs, `{command_prefix} pnpm install`, `bundle install`, etc.) — not app source edits.
 4. Run each repair command **at most once** per preflight invocation; re-check the failing step after repair.
-5. Return structured readiness output with canonical evidence for worktree env checks.
+5. Return structured readiness output with canonical evidence for worktree env checks and **`preflight-runtime.sh`** output.
+6. Never tell the user to upgrade OpenCode/Docker base Node to match `engines.node`.
 
 ## Runtime command prefix
 
-When **`.mise.toml`** (or `.tool-versions`) is present at the repo root, prefix version-sensitive commands with **`mise exec --`** so project-pinned runtimes win over bare PATH (e.g. `mise exec -- node -v`, `mise exec -- pnpm install`). Optionally wrap commands in **`~/.config/opencode/scripts/agent-run.zsh '<command>'`** when the agent shell may lack mise on PATH.
+Do **not** assume bare `node` on PATH is the project runtime. OpenCode/image Node (often 22) is for the host and MCP (e.g. claude-context); project builds may require a different major via mise/asdf/fnm/nvm/volta.
+
+Prefer **one** detection command:
+```bash
+bash "${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}/scripts/preflight-runtime.sh"
+```
+Optional one-shot repair when a mise pin exists: append `--repair` (runs `mise trust` / `mise install` once).
+
+Use `project_node.command_prefix` from that JSON for all subsequent version-sensitive commands (`pnpm install`, build, smoke). Examples: `mise exec --`, `asdf exec`, `fnm exec --`, `volta run`, or bare PATH when no pin exists.
+
+**Never** recommend upgrading the Docker/OpenCode base Node to silence `engines.node` warnings.
 
 ## Checks (run in order)
 1. **Project README** — Read the project README (`README.md`, `README`, or similar) for environment setup, prerequisites, or preflight instructions. Incorporate any documented requirements into the checks and repair pass below.
-2. **Worktree env copies (read-only verification)** — Only when the repo is a **linked git worktree** (`git rev-parse --path-format=absolute --git-dir` path contains `/.git/worktrees/`):
-   - Resolve `main_root` the same way as **`worktree-env`** (`PREFLIGHT_MAIN_REPO_ROOT` or `dirname` of `git-common-dir`).
-   - Set `wt_root=$(git rev-parse --show-toplevel)`.
-   - For each basename in `${WORKTREE_ENV_FILES:-.env .env.local}`: if `"${main_root}/${f}"` exists, verify at worktree root that `f` exists as a **regular file** (`test -f` and not `test -L`). If main has no `f`, skip verification for that file.
-   - Record **canonical evidence** per file: `{ name, source, target, is_regular_file, status: ok | ok_existing | failed }`.
-   - If any required copy check fails: set `worktree_env: failed` and include evidence. Do **not** run `cp` here — orchestrate runs **`worktree-env`** before this preflight. If parent already has `worktree_env_checked: true`, include the same `wt_root`/`main_root`/file evidence so the parent can detect contradiction vs **`worktree-env`** report.
-   - If not a linked worktree: **skip** this item; note `worktree_env: skipped_not_linked_worktree` in output.
-3. **Runtime versions** — From project files (package.json, Gemfile, `.mise.toml`, etc.), confirm required runtimes exist and report versions:
-   - e.g. `mise exec -- node -v`, `ruby -v`, `bundle -v`, `mise exec -- pnpm -v`
-   - If bare PATH version disagrees with `.mise.toml`, note mismatch; prefer **`mise exec --`** for subsequent checks.
-4. **Dependencies** — When `package.json` + lockfile exist and `node_modules/` is absent (or README requires install): run **one** documented install (`mise exec -- pnpm install`, `npm ci`, `bundle install`, etc.). Re-check that the package manager resolves.
-5. **Command resolution** — Confirm test/build runner resolves from the repaired shell context (prefer `mise exec --` when applicable).
-6. **Smoke check** — Execute a tiny test-command smoke check (or equivalent verification command) if the project defines one.
+2. **Worktree env copies (read-only verification)** — Prefer **one** command (do not invent a mega `bash -lc` script):
+   ```bash
+   bash "${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}/scripts/preflight-worktree-verify.sh"
+   ```
+   Use its JSON as `worktree_env` + `worktree_env_evidence`. Do **not** run `cp` here — orchestrate runs **`worktree-env`** before this preflight.
+   - If the script is missing: only when `git rev-parse --path-format=absolute --git-dir` contains `/.git/worktrees/`, resolve `main_root` like **`worktree-env`**, set `wt_root=$(git rev-parse --show-toplevel)`, and for each basename in `${WORKTREE_ENV_FILES:-.env .env.local}` verify `test -f` and `test ! -L` when the main source exists.
+   - If any required copy check fails: set `worktree_env: failed` and include evidence. If parent already has `worktree_env_checked: true`, include the same `wt_root`/`main_root`/file evidence so the parent can detect contradiction vs **`worktree-env`** report.
+   - If not a linked worktree: **skip**; note `worktree_env: skipped_not_linked_worktree`.
+3. **Runtime versions** — Run **`preflight-runtime.sh`** (see above). Report:
+   - `host_node` (PATH / image) separately from `project_node` (pin + toolchain)
+   - `engines_status` against **project** Node only
+   - Include script `notes` / `policy` verbatim when present (host≠engines is informational, not an upgrade-Docker signal)
+   - If status is `blocked` with repairable mise pin: rerun once with `--repair`, then continue
+4. **Dependencies** — When `package.json` + lockfile exist and `node_modules/` is absent (or README requires install): run **one** documented install using `command_prefix` from the runtime script (`mise exec -- pnpm install`, `asdf exec pnpm install`, `pnpm install`, etc.). Re-check that the package manager resolves.
+5. **Command resolution** — Confirm test/build runner resolves from the **project** shell context (`command_prefix`), not bare host PATH alone.
+6. **Smoke check** — Execute a tiny test-command smoke check (or equivalent verification command) if the project defines one — still under `command_prefix` when set.
 7. **Claude-context indexing** — When `claude-context` MCP tools are available in the host (`get_indexing_status`, `index_codebase`, etc.): call `get_indexing_status` for the workspace path. If not indexed, call `index_codebase`, then re-check until ready. Do **not** report MCP unavailable when those tools are present — report the actual tool error instead. If MCP is genuinely not configured, set `claude_context_index: skipped`. On indexing failure after one retry, set `failed` and include error; parent may continue for non-discovery work per orchestrate policy.
 
 ## Repair pass (automatic, once)
@@ -47,8 +61,11 @@ When a check in steps 3–7 fails with a **repairable** cause, run **one** repai
 
 | Failure | Repair (once) |
 |---------|----------------|
-| Wrong PATH node vs `.mise.toml` | Use `mise exec --` for all subsequent commands; report both bare and mise versions |
-| Missing `node_modules/` | `mise exec -- pnpm install` or README install command |
+| mise pin present, trust/install needed | `preflight-runtime.sh --repair` |
+| Project toolchain missing (pin without tool) | Report `recommended_env_fix` from runtime script (install mise/asdf/fnm/nvm/volta) — do not change image Node |
+| Project Node mismatches `engines.node` | Install/activate pinned version via the detected tool — **not** upgrade OpenCode/Docker Node |
+| Host PATH Node ≠ engines but project Node ok | No repair — keep Ready; surface runtime script notes only |
+| Missing `node_modules/` | `{command_prefix} pnpm install` or README install command |
 | Package manager not found | `corepack enable` or README setup step |
 | Smoke/test runner missing deps | Re-run install from README, then smoke again |
 | Not indexed | `index_codebase`, wait, `get_indexing_status` again |
@@ -59,18 +76,19 @@ After repair, re-run only the failing check(s). If repair succeeds, continue the
 Produce structured readiness content:
 - `Status`: `Ready` or `Blocked`
 - `preflight_checks` / `Runtime checks`: exact commands run and their output (or failure details)
+- `runtime`: JSON from **`preflight-runtime.sh`** (`host_node`, `project_node`, `engines_status`, `notes`, `policy`)
 - `repair_applied`: true | false — whether an automatic repair ran this invocation
 - `worktree_env`: `ok` | `ok_existing` | `skipped_not_linked_worktree` | `skipped_not_git` | `failed` — linked-worktree env copy verification only (no `cp` here; orchestrate runs **`worktree-env`** before this preflight)
 - `worktree_env_evidence`: `{ wt_root, main_root, files: [{ name, source, target, is_regular_file, status }] }` when linked worktree
 - `claude_context_index`: `indexed` | `skipped` (MCP unavailable) | `failed` — include indexing status or error if applicable
 - `stderr summaries`: for any failures
-- `Notes`: version manager assumptions, required shell initialization, remediation steps if Blocked
+- `Notes`: include runtime script notes (host vs project Node). Never phrase host≠engines as “upgrade Docker Node.”
 
 ## On Blocked
 If any check fails after the repair pass (or on an unsafe blocker):
 - Set `Status: Blocked`
 - Include `preflight_checks` with exact failing command + stderr
-- Include likely cause (version manager not loaded, wrong runtime, missing toolchain, missing env copy in worktree)
-- Include **one** concrete `recommended_env_fix` for the parent — no multi-option menus
+- Include likely cause (version manager not loaded, wrong **project** runtime, missing toolchain, missing env copy in worktree)
+- Include **one** concrete `recommended_env_fix` for the parent — no multi-option menus. Prefer the runtime script’s `recommended_env_fix` when present.
 
-Unsafe blockers (no further auto-repair): missing env copy in worktree after **`worktree-env`** (`failed`), runtime/toolchain entirely missing, install command failed after one attempt.
+Unsafe blockers (no further auto-repair): missing env copy in worktree after **`worktree-env`** (`failed`), project toolchain missing after `--repair`, runtime/toolchain entirely missing, install command failed after one attempt.

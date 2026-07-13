@@ -101,6 +101,33 @@ if [[ ! -f skills/github-issue-run/lib/checkout-contract.sh ]]; then
   ERR=1
 fi
 
+echo "Checking worktree-env / preflight bootstrap scripts..."
+for f in scripts/worktree-env.sh scripts/preflight-worktree-verify.sh scripts/preflight-runtime.sh; do
+  if [[ ! -f "$f" ]]; then
+    echo "  MISSING: $f"
+    ERR=1
+  elif [[ ! -x "$f" ]]; then
+    echo "  NOT EXECUTABLE: $f"
+    ERR=1
+  fi
+done
+if ! grep -q 'scripts/worktree-env.sh' agents/worktree-env.md skills/worktree-env/SKILL.md 2>/dev/null; then
+  echo "  MISSING: worktree-env.sh reference in worktree-env agent/skill"
+  ERR=1
+fi
+if ! grep -q 'scripts/preflight-worktree-verify.sh' agents/preflight.md skills/preflight/SKILL.md 2>/dev/null; then
+  echo "  MISSING: preflight-worktree-verify.sh reference in preflight agent/skill"
+  ERR=1
+fi
+if ! grep -q 'scripts/preflight-runtime.sh' agents/preflight.md skills/preflight/SKILL.md 2>/dev/null; then
+  echo "  MISSING: preflight-runtime.sh reference in preflight agent/skill"
+  ERR=1
+fi
+if ! grep -q 'do not recommend upgrading the Docker/base Node' scripts/preflight-runtime.sh 2>/dev/null; then
+  echo "  MISSING: Docker/image Node policy note in preflight-runtime.sh"
+  ERR=1
+fi
+
 if [[ $ERR -ne 0 ]]; then
   echo "validate-opencode-config: FAILED"
   exit 1

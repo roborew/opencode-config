@@ -283,6 +283,8 @@ Orchestrate **does not** run final product sign-off, write changelog/docs for Gi
 | Project automation (fanout, issue-expand, feature-check) | `opencode-run` — see [bin/opencode-run](bin/opencode-run) |
 | Stack cleanup (remove legacy copied bin/) | `opencode-assess-stack` |
 | Git / SQL guardrails (scripts)                                | [scripts/block-dangerous-git.sh](scripts/block-dangerous-git.sh), [scripts/preflight-git.sh](scripts/preflight-git.sh) |
+| Worktree env copy / verify (scripts)                          | [scripts/worktree-env.sh](scripts/worktree-env.sh), [scripts/preflight-worktree-verify.sh](scripts/preflight-worktree-verify.sh) |
+| Project vs host Node (preflight)                              | [scripts/preflight-runtime.sh](scripts/preflight-runtime.sh) |
 
 
 ---

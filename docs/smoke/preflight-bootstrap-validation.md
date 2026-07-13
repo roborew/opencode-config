@@ -84,7 +84,17 @@ ln -sf /path/to/main-checkout/.env .env
 
 ## Canonical verification commands (operator)
 
-Use these to validate ground truth without re-running full agents:
+Prefer the scripts (same JSON agents return):
+
+```bash
+bash ~/.config/opencode/scripts/worktree-env.sh              # copy + report (linked worktree only)
+bash ~/.config/opencode/scripts/preflight-worktree-verify.sh # read-only verify
+bash ~/.config/opencode/scripts/preflight-runtime.sh         # host vs project Node + engines
+```
+
+**Runtime policy:** Compare `engines.node` to **project** Node (`mise` / `asdf` / `fnm` / `nvm` / `volta` / pin files). Host/PATH Node may be OpenCode image Node 22 for MCP — do **not** treat that as “upgrade Docker to Node 24.”
+
+Or validate ground truth without agents:
 
 ```bash
 wt_root="$(git rev-parse --show-toplevel)"
@@ -95,7 +105,7 @@ for f in .env .env.local; do
   echo "=== $f ==="
   test -f "$wt_root/$f" && test ! -L "$wt_root/$f" && echo "regular file: yes" || echo "regular file: NO"
 done
-mise exec -- node -v 2>/dev/null || node -v
+bash ~/.config/opencode/scripts/preflight-runtime.sh | jq '{host: .host_node.version, project: .project_node.version, via: .project_node.via, engines_status}'
 test -d node_modules && echo "node_modules: present" || echo "node_modules: MISSING"
 ```
 
