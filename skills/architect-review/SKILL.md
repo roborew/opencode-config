@@ -19,7 +19,20 @@ Do not narrate the mode switch. Do not describe what you are about to do.
 | Ambiguous (both slug and `.plan` mentioned) | Ask once: sign-off from **GitHub issues** (`feature:<slug>`) or **local plan file**? |
 | New feature planning | Load **`architect-plan`** instead |
 
-**Preferred entry:** **impl repo** architect option 4 after orchestrate opens a PR. Spec **option 3 feature-complete** is the final ceremony after all impl repos finish Mode F.
+**Preferred entry:** **impl repo** architect **option 4** → **Mode F sub-menu** → **R** after orchestrate PR or remediation push. Spec **option 3 feature-complete** is the final ceremony after all impl repos finish Mode F.
+
+## Mode F sub-menu (impl architect option 4)
+
+Present when user picks option 4 or returns from orchestrate without an explicit phase. See **architect** agent for verbatim menu text.
+
+| Choice | Run |
+|--------|-----|
+| **R** | Phase R only (triage → remediate or Merge-ready) |
+| **1** | Phase 1 accept only |
+| **2** | Phase 2 docs only |
+| **A** | Auto-detect from pasted handoff |
+
+**Auto (A) defaults:** orchestrate-complete or remediation-return script → **R**; user says Merge-ready and accept → **1**; doc-scope table reply → **2**.
 
 For new feature planning or plan-type selection, load **`architect-plan`** instead of this skill.
 
@@ -68,9 +81,15 @@ Accept helper: $OC/skills/architect-review/lib/mode-f-accept-issues.sh (--repo O
 Parent issue: parse parent_issue URL from docs/prd/<slug>.md frontmatter (for remediation sub-issues)
 ```
 
-### Phase R — PR feedback triage (first after orchestrate PR)
+### Phase R — PR feedback triage (first after orchestrate PR, or re-check after remediation)
 
-Run when orchestrate handoff includes **`pr_url`** or user pastes remediation re-check after orchestrate push.
+Run when:
+
+- orchestrate handoff includes **`pr_url`** (first pass), or
+- user picks **Mode F sub-menu R**, or
+- user pastes **remediation-return** script after orchestrate re-push.
+
+**Re-check (return loop):** Same steps as first pass; emphasize delta since last Phase R (new PR comments, CI re-run, remediation issues now `state:ready-for-review`, user feedback). Do not skip to Phase 1 until verdict is **Merge-ready**.
 
 #### R1. Data collection (read-only)
 
@@ -151,6 +170,14 @@ Copy/paste into orchestrate:
 ```text
 feature:<slug>
 Remediation: address open feature:<slug> issues (remediation:* and any incomplete). PR: <pr_url>
+```
+
+**After orchestrate remediates and pushes**, emit this return paste for the user:
+
+```text
+Remediation complete for <Display Name> (`feature:<slug>`).
+PR: <pr_url>
+impl architect option 4 → R — re-check PR feedback, CI, tickets, and user input.
 ```
 ````
 

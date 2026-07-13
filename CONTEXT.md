@@ -37,7 +37,7 @@ Every planned unit of work exists as a GitHub issue before implementation; commi
 _Avoid_: Plan file, local backlog
 
 **Phase R**:
-Impl architect Mode F step that triages post-PR feedback (hosted review comments, CI failures, incomplete tickets, user feedback) and publishes remediation sub-issues before acceptance.
+Impl architect Mode F step that triages post-PR feedback (hosted review comments, CI failures, incomplete tickets, user feedback) and publishes remediation sub-issues before acceptance. Re-enter via **impl architect option 4 → R** after orchestrate remediation push.
 _Avoid_: Post-merge review only, spec sign-off
 
 **Remediation ticket**:

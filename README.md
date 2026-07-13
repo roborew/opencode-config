@@ -242,7 +242,7 @@ tmp/
 |------|---------|-------|--------|
 | Plan + expand | A (spec) | **architect** | Option 1 — approve issue bodies; receive per-repo handoffs |
 | Execute backlog | **B (new, per impl)** | **orchestrate** | Open impl repo; `/new`; `feature:<slug>` |
-| Sign-off per impl repo | **C (new, impl)** | **architect** | Option 4 — Phase R → accept → docs |
+| Sign-off per impl repo | **C (new, impl)** | **architect** | Option 4 → **R** (first pass) or **R** again (after remediation) |
 | Close feature (multi-repo) | **D (spec)** | **architect** | Option 3 **feature-complete** — merge gate + close |
 
 Optional same-session path: architect ends with a short table **HANDOFF** block → you run **`/compact`** → switch to orchestrate → kickoff with `feature:<slug>`. If MiniMax returns duplicate `tool_call` errors, use **`/new`** instead.

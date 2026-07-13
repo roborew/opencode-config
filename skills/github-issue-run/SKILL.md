@@ -106,7 +106,8 @@ Stdout is JSON: `{ branch, base, pr_url, pr_number, action, repo, message }`.
 | `skipped-protected-branch` | Current branch is `develop`/`main`/`master` — push/PR skipped; report `message` and manual next steps |
 
 3. Report `pr_url` (or skip reason) and feature **`### CodeRabbit`** completion fields to the user.
-4. Prompt: **Switch to `architect` in this impl repo for Mode F Phase R** (PR feedback triage → remediation loop or accept + docs).
+4. **First orchestration complete** (PR newly opened): prompt **impl architect option 4 → A** with first-complete paste (see `orchestrate-execution` Completion template).
+5. **Remediation session complete** (user message included `Remediation:`): prompt **impl architect option 4 → R** with remediation-return paste — re-check PR feedback before accept/docs.
 
 **Orchestrate must not** set `state:done`, close issues as accepted, or write `docs/changelog/*` — that is **impl architect Mode F** ([architect-review](../architect-review/SKILL.md), helper `architect-review/lib/mode-f-accept-issues.sh`). Spec **feature-complete** closes issues at merge.
 

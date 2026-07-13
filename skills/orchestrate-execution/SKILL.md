@@ -232,6 +232,8 @@ When discovery fails (queue exhausted):
 
 **Opt-out:** `ORCHESTRATE_AUTO_PR=0` or user instruction not to open a PR. **Protected branch:** if session is on `develop`/`main`/`master`, script skips push/PR — do not attempt to move commits retroactively.
 
+**Remediation session** (user first message includes `Remediation:` or architect remediation handoff): when queue empties, **skip CodeRabbit gate** (already ran on initial orchestration). Push to existing PR via `feature-finish-pr.sh` (`pr-exists` expected). Emit **remediation-return script** (not first-complete script) pointing to **impl architect option 4 → R**.
+
 **Prerequisite (enforced):** **Issue-expand readiness gate** — substantive **Implementation plan** and non-empty `stages[]` in **`opencode-task-json`**. Orchestrate does not run issue-expand.
 
 ## Stage Loop
@@ -409,14 +411,22 @@ When verifier passes for all stages, any required **CodeRabbit gate** has **`COD
 ### Next steps
 | Order | Who | Action | Exact prompt / input |
 |-------|-----|--------|----------------------|
-| 1 | User | Start a new **impl** `architect` session (option 4) in **this repo** for Phase R PR feedback | `feature:<slug> PR: <pr_url>` |
-| 2 | architect | Run Mode F Phase R (PR comments, CI, remediation tickets); then Phase 1 accept + Phase 2 docs when Merge-ready | Review the table above; paste back to orchestrate only if Phase R publishes remediation |
+| 1 | User | Start a new **impl** `architect` session → **option 4** → **R** (or **A** with paste below) | See copy/paste scripts |
+| 2 | architect | **Phase R** first pass: PR comments, CI, remediation tickets; Phase 1+2 only when Merge-ready | Paste back to orchestrate only if Phase R publishes remediation |
 
-### Copy/paste sign-off script
+### Copy/paste sign-off script (first orchestrate complete — PR just opened)
 ```text
 Orchestrate complete for <Display Name> (`feature:<slug>`).
 PR: <pr_url or skip reason>
-Please run impl architect option 4 Phase R for this PR. Triage CodeRabbit/Kilo/CI comments and incomplete tickets. If remediation needed, publish tickets and I will return to orchestrate; if Merge-ready, accept issues (state:done, stay open) and complete docs.
+impl architect option 4 → A
+Please run Mode F Phase R for this PR. Triage CodeRabbit/Kilo/CI comments and incomplete tickets. If remediation needed, publish tickets and I will return to orchestrate; if Merge-ready, accept issues (state:done, stay open) and complete docs.
+```
+
+### Copy/paste remediation-return script (after remediation queue + push — back to architect)
+```text
+Remediation complete for <Display Name> (`feature:<slug>`).
+PR: <pr_url>
+impl architect option 4 → R — re-check PR feedback, CI, tickets, and user input.
 ```
 ````
 

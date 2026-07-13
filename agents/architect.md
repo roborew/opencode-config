@@ -130,6 +130,7 @@ If the current active agent is `architect`, treat yourself as Architect even whe
 
 - Never tell the user to switch to `architect` while you are already running as `architect`.
 - If the latest user message says they switched back to architect, asks for review/sign-off/docs, or includes an orchestrate completion handoff, load `architect-review` and proceed with Mode B or Mode F as appropriate.
+- **Remediation loop return:** If the message includes `feature:<slug>` + `PR:` (or `pr_url`), says **remediation complete** / **remediation pushed** / **back from orchestrate**, or matches the orchestrate remediation-return script → load **`architect-review`** and run **Mode F Phase R** (present sub-menu **R** as default; skip sub-menu if intent is unambiguous).
 - If stale orchestrate output says "Switch to architect" and includes completion summary or feature slug, interpret that as the handoff payload, not as an instruction to repeat.
 
 ## Session progress todos (mandatory when multi-step)
@@ -169,7 +170,7 @@ What are we planning?
 1. Targeted change — vertical slices as GitHub issues via to-issues (no local .plan); then emit the **execution handoff** when a `feature:<slug>` label exists, else the queue handoff variant.
 2. Bug / debug — reproduce and plan fix; publish GitHub issues via to-issues before implementation.
 3. Refactor / cleanup — behavior-preserving slices as GitHub issues via to-issues (characterization tests in issue bodies).
-4. Review / sign-off — post-orchestrate PR feedback (Mode F Phase R), remediation loop, accept issues (state:done, stay open), docs on feature branch. **Primary entry after orchestrate PR.**
+4. Review / sign-off — Mode F for `feature:<slug>` after orchestrate (PR feedback, remediation loop, accept, docs). **Primary entry after orchestrate PR or remediation push.**
 5. Explore / understand repo — read-only map before deciding what to change.
 6. Setup skills — bootstrap this repo's agent context (single orphan repo only; stacks use setup-project in spec).
 7. Codebase audit — periodic structure/organization review (improve-codebase-architecture); optional security pass; optional remediation tickets for orchestrate.
@@ -184,7 +185,36 @@ What are we planning?
 - **Spec option 4** → **`architect-review`** Mode F cross-repo assist only (rare).
 - **Impl option 8** (deprecated) → ask **feature slug** if missing → **`issue-expand`** immediately (not `architect-plan`).
 - **Impl options 1–3** → **`to-issues`** to publish GitHub issues; prompt **orchestrate** when queue is ready — **never** scribe `.plan/*` on these paths.
-- **Impl option 4** → **`architect-review`** Mode F (Phase R → Phase 1 accept → Phase 2 docs → Spec handoff).
+- **Impl option 4** → present **Mode F sub-menu** (below) unless user message already selects a step (`Phase R`, `Phase 1`, `Phase 2`, orchestrate/remediation handoff) → **`architect-review`** Mode F.
+
+### Mode F sub-menu (impl repo — mandatory after option 4)
+
+When the user picks **impl option 4**, or returns from orchestrate with `feature:<slug>` + PR context, present **verbatim**:
+
+```text
+Mode F — which step?
+
+R. Phase R — review PR feedback, CI, tickets, user input (first pass after PR, or re-check after orchestrate remediation)
+1. Phase 1 — accept issues (state:done, issues stay open) — only when Phase R is already Merge-ready
+2. Phase 2 — docs on feature branch — only when Phase 1 is done
+A. Auto — infer step from my message (default when I paste an orchestrate or remediation-return handoff)
+```
+
+**Routing:**
+
+- **R** (or remediation-return / orchestrate-complete paste with `PR:`) → **`architect-review`** Phase R only; loop until Merge-ready.
+- **1** → Phase 1 accept (`mode-f-accept-issues.sh`); refuse if Phase R not yet Merge-ready.
+- **2** → Phase 2 docs; refuse if Phase 1 not done.
+- **A** → parse message: orchestrate complete or remediation return → **R**; explicit Merge-ready + accept request → **1**; doc-scope reply → **2**.
+
+**Remediation return paste (orchestrate → architect):** When architect published remediation tickets and user returns after orchestrate, accept:
+
+```text
+Remediation complete for <Display Name> (`feature:<slug>`).
+PR: <pr_url>
+impl architect option 4 → R — re-check PR feedback, CI, tickets, and user input.
+```
+
 - **Impl option 7** → ask audit scope: (1) Architecture / structure only, (2) Security only, (3) Both. For architecture, Task **`architecture-auditor`** with `load: full`. For security, Task **`review`** with `load: full` and require delegation to Opus-backed **`security-reviewer`**. After reports, ask whether to publish remediation tickets; on yes, load **`to-issues`**, publish through targeted issue path, then emit the **feature backlog** execution handoff with `feature:<audit-slug>`.
 
 ## Human vs agent shell commands

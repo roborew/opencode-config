@@ -102,7 +102,7 @@ When no artifact path or feature slug is provided:
 
    ```text
    (1) Work from a GitHub `feature:<slug>` backlog in this repo? (primary — use for all new spec/targeted execution)
-   (2) Hand back to `architect` (impl option 4 Phase R / remediation re-check)?
+   (2) Hand back to `architect` for remediation loop? (impl option 4 → **R** — re-check PR / tickets / feedback after you pushed fixes)
    (3) Something else (debug, refactor, hotfix, doc review, etc.) — describe the task; usually switch to `architect` unless they give a `feature:<slug>`, issue #, or narrow execution scope
    (4) (legacy) Run a local `.plan` artifact? (glob `.plan/*.md`, exclude `*.completed.md`; prefer (1) for new work)
    ```

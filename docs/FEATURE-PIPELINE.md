@@ -18,7 +18,7 @@ Spec-driven path from PRD to orchestrate-ready GitHub issues. **Agents run `bin/
 
 - **Planning:** one **spec** architect session — grill-me → to-prd → fanout → issue-expand → gates → handoff(s).
 - **Execution:** **new** OpenCode session per impl repo → orchestrate with `feature:<slug>` (parallel OK when handoff says so).
-- **Review loop:** **new** session per impl repo → **impl** architect option 4 with slug + PR URL from orchestrate (Phase R until Merge-ready).
+- **Review loop:** **new** session per impl repo → **impl architect option 4** → **R** (or **A** with handoff paste) until Merge-ready + docs.
 - **Complete:** **spec** architect option 3 **feature-complete** after every impl repo reports Mode F done.
 
 Same-session handoff is optional (`/compact` after a short table HANDOFF block); use a new session if the provider errors on tool history.
