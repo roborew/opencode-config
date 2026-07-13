@@ -52,6 +52,10 @@ _Avoid_: Auto-merge, silent close
 Policy that impl repos only transition `state:*` labels; GitHub issue **close** happens in spec feature-complete when PRs merge.
 _Avoid_: Close on accept, progressive close in impl
 
+**Claude Context (indexing)**:
+Optional semantic code index via `mcp.claude-context` in `opencode.json`. Speeds discovery; OpenCode works without it (`MCP_FALLBACK`). **Host vs Docker:** `enabled: true` only for local-only Desktop/CLI; keep `enabled: false` on the host when attached to the Docker OpenCode server (container + Milvus indexes instead). Never enable both.
+_Avoid_: Running host and server `claude-context` together
+
 ## Relationships
 
 - A **Spec feature** lives in the **Spec repo** as a PRD and produces **Fanout** child issues in one or more **Implementation repos**
