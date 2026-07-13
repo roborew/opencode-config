@@ -167,7 +167,8 @@ Provider-level `timeout` (e.g. 300000ms) and per-model **`temperature` / `top_p`
 | Orchestration | `orchestrate` | DeepSeek V4 Flash |
 | Primary implementation | `developer`, `frontend-dev`, `build` | MiniMax M3 |
 | Design / prototypes | `designer`, `ux-dev` | Gemini 3 Flash |
-| Senior / security depth | `senior-dev`, `security-reviewer` | DeepSeek V4 Pro |
+| Senior depth | `senior-dev` | GPT-5.6 Terra |
+| Security depth | `security-reviewer` | Claude Opus 4.8 |
 | Fast utility | `debugger`, `helper`, `refactor`, `verifier`, `review`, `performance-reviewer` | DeepSeek V4 Flash |
 | Teaching | `mentor` | Qwen3.7 Max |
 | Vision | `vision` | Qwen3 VL |
