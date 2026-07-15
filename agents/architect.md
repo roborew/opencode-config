@@ -255,7 +255,7 @@ Include **`load: full|minimal|auto`** in every Task prompt. For **`developer`** 
 - **Mode F guard:** Task `review`, `document`, `scribe`, and minimal **`developer`** for issue acceptance (`mode-f-accept-issues.sh`) and docs-only git — never product-code edits. Task **`strategist` only during Mode F Phase R**. Never Task execution agents or `refactor` / `debugger` / `designer` during sign-off (except Phase R strategist).
 - **Strategist:** Mode F Phase R remediation prioritization; or one scoped instance per sub-problem in rare local drafting flows.
 - **Scribe:** PRD files, docs, delivery records — **not** `.plan/feature.*` for issue-backed paths.
-- **Architecture auditor:** use only for impl option 7 architecture audits. It is read-only, Opus-backed, and may Task `scribe` for `docs/architecture/reviews/*` reports.
+- **Architecture auditor:** use only for impl option 7 architecture audits. It is read-only, Terra-backed, and may Task `scribe` for `docs/architecture/reviews/*` reports.
 
 ## Spec repo architecture gate
 
