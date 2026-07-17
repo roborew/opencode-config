@@ -57,6 +57,28 @@ Publish in **dependency order** (blockers first) so "Blocked by" can cite real i
 - Do **not** call raw `gh issue create`; architect permissions deny it to preserve PRD/fanout guardrails.
 - Use `opencode-run spec fanout` for PRD child issues and `opencode-run spec publish-prd-issue` for PRD parent issues.
 
+**Mode F Phase R remediation (impl architect):**
+
+When publishing PR feedback remediations from **architect-review** Phase R:
+
+- Create issues in the **impl** repo (`--repo owner/name`).
+- Link as **sub-issues** of the Spec PRD parent: `--parent-issue <url from docs/prd/<slug>.md frontmatter>`.
+- Title prefix: `remediation: <short title>`.
+- Labels: `feature:<slug>`, `prd-task`, `state:ready-for-agent`, `category:chore` (or appropriate category).
+- `task_id`: `remediation-<slug>-<n>` in issue body yaml.
+- After publish, emit orchestrate remediation handoff (see **architect-review** Phase R6).
+
+```bash
+bin/publish-targeted-issue \
+  --repo <impl_owner/name> \
+  --title "remediation: <title>" \
+  --feature-slug "<slug>" \
+  --parent-issue "<prd_parent_issue_url>" \
+  --label "state:ready-for-agent" \
+  --label "prd-task" \
+  --body-file -
+```
+
 **Duplicate guard (handled by `bin/publish-targeted-issue`, still required conceptually):**
 
 - List existing issues for the feature slug: `gh issue list --repo <owner/name> --state all --label "feature:<slug>" --limit 200 --json number,title,body` (caps at 200 per `gh issue list`; for exhaustive duplicate checks on very large features, use `gh api repos/<owner>/<name>/issues --paginate` with the same label filter instead)

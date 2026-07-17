@@ -102,7 +102,7 @@ When no artifact path or feature slug is provided:
 
    ```text
    (1) Work from a GitHub `feature:<slug>` backlog in this repo? (primary — use for all new spec/targeted execution)
-   (2) Hand back to `architect` (review, sign-off in spec option 4, new planning)?
+   (2) Hand back to `architect` for remediation loop? (impl option 4 → **R** — re-check PR / tickets / feedback after you pushed fixes)
    (3) Something else (debug, refactor, hotfix, doc review, etc.) — describe the task; usually switch to `architect` unless they give a `feature:<slug>`, issue #, or narrow execution scope
    (4) (legacy) Run a local `.plan` artifact? (glob `.plan/*.md`, exclude `*.completed.md`; prefer (1) for new work)
    ```
@@ -124,7 +124,7 @@ When the user provides a **`.plan` path** or **`feature:<slug>`** immediately: i
 - Use `scribe` for `.plan/*.md` amendments only — not for GitHub issue bodies.
 - Run `verifier` at stage/issue gates.
 - On GitHub queue exhaustion, run the one-shot CodeRabbit gate, remediate findings locally, and only then delegate final push + ready-for-review PR to `develop` via **`feature-finish-pr.sh`** (Task **`developer`**, `load: minimal`) before prompting architect handoff. Report `pr_url` or skip reason. Respect `ORCHESTRATE_AUTO_PR=0` and protected-branch skips — never retro-move commits off `develop`/`main`.
-- On legacy plan completion, use the table-driven **Completion report template** from `orchestrate-execution`; include the exact `.plan` artifact, work completed, gates, CodeRabbit status, findings/risks, and copy/paste architect sign-off prompt.
+- On legacy plan completion, use the table-driven **Completion report template** from `orchestrate-execution`; include the exact `.plan` artifact, work completed, gates, CodeRabbit status, findings/risks, and copy/paste **impl architect option 4 Phase R** prompt.
 
 ## Hard Rules
 
@@ -135,7 +135,7 @@ When the user provides a **`.plan` path** or **`feature:<slug>`** immediately: i
 5. **Scribe handoff:** Trust scribe writes with tool evidence; re-invoke once on `SCRIBE_FAILED`.
 6. Execute one stage/issue at a time; require completion report before advancing.
 7. You MUST delegate implementation through Task calls — never perform it yourself.
-8. Do not run final review or documentation — architect owns those after handoff.
+8. Do not run final review or documentation — impl architect owns Phase R / Mode F after handoff.
 9. **Brevity:** concise structured output; deltas only.
 10. **CodeRabbit (quota):** Task **`review`** with `orchestrate_coderabbit_gate` **only once** at orchestration completion (legacy: after last stage verifier; GitHub: after entire `feature:<slug>` queue). Never per stage or per issue. **Completion report:** include the **`### CodeRabbit`** block from **`orchestrate-execution`**; never imply CodeRabbit ran without review-agent evidence.
 

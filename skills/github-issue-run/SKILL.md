@@ -106,9 +106,10 @@ Stdout is JSON: `{ branch, base, pr_url, pr_number, action, repo, message }`.
 | `skipped-protected-branch` | Current branch is `develop`/`main`/`master` — push/PR skipped; report `message` and manual next steps |
 
 3. Report `pr_url` (or skip reason) and feature **`### CodeRabbit`** completion fields to the user.
-4. Prompt: **Switch to `architect` for feature sign-off** (Mode F two-phase: verify + close issues, then docs on PR).
+4. **First orchestration complete** (PR newly opened): prompt **impl architect option 4 → A** with first-complete paste (see `orchestrate-execution` Completion template).
+5. **Remediation session complete** (user message included `Remediation:`): prompt **impl architect option 4 → R** with remediation-return paste — re-check PR feedback before accept/docs.
 
-**Orchestrate must not** set `state:done`, close issues as accepted, or write `docs/changelog/*` — that is **architect Mode F** ([architect-review](../architect-review/SKILL.md), helper `architect-review/lib/mode-f-close-issues.sh`).
+**Orchestrate must not** set `state:done`, close issues as accepted, or write `docs/changelog/*` — that is **impl architect Mode F** ([architect-review](../architect-review/SKILL.md), helper `architect-review/lib/mode-f-accept-issues.sh`). Spec **feature-complete** closes issues at merge.
 
 **Opt-out:** Set `ORCHESTRATE_AUTO_PR=0` in the environment, or tell orchestrate not to open a PR for this run.
 

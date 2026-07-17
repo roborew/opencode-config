@@ -2,7 +2,7 @@
 name: improve-codebase-architecture
 description: Periodic codebase architecture audit that finds shallow modules, weak seams, coupling leaks, and deepening opportunities. Use for structure/organization reviews, maintainability audits, testability audits, and optional remediation ticket preparation.
 modelTier: "smart"
-roleReminder: "Run as read-only audit. Prefer the Opus-backed architecture-auditor subagent. Produce an HTML report plus issue-ready candidate summaries; do not publish issues yourself."
+roleReminder: "Run as read-only audit. Prefer the Terra-backed architecture-auditor subagent. Produce an HTML report plus issue-ready candidate summaries; do not publish issues yourself."
 ---
 
 # Improve Codebase Architecture
@@ -15,7 +15,7 @@ Surface architectural friction and propose **deepening opportunities**: changes 
 - Use `CONTEXT.md`, `CONTEXT-MAP.md`, and `docs/adr/` as background vocabulary and constraints, not as an interview script.
 - Stop after producing the audit report and candidate summary. Parent `architect` decides whether to ask the user about remediation tickets.
 - Do not invoke `to-issues`, `to-prd`, `fanout-issues`, `issue-expand`, or implementation agents.
-- If the model is not `openrouter/anthropic/claude-opus-4.8` or an explicitly approved fallback, report `MODEL_UNAVAILABLE: openrouter/anthropic/claude-opus-4.8` to the parent before doing heavy synthesis.
+- If the model is not `openrouter/openai/gpt-5.6-terra` or an explicitly approved fallback, report `MODEL_UNAVAILABLE: openrouter/openai/gpt-5.6-terra` to the parent before doing heavy synthesis.
 
 ## Glossary
 

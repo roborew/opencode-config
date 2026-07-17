@@ -24,7 +24,8 @@ Manage GitHub issue **state:** labels for the current repo (or `TRIAGE_REPO=owne
 | `state:needs-info` | `state:ready-for-agent` | **Human replied** with answers |
 | `state:ready-for-agent` | `state:in-progress` | Agent/orchestrate picked up |
 | `state:in-progress` | `state:ready-for-review` | Implementation complete |
-| `state:ready-for-review` | `state:done` | Sign-off / merge |
+| `state:ready-for-review` | `state:done` | Impl architect Mode F Phase 1 accept (issue stays **open**) |
+| `state:done` (open) | issue **closed** | Spec **feature-complete** at merge only |
 | any | `state:blocked` | Dependency or env blocker |
 | any | `state:wontfix` | Explicit cancel |
 
@@ -32,7 +33,7 @@ Manage GitHub issue **state:** labels for the current repo (or `TRIAGE_REPO=owne
 
 - **Never** transition `state:needs-info` → `state:ready-for-agent` without explicit human reply in the thread.
 - Remove prior `state:*` label before adding a new one (use **`lib/triage.sh transition`**).
-- Do not close issues as part of triage unless the user explicitly requests close.
+- Do not close issues as part of triage unless the user explicitly requests close in a **feature-complete** or one-off cancel flow.
 
 ## CLI helpers (you or developer run)
 

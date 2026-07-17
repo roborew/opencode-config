@@ -1,7 +1,7 @@
 ---
 description: Escalation when developer is stuck. Invoked by orchestrate via Task when operator asks. Diagnose root cause, implement fix. Hand back to orchestrator when blocker fixed.
 mode: subagent
-model: openrouter/deepseek/deepseek-v4-pro
+model: openrouter/openai/gpt-5.6-terra
 steps: 40
 tools:
   write: true

@@ -115,8 +115,8 @@ OpenCode does not define an in-repo model allowlist beyond [`opencode.json`](../
 13. For final completion, run `verifier` per stage; run final verifier when all stages complete.
 14. **CodeRabbit gate** (once per orchestration, after final verifier / entire GitHub queue, before difficulty gates and architect): **medium/hard** — orchestrate Tasks **`review`** with `execution_mode: orchestrate_coderabbit_gate` and **`code-review`** skill on **all** changed files against `develop` by default; **never** per stage, per issue, or after remediation. BLOCKED → developer/frontend-dev fixes every non-deferred numbered finding → verifier confirms local fixes. **easy** — skip.
 15. **Difficulty completion gates** (after CodeRabbit PASS when applicable): **easy** — none. **medium** — orchestrate invokes **`review`** with artifact + completion summary (+ CodeRabbit findings). **hard** — orchestrate invokes **`senior-dev`** (scheduled review), then **`helper`** (strategy conformance). Remediation from these gates may update review artifact via scribe before handoff.
-16. When gates complete: orchestrate prints the mandatory table-based completion handoff: **Sign-off target**, **Work completed**, **Gates and checks**, **CodeRabbit**, **Key findings / risks**, **Next steps**, and **Copy/paste sign-off script**. The handoff must name the exact `feature:<slug>` or `.plan` artifact and PR/skip reason; architect still runs Mode B/Mode F review + docs (authoritative sign-off).
-17. Architect (post-implementation): invokes `review` for sign-off. If remediation: scribe writes review artifact → user switches to orchestrate → developer applies fixes → verifier. If sign-off: architect invokes `document` → scribe writes docs → scribe **archives** the primary implementation artifact to `.plan/<type>.<slug>.completed.md` via `operation: archive_plan` so future orchestrate sessions do not offer it as a runnable plan.
+16. When gates complete: orchestrate prints the mandatory table-based completion handoff pointing to **impl architect option 4 Phase R** (not spec close). The handoff must name the exact `feature:<slug>` or `.plan` artifact and PR/skip reason.
+17. **Impl architect** (post-PR): Mode F Phase R triages PR feedback; remediation loop with orchestrate; Phase 1 accepts issues (`state:done`, open); Phase 2 docs on feature branch. **Spec feature-complete** closes issues at merge, runs merge gate, closes PRD. Legacy `.plan`: architect Mode B review → docs → `archive_plan`.
 
 At each stage handoff, orchestrate grades child output:
 
@@ -167,7 +167,8 @@ Provider-level `timeout` (e.g. 300000ms) and per-model **`temperature` / `top_p`
 | Orchestration | `orchestrate` | DeepSeek V4 Flash |
 | Primary implementation | `developer`, `frontend-dev`, `build` | MiniMax M3 |
 | Design / prototypes | `designer`, `ux-dev` | Gemini 3 Flash |
-| Senior / security depth | `senior-dev`, `security-reviewer` | DeepSeek V4 Pro |
+| Senior depth | `senior-dev`, `architecture-auditor` | GPT-5.6 Terra |
+| Security depth | `security-reviewer` | Claude Opus 4.8 |
 | Fast utility | `debugger`, `helper`, `refactor`, `verifier`, `review`, `performance-reviewer` | DeepSeek V4 Flash |
 | Teaching | `mentor` | Qwen3.7 Max |
 | Vision | `vision` | Qwen3 VL |
@@ -196,6 +197,8 @@ Runtime authority: `opencode.json`. Agent frontmatter `model:` should match for 
 Primaries and execution agents should use MCP only when it reduces uncertainty:
 
 - **`claude-context`**: Semantic code search keyed by **absolute path** (not only the OpenCode workspace). Pass the absolute path of the repo under investigation to `get_indexing_status`, `index_codebase`, and `search_code`. From the **spec repo**, resolve sibling impl paths via `bin/project/spec/lib/resolve_impl_path.sh` (`../<repo-basename>` beside spec). Use during planning (architect, **strategist**, debugger, refactor, review, document, designer). Discovery-heavy agents must run a readiness gate first (`get_indexing_status` for the target path; if needed `index_codebase`) and may fall back to bash/glob (`rg`, `find` on the sibling path) only when MCP is unavailable or indexing still fails after retry, with `MCP_FALLBACK` recorded in output. `orchestrate` also runs a lightweight readiness check on fresh startup even when full preflight is skipped.
+
+  **Host vs Docker:** Toggle `mcp.claude-context.enabled` in `opencode.json`. Use **`true`** for local-only Desktop/CLI; use **`false`** on the host when Desktop attaches to the Docker OpenCode server (indexing then runs in the container against Milvus). Do not enable both — see [README — Claude Context indexing](../README.md#claude-context-indexing-host-vs-docker-server). Indexing is optional; OpenCode works without it.
 - **`context7`**: Up-to-date docs for 9000+ external libraries. Use when framework/library API behavior is uncertain. Limit to 3 calls per question.
 - **`docs-mcp-server`**: Internal docs, prototypes, linked repos, architecture notes.
 - **`dash-api`**: API/library contract lookup when behavior is unclear.
