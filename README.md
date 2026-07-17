@@ -1,8 +1,77 @@
 # OpenCode Agent Orchestration
 
-Stage-based **Architect → Orchestrate → subagents** pipeline with model routing in [`opencode.json`](opencode.json).
+Stage-based **Architect → Orchestrate** pipeline with model routing in [`opencode.json`](opencode.json).
 
 **Operational detail:** [docs/RUNBOOK.md](docs/RUNBOOK.md) · **Feature pipeline:** [docs/FEATURE-PIPELINE.md](docs/FEATURE-PIPELINE.md) · **Capability matrix:** [docs/architecture/opencode-capability-matrix.md](docs/architecture/opencode-capability-matrix.md)
+
+---
+
+## Feature flow (PRD → sign-off)
+
+Plan in **spec**. Build and sign off the work in each **work repo** (with a review ↔ build loop). Close the feature in **spec**.
+
+**Reminders**
+
+- Sign-off of the **work** (review, remediation, tickets to `state:done`, docs, PR merge-ready) = **architect in the work repo**.
+- Sign-off of the **feature across the stack** (merge + close) = **architect in spec** → **3. Feature complete**.
+- Spec closes tickets that are already `state:done`. Getting them to done and making the PR merge-ready is **work-repo** work — not spec.
+
+### How to use
+
+1. Open the repo for the current step (`*-spec` or a work repo such as `*-web` / `*-api`).
+2. Choose only **architect** or **orchestrate**.
+3. For **architect**, always start with **`hi`**, then pick the **menu line** you see.
+4. Approve when asked; paste handoffs into **orchestrate**; stay in the work-repo loop until you are happy before returning to spec.
+
+### Diagram
+
+```mermaid
+flowchart TB
+  subgraph specStart ["1. Spec — architect → hi → 1. Product feature / PRD"]
+    S1["Your job: approve PRD and issue plans"]
+    S2["Done when: you have handoffs for each work repo"]
+  end
+
+  subgraph workLoop ["2. Work repo — LOOP until you are happy"]
+    direction TB
+    W1["Select orchestrate\nPaste feature:slug\nDone when: feature PR exists"]
+    W2["Select architect → hi → 4. Review / sign-off\nChoose R. Phase R"]
+    W3{"Changes needed?"}
+    W4["Select orchestrate again\nDo the remediation work\nThen back to architect R"]
+    W5["Choose 1. Phase 1 — accept\nTickets → state:done stay open\nYour sign-off of the work"]
+    W6["Choose 2. Phase 2 — docs\nPR left merge-ready in this repo"]
+    W1 --> W2 --> W3
+    W3 -->|yes| W4 --> W2
+    W3 -->|no — happy| W5 --> W6
+  end
+
+  subgraph specEnd ["3. Spec — architect → hi → 3. Feature complete"]
+    E1["Only after every work repo finished Mode F"]
+    E2["Your job: choose merge gate"]
+    E3["Closes done tickets + merges PRs + closes PRD\nNo PR prep here"]
+  end
+
+  S1 --> S2 --> W1
+  W6 --> E1 --> E2 --> E3
+```
+
+```text
+SPEC (start)          WORK REPO (loop until happy)              SPEC (finish)
+architect / 1    →    orchestrate ⇄ architect / 4 (R→1→2)   →   architect / 3
+PRD + handoffs        build → review → (fix → review)*          merge + close
+```
+
+### Responsibility at each stage
+
+| Stage | Repo | Select | Your choice | Your job | This stage owns |
+|-------|------|--------|-------------|----------|-----------------|
+| Plan / PRD | **spec** | **architect** → `hi` | **1. Product feature / PRD — …** | Answer grill; **approve PRD**; **approve** issue plans | Planning + handoffs only — not code, not PR polish |
+| Build | **work repo** | **orchestrate** | Paste `feature:<slug>` / handoff | Wait for the feature PR | Implements the queue; opens/updates the feature PR |
+| Review / accept / docs | **same work repo** | **architect** → `hi` | **4. Review / sign-off — Mode F …** then **R** / **1** / **2** | Drive review; when happy: accept then docs | **All PR readiness and ticket acceptance** before spec |
+| Remediation loop | **same work repo** | **orchestrate** ↔ **architect** | After **R**, if changes needed: **orchestrate** → then **4** → **R** again | Stay until happy — **do not go to spec yet** | Work-repo loop only |
+| Final close | **spec** | **architect** → `hi` | **3. Feature complete — …** | After every work repo finished Mode F; choose merge gate | Merge PRs; **close** `state:done` tickets; close PRD. No PR prep |
+
+Detail (labels, gates, Mode F phases): [docs/FEATURE-PIPELINE.md](docs/FEATURE-PIPELINE.md). If the stack is not bootstrapped yet, continue with [Prerequisites](#prerequisites) below.
 
 ---
 
@@ -252,45 +321,20 @@ tmp/
 
 ## Daily use
 
-### Product (spec repo)
+See **[Feature flow (PRD → sign-off)](#feature-flow-prd--sign-off)** for the full map (including the work-repo review ↔ orchestrate loop). Short session cheat-sheet:
 
-`grill-me` → `to-prd` → human approves PRD → fanout → **issue-expand** (all impl siblings) → gates → execution handoff(s) per impl repo
+| Step | Repo | Select | You do |
+|------|------|--------|--------|
+| Plan | **spec** | **architect** → `hi` → **1. Product feature / PRD …** | Approve PRD and issue plans; copy handoffs |
+| Build | **each work repo** | **orchestrate** (new session) | Paste `feature:<slug>` / handoff; wait for PR |
+| Review loop | **same work repo** | **architect** → `hi` → **4. Review / sign-off …** → **R** ↔ **orchestrate** until happy → **1** → **2** | Accept (`state:done`); docs; leave PR merge-ready |
+| Close | **spec** | **architect** → `hi` → **3. Feature complete …** | Merge gate after every work repo finished Mode F |
 
-### Implementation (per repo, dependency order)
+Optional same-session path after a short HANDOFF block: `/compact` then switch agent. If the provider errors on tool history, use `/new` instead.
 
-1. **`/new`** → **`orchestrate`** (impl repo) → paste **first message** from spec handoff (`feature:<slug>`).
-2. When orchestrate reports queue exhausted (+ PR URL): **new session** → **`architect`** in **the same impl repo** → **option 4** with `feature:<slug>` and PR URL → **Mode F Phase R** (remediation loop until Merge-ready → accept → docs).
-3. When **every** impl repo for the feature reports Mode F complete: **`architect`** in **spec** → **option 3** (**feature-complete**) — rollup, merge gate (human or agent), close issues, merge PRs, close PRD.
+**Legacy path:** work-repo architect targeted change → orchestrate → architect Mode B (local `.plan` archive). Prefer the GitHub / Mode F path above.
 
-**Legacy path:** architect **option 1** (targeted `.plan`) → orchestrate on artifact path → architect **option 4** Mode B (review + docs + `*.completed.md` archive).
-
-### Session handoffs (architect ↔ orchestrate)
-
-| Step | Session | Agent | You do |
-|------|---------|-------|--------|
-| Plan + expand | A (spec) | **architect** | Option 1 — approve issue bodies; receive per-repo handoffs |
-| Execute backlog | **B (new, per impl)** | **orchestrate** | Open impl repo; `/new`; `feature:<slug>` |
-| Sign-off per impl repo | **C (new, impl)** | **architect** | Option 4 → **R** (first pass) or **R** again (after remediation) |
-| Close feature (multi-repo) | **D (spec)** | **architect** | Option 3 **feature-complete** — merge gate + close |
-
-Optional same-session path: architect ends with a short table **HANDOFF** block → you run **`/compact`** → switch to orchestrate → kickoff with `feature:<slug>`. If MiniMax returns duplicate `tool_call` errors, use **`/new`** instead.
-
-### Who does what at execution time
-
-| Action | Who |
-|--------|-----|
-| Implement stages, edit code, run tests | **`developer`** / **`frontend-dev`** (Task from **orchestrate**) |
-| Per-stage / per-issue verification | **`verifier`** |
-| `git commit` on current feature branch (`Refs:` / `Closes:` issue #) | Implementation subagents on **`expected_branch`** from checkout contract (orchestrate requires evidence in completion report) |
-| Issue labels `state:in-progress` → `state:ready-for-review` | **orchestrate** via **`developer`** + `issue-state-transition.sh` |
-| Final push + open ready-for-review PR after queue empty and CodeRabbit fixes are local | **orchestrate** via **`developer`** + `feature-finish-pr.sh` (skip with `ORCHESTRATE_AUTO_PR=0`) |
-| Code/PR review vs tickets + PRD; `state:done` (issues stay open) | **impl architect** **Mode F Phase R + Phase 1** — not orchestrate |
-| Changelog + sign-off docs on feature PR | **impl architect** **Mode F Phase 2** (`document` → `scribe` → **developer** push) |
-| Remediation after PR feedback | **impl architect** Phase R publishes sub-issues → **new orchestrate session** |
-| Merge PR + close issues + close PRD | **spec feature-complete** — human or agent merge gate |
-| Cross-repo rollup | **architect** + **feature-complete** in spec |
-
-Orchestrate **does not** run final product sign-off, write changelog/docs for GitHub-only features, close tickets, or merge PRs — that is **impl architect Mode F** then **spec feature-complete**.
+**Single-repo (no PRD stack):** [Single repository](#single-repository) — `to-issues` → **orchestrate** (no spec fanout).
 
 ---
 
