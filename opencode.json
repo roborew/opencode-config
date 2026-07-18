@@ -130,6 +130,13 @@
             "top_p": 0.9
           }
         },
+        "moonshotai/kimi-k3": {
+          "name": "Kimi K3",
+          "options": {
+            "temperature": 0.2,
+            "top_p": 0.9
+          }
+        },
         "anthropic/claude-opus-4.8": {
           "name": "Claude Opus 4.8"
         }
@@ -217,7 +224,7 @@
     },
     "senior-dev": {
       "mode": "subagent",
-      "model": "openrouter/openai/gpt-5.6-terra",
+      "model": "openrouter/moonshotai/kimi-k3",
       "steps": 40
     },
     "vision": {
