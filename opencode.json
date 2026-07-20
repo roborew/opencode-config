@@ -1,8 +1,13 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "default_agent": "orchestrate",
-  "plugin": ["@warp-dot-dev/opencode-warp"],
-  "instructions": ["rules/testing.md", "rules/**/*.md"],
+  "plugin": [
+    "@warp-dot-dev/opencode-warp"
+  ],
+  "instructions": [
+    "rules/testing.md",
+    "rules/**/*.md"
+  ],
   "permission": {
     "external_directory": {
       "*": "allow",
@@ -146,7 +151,11 @@
   "mcp": {
     "augment-context-engine": {
       "type": "local",
-      "command": ["/opt/homebrew/bin/auggie", "--mcp", "--mcp-auto-workspace"],
+      "command": [
+        "/opt/homebrew/bin/auggie",
+        "--mcp",
+        "--mcp-auto-workspace"
+      ],
       "enabled": false
     },
     "auggie": {
@@ -186,6 +195,30 @@
     "cloudflare-api": {
       "type": "remote",
       "url": "https://mcp.cloudflare.com/mcp",
+      "enabled": true,
+      "oauth": {}
+    },
+    "cloudflare-docs": {
+      "type": "remote",
+      "url": "https://docs.mcp.cloudflare.com/mcp",
+      "enabled": true,
+      "oauth": {}
+    },
+    "cloudflare-bindings": {
+      "type": "remote",
+      "url": "https://bindings.mcp.cloudflare.com/mcp",
+      "enabled": true,
+      "oauth": {}
+    },
+    "cloudflare-builds": {
+      "type": "remote",
+      "url": "https://builds.mcp.cloudflare.com/mcp",
+      "enabled": true,
+      "oauth": {}
+    },
+    "cloudflare-observability": {
+      "type": "remote",
+      "url": "https://observability.mcp.cloudflare.com/mcp",
       "enabled": true,
       "oauth": {}
     }

@@ -86,7 +86,18 @@ permission:
       "setup-skills": "allow",
       "setup-project": "allow",
       "issue-expand": "allow",
-      "feature-complete": "allow"
+      "feature-complete": "allow",
+      "cloudflare": "allow",
+      "agents-sdk": "allow",
+      "durable-objects": "allow",
+      "wrangler": "allow",
+      "sandbox-sdk": "allow",
+      "web-perf": "allow",
+      "workers-best-practices": "allow",
+      "cloudflare-one": "allow",
+      "cloudflare-one-migrations": "allow",
+      "cloudflare-email-service": "allow",
+      "turnstile-spin": "allow"
     }
   task:
     "*": deny

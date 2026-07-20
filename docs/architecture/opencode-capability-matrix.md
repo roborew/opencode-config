@@ -20,5 +20,5 @@ Other read-only specialists (`debugger`, `refactor`, `designer`, `strategist`, `
 ## Preserved strengths
 
 - Per-agent model routing in `opencode.json`.
-- MCP: `context7`, `docs-mcp-server`, `dash-api`, `claude-context` (command path unchanged), `cloudflare-api` (OAuth, DNS/zone/API ops).
+- MCP: `context7`, `docs-mcp-server`, `dash-api`, `claude-context` (command path unchanged), Cloudflare remote MCP (`cloudflare-api`, `cloudflare-docs`, `cloudflare-bindings`, `cloudflare-builds`, `cloudflare-observability`; OAuth). Cloudflare platform skills vendored from [cloudflare/skills](https://github.com/cloudflare/skills).
 - `strategist`, `preflight`, architect plan/review split.

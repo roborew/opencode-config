@@ -384,6 +384,8 @@ Global **`instructions`** pull in [rules/](rules/). Global **`permission`** in `
 
 **CodeRabbit** (`skills/code-review`, from [coderabbitai/skills](https://github.com/coderabbitai/skills)): orchestrate runs **one** **CodeRabbit gate** via `review` after **all** stages/issues pass final verifier (`medium`/`hard`) — before difficulty gates and architect handoff (GitHub: after the full `feature:<slug>` queue, not per issue). Requires CodeRabbit CLI + auth.
 
+**Cloudflare** (from [cloudflare/skills](https://github.com/cloudflare/skills)): platform skills under `skills/` (`cloudflare`, `agents-sdk`, `durable-objects`, `wrangler`, `sandbox-sdk`, `web-perf`, `workers-best-practices`, `cloudflare-one`, `cloudflare-one-migrations`, `cloudflare-email-service`, `turnstile-spin`) plus slash commands `/build-agent` and `/build-mcp` in `commands/`. Companion MCP servers (`cloudflare-api`, `cloudflare-docs`, `cloudflare-bindings`, `cloudflare-builds`, `cloudflare-observability`) are configured in `opencode.json`. Allowed on `architect`, `developer`, `senior-dev`, `frontend-dev`, `debugger`, and `performance-reviewer` via each agent’s `permission.skill`.
+
 **Git guardrails:** `opencode.json` denies branch mutation commands (`git switch`, `git checkout -b`, protected-branch checkouts) for execution agents. `scripts/block-dangerous-git.sh` blocks the same patterns for hook-style validation. Orchestrate runs **`checkout-contract.sh`** every session to capture the current branch; subagents must not create or switch branches. Use `scripts/preflight-git.sh '<command>'` before risky git invocations, or wrap tool calls with `scripts/block-dangerous-git.sh` where your runtime supports stdin JSON hooks.
 
 ## Desktop / shell environment

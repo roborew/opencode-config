@@ -16,7 +16,24 @@ permission:
     "~/.gnupg/**": deny
     "~/.aws/**": deny
     "*": allow
-  skill: { "developer": "allow", "debug-fix": "allow", "zoom-out": "allow", "caveman": "allow" }
+  skill:
+    {
+      "developer": "allow",
+      "debug-fix": "allow",
+      "zoom-out": "allow",
+      "caveman": "allow",
+      "cloudflare": "allow",
+      "agents-sdk": "allow",
+      "durable-objects": "allow",
+      "wrangler": "allow",
+      "sandbox-sdk": "allow",
+      "web-perf": "allow",
+      "workers-best-practices": "allow",
+      "cloudflare-one": "allow",
+      "cloudflare-one-migrations": "allow",
+      "cloudflare-email-service": "allow",
+      "turnstile-spin": "allow"
+    }
   edit:
     "~/.config/opencode/**": deny
     "/Users/robo/.config/opencode/**": deny

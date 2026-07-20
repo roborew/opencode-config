@@ -9,7 +9,15 @@ tools:
   skill: true
 permission:
   edit: deny
-  skill: { "debugger": "allow" }
+  skill:
+    {
+      "debugger": "allow",
+      "cloudflare": "allow",
+      "wrangler": "allow",
+      "durable-objects": "allow",
+      "agents-sdk": "allow",
+      "workers-best-practices": "allow"
+    }
   task: { "*": deny }
 ---
 # Debugger Agent

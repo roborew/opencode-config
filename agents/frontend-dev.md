@@ -16,7 +16,15 @@ permission:
     "~/.gnupg/**": deny
     "~/.aws/**": deny
     "*": ask
-  skill: { "frontend-dev": "allow" }
+  skill:
+    {
+      "frontend-dev": "allow",
+      "cloudflare": "allow",
+      "wrangler": "allow",
+      "web-perf": "allow",
+      "turnstile-spin": "allow",
+      "workers-best-practices": "allow"
+    }
   edit:
     "~/.config/opencode/**": deny
     "/Users/robo/.config/opencode/**": deny
