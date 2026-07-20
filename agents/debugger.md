@@ -14,8 +14,6 @@ permission:
       "debugger": "allow",
       "cloudflare": "allow",
       "wrangler": "allow",
-      "durable-objects": "allow",
-      "agents-sdk": "allow",
       "workers-best-practices": "allow"
     }
   task: { "*": deny }

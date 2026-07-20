@@ -21,8 +21,6 @@ permission:
       "frontend-dev": "allow",
       "cloudflare": "allow",
       "wrangler": "allow",
-      "web-perf": "allow",
-      "turnstile-spin": "allow",
       "workers-best-practices": "allow"
     }
   edit:

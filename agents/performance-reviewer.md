@@ -16,7 +16,7 @@ permission:
     "~/.aws/**": deny
     "*": ask
   edit: deny
-  skill: { "performance-reviewer": "allow", "web-perf": "allow" }
+  skill: { "performance-reviewer": "allow" }
   bash:
     "*": allow
     "rm -rf /*": deny

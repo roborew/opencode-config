@@ -203,24 +203,6 @@
       "url": "https://docs.mcp.cloudflare.com/mcp",
       "enabled": true,
       "oauth": {}
-    },
-    "cloudflare-bindings": {
-      "type": "remote",
-      "url": "https://bindings.mcp.cloudflare.com/mcp",
-      "enabled": true,
-      "oauth": {}
-    },
-    "cloudflare-builds": {
-      "type": "remote",
-      "url": "https://builds.mcp.cloudflare.com/mcp",
-      "enabled": true,
-      "oauth": {}
-    },
-    "cloudflare-observability": {
-      "type": "remote",
-      "url": "https://observability.mcp.cloudflare.com/mcp",
-      "enabled": true,
-      "oauth": {}
     }
   },
   "agent": {

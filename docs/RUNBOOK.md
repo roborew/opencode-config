@@ -203,13 +203,10 @@ Primaries and execution agents should use MCP only when it reduces uncertainty:
 - **`context7`**: Up-to-date docs for 9000+ external libraries. Use when framework/library API behavior is uncertain. Limit to 3 calls per question.
 - **`docs-mcp-server`**: Internal docs, prototypes, linked repos, architecture notes.
 - **`dash-api`**: API/library contract lookup when behavior is unclear.
-- **`cloudflare-api`**: Live Cloudflare account operations — DNS records, zone settings, Workers, and other API-backed changes when the task requires current account state or mutations. Prefer read-only verification first; confirm zone, record name, type, and TTL before create/update/delete DNS records.
-- **`cloudflare-docs`**: Up-to-date Cloudflare product documentation and reference (preferred over pre-trained knowledge for Workers, limits, bindings, and config). Prefer this over `context7` for Cloudflare-specific docs.
-- **`cloudflare-bindings`**: Guidance for Workers bindings (KV, D1, R2, AI, and related primitives) when scaffolding or wiring apps.
-- **`cloudflare-builds`**: Workers build status and build insights.
-- **`cloudflare-observability`**: Application logs and analytics for Cloudflare-hosted workloads.
+- **`cloudflare-api`**: Live Cloudflare account operations — especially DNS records and zone settings for app domains, plus related Workers/Pages ops when needed. Prefer read-only verification first; confirm zone, record name, type, and TTL before create/update/delete DNS records.
+- **`cloudflare-docs`**: Up-to-date Cloudflare docs for DNS, Workers/Pages, and Wrangler (preferred over pre-trained knowledge). Prefer this over `context7` for Cloudflare-specific docs.
 
-**Cloudflare skills / commands** (vendored from [cloudflare/skills](https://github.com/cloudflare/skills)): platform skills under `skills/` (`cloudflare`, `agents-sdk`, `durable-objects`, `wrangler`, and related). Slash commands `/build-agent` and `/build-mcp` live in `commands/`. Agents that may load these skills: `architect`, `developer`, `senior-dev`, `frontend-dev`, `debugger`, `performance-reviewer` (see each agent’s `permission.skill`). First use of Cloudflare MCP servers may require OAuth in the OpenCode UI.
+**Cloudflare skills** (narrow set from [cloudflare/skills](https://github.com/cloudflare/skills)): `cloudflare` (DNS/domains + platform guidance for web apps), `wrangler` (local run/deploy), `workers-best-practices`. Allowed on `architect`, `developer`, `senior-dev`, `frontend-dev`, `debugger`. First use of Cloudflare MCP may require OAuth in the OpenCode UI.
 
 If a user says "look at the prototype", check `docs-mcp-server` first and record what was used.
 
