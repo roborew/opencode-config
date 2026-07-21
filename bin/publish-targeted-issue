@@ -145,7 +145,7 @@ for label in "${labels[@]}"; do
   create_args+=(--label "$label")
 done
 
-issue_url="$(gh "${create_args[@]}" --json url -q .url)"
+issue_url="$(gh "${create_args[@]}")"
 
 if [[ -n "$parent_issue" ]]; then
   GITHUB_PROJECT_SH="${OC}/bin/project/spec/lib/github_project.sh"
