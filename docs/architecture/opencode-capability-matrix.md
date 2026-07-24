@@ -12,10 +12,11 @@
 | Review (planning) | `review` | `review` + optional `security-reviewer`, `performance-reviewer`, `doc-reviewer` | `auto` (effective `load: full` for `review`; specialists default `load: full`) | Review markdown to parent | Architect + `scribe` |
 | CodeRabbit gate (completion) | `orchestrate` → `review` | `code-review` (+ `review` on `load: full`) | Parent: `load: full` on CodeRabbit Task; **exactly once** per artifact/feature | `CODERABBIT_GATE` + full finding inventory + per-item local resolutions; feature completion summary | After last verifier / queue exhausted; `coderabbit review --agent --base develop` by default; before final push/PR, difficulty gates, and architect — **not** per issue and **not** after remediation |
 | Evidence check | `verifier` | `verifier` | `auto` | Verdict + evidence | Orchestrate |
+| Docker compose build/test (Sysbox sibling) | `developer`, `frontend-dev`, `verifier` (probe: `preflight`) | `docker-sandbox` | Load when compose/Docker tests needed and `sandbox` on PATH / preflight `sandbox: ready` | `sandbox exec` logs as test evidence | `OPENCODE_SANDBOX_ENABLED` |
 | Docs generation | `document` | `document` | `auto` | Content to `scribe` | Architect |
 | Ship / hotfix / TDD | (user-chosen agent with skill allowed) | `ship`, `hotfix`, `debug-fix`, `tdd` | User-chosen | Git / PR | User confirms each step |
 
-Other read-only specialists (`debugger`, `refactor`, `designer`, `strategist`, `helper`, `senior-dev`, `mentor`, `vision`, `scribe`) define **Execution readiness** and **Auto-load triggers** in their agent files; parents still pass `load: full|minimal|auto` on every Task. **`worktree-env`** and **`preflight`** are narrow startup subagents (bash + single skill only; no app-code edits).
+Other read-only specialists (`debugger`, `refactor`, `designer`, `strategist`, `helper`, `senior-dev`, `mentor`, `vision`, `scribe`) define **Execution readiness** and **Auto-load triggers** in their agent files; parents still pass `load: full|minimal|auto` on every Task. **`worktree-env`** and **`preflight`** are narrow startup subagents (bash + allow-listed skills only; no app-code edits).
 
 ## Preserved strengths
 

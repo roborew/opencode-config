@@ -16,7 +16,7 @@ permission:
     "~/.aws/**": deny
     "*": ask
   edit: deny
-  skill: { "verifier": "allow" }
+  skill: { "verifier": "allow", "docker-sandbox": "allow" }
   bash:
     "*": allow
     "rm -rf /*": deny

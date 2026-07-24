@@ -16,7 +16,7 @@ permission:
     "~/.aws/**": deny
     "*": allow
   edit: deny
-  skill: { "preflight": "allow" }
+  skill: { "preflight": "allow", "docker-sandbox": "allow" }
   bash:
     "*": allow
     "rm -rf /*": deny
@@ -48,7 +48,8 @@ You are the **preflight** subagent: a single-purpose environment readiness speci
    Use `project_node.command_prefix` for installs/builds. Treat `host_node` as OpenCode/image PATH — **never** recommend upgrading Docker/base Node to silence `engines.node`.
 4. Never read or print the contents of `.env` / `.env.local` files.
 5. Run the repair pass **at most once** per invocation when checks fail repairably (`preflight-runtime.sh --repair` when applicable).
-6. Return one structured readiness report: `Status`, `preflight_checks`, `runtime` (from script), `worktree_env_evidence`, `repair_applied`, `claude_context_index`, and `recommended_env_fix` if Blocked.
+6. After runtime checks, if `sandbox` is on PATH, run `sandbox probe` and record `sandbox: ready` or `sandbox: unavailable` (CLI missing or probe fails → `unavailable`; never Blocked for that alone).
+7. Return one structured readiness report: `Status`, `preflight_checks`, `runtime` (from script), `worktree_env_evidence`, `repair_applied`, `claude_context_index`, `sandbox`, and `recommended_env_fix` if Blocked.
 
 ## Hard rules
 

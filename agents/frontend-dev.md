@@ -21,7 +21,8 @@ permission:
       "frontend-dev": "allow",
       "cloudflare": "allow",
       "wrangler": "allow",
-      "workers-best-practices": "allow"
+      "workers-best-practices": "allow",
+      "docker-sandbox": "allow"
     }
   edit:
     "~/.config/opencode/**": deny

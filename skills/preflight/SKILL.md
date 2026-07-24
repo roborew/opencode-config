@@ -50,14 +50,15 @@ Use `project_node.command_prefix` from that JSON for all subsequent version-sens
    - `engines_status` against **project** Node only
    - Include script `notes` / `policy` verbatim when present (host≠engines is informational, not an upgrade-Docker signal)
    - If status is `blocked` with repairable mise pin: rerun once with `--repair`, then continue
-4. **Dependencies** — When `package.json` + lockfile exist and `node_modules/` is absent (or README requires install): run **one** documented install using `command_prefix` from the runtime script (`mise exec -- pnpm install`, `asdf exec pnpm install`, `pnpm install`, etc.). Re-check that the package manager resolves.
-5. **Command resolution** — Confirm test/build runner resolves from the **project** shell context (`command_prefix`), not bare host PATH alone.
-6. **Smoke check** — Execute a tiny test-command smoke check (or equivalent verification command) if the project defines one — still under `command_prefix` when set.
-7. **Claude-context indexing** — When `claude-context` MCP tools are available in the host (`get_indexing_status`, `index_codebase`, etc.): call `get_indexing_status` for the workspace path. If not indexed, call `index_codebase`, then re-check until ready. Do **not** report MCP unavailable when those tools are present — report the actual tool error instead. If MCP is genuinely not configured, set `claude_context_index: skipped`. On indexing failure after one retry, set `failed` and include error; parent may continue for non-discovery work per orchestrate policy.
+4. **Sandbox capability (soft)** — If `command -v sandbox` succeeds, run `sandbox probe`. Set `sandbox: ready` when exit 0 and JSON has `"available": true`; otherwise `sandbox: unavailable` (non-zero exit, `{ "available": false, ... }`, or `SANDBOX_UNAVAILABLE`). If the CLI is missing, set `sandbox: unavailable`. **`unavailable` is not Blocked** and must not trigger Status: Blocked by itself. Do not recommend enabling Sysbox/Docker from preflight.
+5. **Dependencies** — When `package.json` + lockfile exist and `node_modules/` is absent (or README requires install): run **one** documented install using `command_prefix` from the runtime script (`mise exec -- pnpm install`, `asdf exec pnpm install`, `pnpm install`, etc.). Re-check that the package manager resolves.
+6. **Command resolution** — Confirm test/build runner resolves from the **project** shell context (`command_prefix`), not bare host PATH alone.
+7. **Smoke check** — Execute a tiny test-command smoke check (or equivalent verification command) if the project defines one — still under `command_prefix` when set.
+8. **Claude-context indexing** — When `claude-context` MCP tools are available in the host (`get_indexing_status`, `index_codebase`, etc.): call `get_indexing_status` for the workspace path. If not indexed, call `index_codebase`, then re-check until ready. Do **not** report MCP unavailable when those tools are present — report the actual tool error instead. If MCP is genuinely not configured, set `claude_context_index: skipped`. On indexing failure after one retry, set `failed` and include error; parent may continue for non-discovery work per orchestrate policy.
 
 ## Repair pass (automatic, once)
 
-When a check in steps 3–7 fails with a **repairable** cause, run **one** repair before marking Blocked:
+When a check in steps 3 or 5–8 fails with a **repairable** cause, run **one** repair before marking Blocked:
 
 | Failure | Repair (once) |
 |---------|----------------|
@@ -81,6 +82,7 @@ Produce structured readiness content:
 - `worktree_env`: `ok` | `ok_existing` | `skipped_not_linked_worktree` | `skipped_not_git` | `failed` — linked-worktree env copy verification only (no `cp` here; orchestrate runs **`worktree-env`** before this preflight)
 - `worktree_env_evidence`: `{ wt_root, main_root, files: [{ name, source, target, is_regular_file, status }] }` when linked worktree
 - `claude_context_index`: `indexed` | `skipped` (MCP unavailable) | `failed` — include indexing status or error if applicable
+- `sandbox`: `ready` | `unavailable` — from `sandbox probe` (or CLI missing). Never treat `unavailable` as Blocked by itself.
 - `stderr summaries`: for any failures
 - `Notes`: include runtime script notes (host vs project Node). Never phrase host≠engines as “upgrade Docker Node.”
 
