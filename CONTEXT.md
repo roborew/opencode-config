@@ -57,8 +57,16 @@ Optional semantic code index via `mcp.claude-context` in `opencode.json`. Speeds
 _Avoid_: Running host and server `claude-context` together
 
 **Sandbox (Sysbox sibling)**:
-Optional opencode-server feature: ephemeral Sysbox sibling containers via the `sandbox` CLI for compose build/test. Gated by `OPENCODE_SANDBOX_ENABLED`; typically off on Mac. Agents use only the CLI — never invent host `docker.sock` or ad-hoc `sysbox-runc`.
-_Avoid_: Mounting host Docker socket into app compose; GPU/CUDA in sandbox
+Optional opencode-server feature: ephemeral Sysbox sibling containers via the `sandbox` CLI for compose build/test and optional review expose. Gated by `OPENCODE_SANDBOX_ENABLED`; typically off on Mac. Agents use only the CLI — never invent host `docker.sock` or ad-hoc `sysbox-runc`. Preflight only probes; create/exec/expose/destroy live in skill `docker-sandbox`.
+_Avoid_: Mounting host Docker socket into app compose; GPU/CUDA in sandbox; forcing Sysbox on Desktop
+
+**Review hostname**:
+Public feature review URL pattern `{feature-slug}.{apex}` (e.g. `blockshed.blockshared.com`), where apex comes from repo `review_domain` / `apex_domain` (or README). Served via existing Traefik + existing Cloudflare Tunnel; agents may create/update **DNS only**.
+_Avoid_: Global `reviews.*` suffix; `cloudflared tunnel create`
+
+**App vs server Infisical**:
+OpenCode **server** Infisical injects secrets into the OpenCode process only. **App** Infisical for sandbox Compose comes from the mounted repo `.env` (setup create + paste). Sibling must reach Infisical over the network.
+_Avoid_: Assuming server Infisical populates app Compose; copying `.env.example` into `.env`
 
 ## Relationships
 
