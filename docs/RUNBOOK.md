@@ -210,6 +210,8 @@ Primaries and execution agents should use MCP only when it reduces uncertainty:
 
 **Cloudflare skills** (narrow set from [cloudflare/skills](https://github.com/cloudflare/skills)): `cloudflare` (DNS/domains + platform guidance for web apps), `wrangler` (local run/deploy), `workers-best-practices`. Allowed on `architect`, `developer`, `senior-dev`, `frontend-dev`, `debugger`. First use of Cloudflare MCP may require OAuth in the OpenCode UI.
 
+**Review-app DNS:** Feature URLs use skill `docker-sandbox` (`sandbox expose` for Traefik labels) plus `cloudflare-api` for optional CNAME upsert to the **existing** host tunnel — not a separate Traefik or tunnel skill, and never `cloudflared tunnel create`. Re-auth with utilities `./scripts/setup.sh mcp-auth cloudflare-api` (Zone DNS Edit).
+
 If a user says "look at the prototype", check `docs-mcp-server` first and record what was used.
 
 **Execution phase**: Developer and frontend-dev receive `FilesToChange` from the plan; do not use claude-context for discovery unless the plan is ambiguous and the assigned stage requires locating additional files.

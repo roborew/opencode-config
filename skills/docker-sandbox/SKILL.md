@@ -1,13 +1,25 @@
 ---
 name: docker-sandbox
-description: "Sysbox sibling sandboxes via opencode-server sandbox CLI: compose build/test and optional Traefik review URLs as {feature}.{apex}. Load when stages need Docker compose or web expose and sandbox is available."
+description: "Sysbox sibling sandboxes via opencode-server sandbox CLI: compose build/test and optional review URLs as {feature}.{apex} (Traefik via sandbox expose + Cloudflare DNS via MCP). Load when stages need Docker compose or web expose."
 modelTier: "fast"
-roleReminder: "Always sandbox probe + env gate first. Hostname is {slug}.{apex}. Never create CF tunnels or use .env.example. Destroy what you create."
+roleReminder: "Probe + env gate first. Expose = sandbox expose (Traefik) then optional CF DNS. Never install Traefik/cloudflared or create tunnels. No .env.example."
 ---
 
 ## Skill reference (optional load)
 
-Load when a stage needs Docker Compose build/test and/or optional web review expose via Sysbox siblings. Follow your agent Hard Rules first. `SKILL_LOADED: docker-sandbox` is optional.
+Load when a stage needs Docker Compose build/test and/or optional web review expose. Follow agent Hard Rules first. `SKILL_LOADED: docker-sandbox` is optional.
+
+## Division of responsibility (do not invent new skills)
+
+| Concern | Who owns it | Agent action |
+|---------|-------------|--------------|
+| Install Traefik / cloudflared on Ubuntu | Human / host ops (opencode-server README) | Never install or edit Traefik static config |
+| Apply Traefik route for a sandbox | `sandbox expose` / `unexpose` CLI | Call CLI only — labels + route helper are automatic |
+| Create Cloudflare **tunnel** | Never (one host tunnel already exists) | Forbidden |
+| DNS for `{slug}.{apex}` | `cloudflare-api` MCP (+ `cloudflare` skill if needed for DNS semantics) | Upsert/delete CNAME → **existing** tunnel target when `OPENCODE_SANDBOX_REVIEW_DNS=on` |
+| App Infisical / `.env` | Setup paste + worktree-env | Gate only; never invent secrets |
+
+There is **no** separate Traefik skill and **no** “configure Cloudflare Tunnel” skill for review apps. Host tunnel + Traefik are prerequisites; this skill only orchestrates sibling lifecycle + optional DNS.
 
 ## Host contract
 
@@ -17,27 +29,26 @@ sandbox probe|create|exec|status|destroy|expose|unexpose
 
 Env: `OPENCODE_SANDBOX_ENABLED`, `OPENCODE_SANDBOX_MODE`, `OPENCODE_SANDBOX_TRAEFIK_*`, `OPENCODE_SANDBOX_REVIEW_DNS`.
 
-Labels/names owned by the server CLI (`opencode-sandbox-<slug>`). Agents must not ad-hoc `docker run --runtime=sysbox-runc`.
+Names: sibling `opencode-sandbox-<slug>`, route helper `opencode-sandbox-route-<slug>`. Never ad-hoc `docker run --runtime=sysbox-runc`.
 
 ## Hard Rules
 
-1. **Always `sandbox probe` first.** If unavailable → report `sandbox: unavailable` and continue non-Docker path. Blocked only if stage `test_commands` explicitly require compose/Docker.
+1. **Always `sandbox probe` first.** Unavailable → `sandbox: unavailable`; continue non-Docker unless stage requires compose/Docker (then Blocked).
 2. **Env gate before create** (never print secret values):
-   - Require `.env` on the worktree (or main before **worktree-env** copy).
-   - If Infisical is used: require non-empty key *names* `INFISICAL_PROJECT_ID`, `INFISICAL_DOMAIN`|`INFISICAL_API_URL`, and `INFISICAL_TOKEN` **or** `INFISICAL_CLIENT_ID`+`INFISICAL_CLIENT_SECRET` (plus `INFISICAL_ENV` when used).
-   - **Never** read/copy `.env.example` or invent values.
-   - On failure: do not create sandbox. Fix: `./scripts/setup.sh projects …` create+paste `.env`, or manual `.env`, then **worktree-env** if linked worktree.
-3. Prefer repo-documented compose (`docker-compose.test.yml`, `compose.test.yaml`, README test|dev). Ask once if ambiguous; never invent a stack.
-4. Always **destroy** sandboxes you create (finally). `destroy` unexposes first.
-5. Never mount host `docker.sock` into nested app compose.
-6. Never use sandbox for GPU/CUDA — unsupported.
-7. **Expose only when asked** for web review. Hostname = `{slug}.{apex}` (not `reviews.*`). Nested app must publish `--port` on the sibling.
-8. **Never create Cloudflare tunnels.** DNS upsert only when `OPENCODE_SANDBOX_REVIEW_DNS=on`; point at existing tunnel target. On DNS auth errors: tell user `./scripts/setup.sh mcp-auth cloudflare-api` + Zone DNS Edit.
-9. Server Infisical ≠ app Infisical — app secrets come from mounted repo `.env`.
+   - Require `.env` on worktree (or main before **worktree-env**).
+   - If Infisical used: non-empty key *names* `INFISICAL_PROJECT_ID`, `INFISICAL_DOMAIN`|`INFISICAL_API_URL`, and `INFISICAL_TOKEN` **or** `CLIENT_ID`+`CLIENT_SECRET` (+ `INFISICAL_ENV` if used).
+   - Never `.env.example` / invent values. Fix: `./scripts/setup.sh projects …` create+paste, then worktree-env if linked.
+3. Prefer documented compose (`docker-compose.test.yml`, `compose.test.yaml`, README). Ask once if ambiguous; never invent a stack.
+4. Always **destroy** what you create (finally). `destroy` unexposes first.
+5. Never mount host `docker.sock` into nested app compose; never GPU/CUDA sandboxes.
+6. **Expose only when asked.** Hostname = `{slug}.{apex}` (not `reviews.*`). App must publish `--port` on the sibling before expose.
+7. **Traefik:** only via `sandbox expose` / `unexpose`. Do not hand-edit Traefik files or invent labels on random containers.
+8. **Cloudflare:** DNS only when `OPENCODE_SANDBOX_REVIEW_DNS` is `on` (default). Never tunnel create/edit. On auth errors → user runs `./scripts/setup.sh mcp-auth cloudflare-api` with Zone DNS Edit.
+9. Server Infisical ≠ app Infisical.
 
 ## ID hygiene
 
-Slug from branch/feature short name (DNS-label sanitize). One sandbox per worktree session unless `status` shows ready id — reuse.
+Slug from branch/feature (DNS-label sanitize). One sandbox per worktree session unless `status` shows ready id — reuse.
 
 ## App apex discovery
 
@@ -49,28 +60,39 @@ Slug from branch/feature short name (DNS-label sanitize). One sandbox per worktr
 
 ```bash
 sandbox probe
-# env gate: test -f .env ; check Infisical key names without printing values
+# env gate: test -f .env ; Infisical key names only
 sandbox create --id <slug> --worktree "$(git rev-parse --show-toplevel)"
 sandbox exec --id <slug> -- docker compose -f docker-compose.test.yml build
 sandbox exec --id <slug> -- docker compose -f docker-compose.test.yml run --rm test
+# … or compose up for a live app before expose
 sandbox destroy --id <slug>
 ```
 
-## Happy path — expose (after app is up and publishing a port)
+## Happy path — expose + DNS
+
+After the app is up and publishing an inner port:
 
 ```bash
-# hostname = {slug}.{apex} e.g. blockshed.blockshared.com
 sandbox expose --id <slug> --port <port> --hostname <slug>.<apex>
-# optional: cloudflare-api MCP DNS for hostname → existing tunnel target
-# report https://<slug>.<apex>
-sandbox unexpose --id <slug>
-sandbox destroy --id <slug>
 ```
+
+Then, if `OPENCODE_SANDBOX_REVIEW_DNS=on` (or unset/default on):
+
+1. Prefer load `cloudflare` skill for DNS record semantics when unsure.
+2. Via **cloudflare-api** MCP (read first):
+   - Resolve zone for `<apex>`.
+   - Find how other hostnames on that zone point at the tunnel (existing CNAME target for apex/`www`/known app host — usually `*.cfargotunnel.com` or the zone’s tunnel target).
+   - Create or update CNAME: name=`<slug>` (or FQDN per API), target=that **same** tunnel target, proxied as other app records on the zone.
+3. Do **not** create a tunnel; do **not** change tunnel ingress (host cloudflared + Traefik already handle traffic).
+4. Report `https://<slug>.<apex>`.
+5. On teardown: delete **only** the DNS record this session created (if any), then `sandbox unexpose` / `destroy`.
+
+If `OPENCODE_SANDBOX_REVIEW_DNS=off`: skip MCP DNS (assume wildcard already covers `*.apex`); still call `sandbox expose`.
 
 ## Evidence
 
-When sandbox is ready and the repo documents compose tests, `sandbox exec` logs are valid verifier evidence.
+`sandbox exec` logs are valid verifier evidence when sandbox is ready and compose tests are documented.
 
 ## On unavailable
 
-Report `sandbox: unavailable`. Do not recommend enabling Sysbox from this skill. Fall back unless the stage explicitly requires compose/Docker.
+Report `sandbox: unavailable`. Do not recommend enabling Sysbox from this skill.
