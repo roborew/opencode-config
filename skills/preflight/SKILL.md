@@ -52,7 +52,7 @@ Use `project_node.command_prefix` from that JSON for all subsequent version-sens
    - If status is `blocked` with repairable mise pin: rerun once with `--repair`, then continue
 4. **Sandbox capability (soft)** — If `command -v sandbox` succeeds, run `sandbox probe`. Set `sandbox: ready` when exit 0 and JSON has `"available": true`; otherwise `sandbox: unavailable` (non-zero exit, `{ "available": false, ... }`, or `SANDBOX_UNAVAILABLE`). If the CLI is missing, set `sandbox: unavailable`. **`unavailable` is not Blocked** and must not trigger Status: Blocked by itself. Do not recommend enabling Sysbox/Docker from preflight.
    - When `sandbox: ready` (or CLI exists): optionally note whether repo-root `.env` exists and whether Infisical *key names* (`INFISICAL_PROJECT_ID`, `INFISICAL_DOMAIN`/`INFISICAL_API_URL`, auth keys, `INFISICAL_ENV` if used) appear present and non-empty — **names/emptiness only; never print values**. Informational only; missing keys do **not** Block preflight.
-   - **Expose readiness:** if `OPENCODE_SANDBOX_TRAEFIK_*` (or equivalent Traefik wiring env) is missing, set `expose: not_ready` (run path still OK). If Traefik env present and sandbox ready, set `expose: ready`. If sandbox unavailable, set `expose: skipped`. Never Block solely for `expose: not_ready`.
+   - **Expose readiness:** if sandbox ready, set `expose: ready` (localhost publish via `sandbox expose`; host cloudflared is a human prerequisite). If sandbox unavailable, set `expose: skipped`. Never Block solely for `expose: not_ready`.
 5. **Dependencies** — When `package.json` + lockfile exist and `node_modules/` is absent (or README requires install): run **one** documented install using `command_prefix` from the runtime script (`mise exec -- pnpm install`, `asdf exec pnpm install`, `pnpm install`, etc.). Re-check that the package manager resolves.
 6. **Command resolution** — Confirm test/build runner resolves from the **project** shell context (`command_prefix`), not bare host PATH alone.
 7. **Smoke check** — Execute a tiny test-command smoke check (or equivalent verification command) if the project defines one — still under `command_prefix` when set.
@@ -85,7 +85,7 @@ Produce structured readiness content:
 - `worktree_env_evidence`: `{ wt_root, main_root, files: [{ name, source, target, is_regular_file, status }] }` when linked worktree
 - `claude_context_index`: `indexed` | `skipped` (MCP unavailable) | `failed` — include indexing status or error if applicable
 - `sandbox`: `ready` | `unavailable` — from `sandbox probe` (or CLI missing). Never treat `unavailable` as Blocked by itself.
-- `expose`: `ready` | `not_ready` | `skipped` — Traefik/review wiring when sandbox ready; `skipped` if sandbox unavailable. Never Block for `not_ready` alone.
+- `expose`: `ready` | `not_ready` | `skipped` — review publish wiring when sandbox ready (localhost publish; host tunnel is a prerequisite); `skipped` if sandbox unavailable. Never Block for `not_ready` alone.
 - `sandbox_env_notes` (optional): `.env` present yes/no; Infisical key-name presence summary (no values).
 - `stderr summaries`: for any failures
 - `Notes`: include runtime script notes (host vs project Node). Never phrase host≠engines as “upgrade Docker Node.”

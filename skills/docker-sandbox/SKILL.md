@@ -1,8 +1,8 @@
 ---
 name: docker-sandbox
-description: "Sysbox sibling sandboxes via opencode-server sandbox CLI: compose build/test and optional review URLs as {feature}.{apex} (Traefik via sandbox expose + Cloudflare DNS via MCP). Load when stages need Docker compose or web expose."
+description: "Sysbox sibling sandboxes via opencode-server sandbox CLI: self-contained compose (Caddy) build/test and optional review URLs as {feature}.{apex} (localhost publish via sandbox expose + Cloudflare tunnel hostname + DNS via MCP). Load when stages need Docker compose or web expose."
 modelTier: "fast"
-roleReminder: "Probe + env gate first. Expose = sandbox expose (Traefik) then optional CF DNS. Never install Traefik/cloudflared or create tunnels. No .env.example."
+roleReminder: "Probe + env gate first. Compose must be self-contained (Caddy). Expose = sandbox expose (localhost) then CF tunnel hostname + optional DNS. Host cloudflared only — never cloudflared-in-compose. No .env.example."
 ---
 
 ## Skill reference (optional load)
@@ -13,13 +13,13 @@ Load when a stage needs Docker Compose build/test and/or optional web review exp
 
 | Concern | Who owns it | Agent action |
 |---------|-------------|--------------|
-| Install Traefik / cloudflared on Ubuntu | Human / host ops (opencode-server README) | Never install or edit Traefik static config |
-| Apply Traefik route for a sandbox | `sandbox expose` / `unexpose` CLI | Call CLI only — labels + route helper are automatic |
-| Create Cloudflare **tunnel** | Never (one host tunnel already exists) | Forbidden |
-| DNS for `{slug}.{apex}` | `cloudflare-api` MCP (+ `cloudflare` skill if needed for DNS semantics) | Upsert/delete CNAME → **existing** tunnel target when `OPENCODE_SANDBOX_REVIEW_DNS=on` |
+| Install host cloudflared (one tunnel) | Human / host ops (opencode-server docs/sandbox.md) | Never install cloudflared; never create a tunnel |
+| Localhost publish for a sandbox | `sandbox expose` / `unexpose` CLI | Call CLI only — returns `origin` (`http://127.0.0.1:<host_port>`) |
+| Tunnel public hostname `{slug}.{apex}` → origin | `cloudflare-api` MCP | Upsert/delete on the **existing** host tunnel |
+| DNS for `{slug}.{apex}` | `cloudflare-api` MCP (+ `cloudflare` skill if needed) | Upsert/delete CNAME → tunnel target when `OPENCODE_SANDBOX_REVIEW_DNS=on` |
 | App Infisical / `.env` | Setup paste + worktree-env | Gate only; never invent secrets |
 
-There is **no** separate Traefik skill and **no** “configure Cloudflare Tunnel” skill for review apps. Host tunnel + Traefik are prerequisites; this skill only orchestrates sibling lifecycle + optional DNS.
+Host tunnel is a prerequisite; this skill orchestrates sibling lifecycle + optional tunnel hostname + DNS. Do not invent a tunnel-create skill.
 
 ## Host contract
 
@@ -27,9 +27,9 @@ There is **no** separate Traefik skill and **no** “configure Cloudflare Tunnel
 sandbox probe|create|exec|status|destroy|expose|unexpose
 ```
 
-Env: `OPENCODE_SANDBOX_ENABLED`, `OPENCODE_SANDBOX_MODE`, `OPENCODE_SANDBOX_TRAEFIK_*`, `OPENCODE_SANDBOX_REVIEW_DNS`.
+Env: `OPENCODE_SANDBOX_ENABLED`, `OPENCODE_SANDBOX_MODE`, `OPENCODE_SANDBOX_REVIEW_DNS`, `OPENCODE_SANDBOX_ROUTE_IMAGE`, optional `OPENCODE_SANDBOX_TUNNEL_ID`.
 
-Names: sibling `opencode-sandbox-<slug>`, route helper `opencode-sandbox-route-<slug>`. Never ad-hoc `docker run --runtime=sysbox-runc`.
+Names: sibling `opencode-sandbox-<slug>`, publish helper `opencode-sandbox-route-<slug>`. Never ad-hoc `docker run --runtime=sysbox-runc`.
 
 ## Hard Rules
 
@@ -39,12 +39,17 @@ Names: sibling `opencode-sandbox-<slug>`, route helper `opencode-sandbox-route-<
    - If Infisical used: non-empty key *names* `INFISICAL_PROJECT_ID`, `INFISICAL_DOMAIN`|`INFISICAL_API_URL`, and `INFISICAL_TOKEN` **or** `CLIENT_ID`+`CLIENT_SECRET` (+ `INFISICAL_ENV` if used).
    - Never `.env.example` / invent values. Fix: `./scripts/setup.sh projects …` create+paste, then worktree-env if linked.
 3. Prefer documented compose (`docker-compose.test.yml`, `compose.test.yaml`, README). Ask once if ambiguous; never invent a stack.
-4. Always **destroy** what you create (finally). `destroy` unexposes first.
-5. Never mount host `docker.sock` into nested app compose; never GPU/CUDA sandboxes.
-6. **Expose only when asked.** Hostname = `{slug}.{apex}` (not `reviews.*`). App must publish `--port` on the sibling before expose.
-7. **Traefik:** only via `sandbox expose` / `unexpose`. Do not hand-edit Traefik files or invent labels on random containers.
-8. **Cloudflare:** DNS only when `OPENCODE_SANDBOX_REVIEW_DNS` is `on` (default). Never tunnel create/edit. On auth errors → user runs `./scripts/setup.sh mcp-auth cloudflare-api` with Zone DNS Edit.
-9. Server Infisical ≠ app Infisical.
+4. **Self-contained compose required for live/review stacks:**
+   - Private compose network only.
+   - Include **Caddy** (or equivalent) reverse-proxying to app services.
+   - Publish Caddy `:80` (TLS at Cloudflare).
+   - Do **not** add cloudflared to compose (one host tunnel).
+5. Always **destroy** what you create (finally). `destroy` unexposes first.
+6. Never mount host `docker.sock` into nested app compose; never GPU/CUDA sandboxes.
+7. **Expose only when asked.** Hostname = `{slug}.{apex}` (not `reviews.*`). App must publish Caddy `--port` on the sibling before expose (typically `80`).
+8. **Publish:** only via `sandbox expose` / `unexpose`.
+9. **Cloudflare:** after expose, upsert tunnel public hostname → `origin` from expose JSON; DNS when `OPENCODE_SANDBOX_REVIEW_DNS` is `on` (default). Never tunnel create. On auth errors → user runs `./scripts/setup.sh mcp-auth cloudflare-api` (Zone DNS Edit + Tunnel Edit on existing tunnel).
+10. Server Infisical ≠ app Infisical.
 
 ## ID hygiene
 
@@ -64,30 +69,31 @@ sandbox probe
 sandbox create --id <slug> --worktree "$(git rev-parse --show-toplevel)"
 sandbox exec --id <slug> -- docker compose -f docker-compose.test.yml build
 sandbox exec --id <slug> -- docker compose -f docker-compose.test.yml run --rm test
-# … or compose up for a live app before expose
+# … or compose up -d for a live app before expose
 sandbox destroy --id <slug>
 ```
 
-## Happy path — expose + DNS
+## Happy path — expose + tunnel hostname + DNS
 
-After the app is up and publishing an inner port:
+After the self-contained stack is up (Caddy publishing an inner port, usually `80`):
 
 ```bash
-sandbox expose --id <slug> --port <port> --hostname <slug>.<apex>
+sandbox expose --id <slug> --port 80 --hostname <slug>.<apex>
+# JSON includes host_port, origin (http://127.0.0.1:<host_port>), url
 ```
 
-Then, if `OPENCODE_SANDBOX_REVIEW_DNS=on` (or unset/default on):
+Then:
 
-1. Prefer load `cloudflare` skill for DNS record semantics when unsure.
+1. Prefer load `cloudflare` skill for DNS/tunnel record semantics when unsure.
 2. Via **cloudflare-api** MCP (read first):
    - Resolve zone for `<apex>`.
-   - Find how other hostnames on that zone point at the tunnel (existing CNAME target for apex/`www`/known app host — usually `*.cfargotunnel.com` or the zone’s tunnel target).
-   - Create or update CNAME: name=`<slug>` (or FQDN per API), target=that **same** tunnel target, proxied as other app records on the zone.
-3. Do **not** create a tunnel; do **not** change tunnel ingress (host cloudflared + Traefik already handle traffic).
+   - Upsert **public hostname** on the **existing** host tunnel (`OPENCODE_SANDBOX_TUNNEL_ID` when set): hostname=`<slug>.<apex>`, service=`origin` from expose JSON.
+   - If `OPENCODE_SANDBOX_REVIEW_DNS=on` (or unset/default on): create or update CNAME name=`<slug>` → same tunnel target other app records use (`*.cfargotunnel.com`), proxied as peers on the zone.
+3. Do **not** create a tunnel; do **not** put cloudflared in compose.
 4. Report `https://<slug>.<apex>`.
-5. On teardown: delete **only** the DNS record this session created (if any), then `sandbox unexpose` / `destroy`.
+5. On teardown: delete **only** the DNS record and tunnel public hostname this session created (if any), then `sandbox unexpose` / `destroy`.
 
-If `OPENCODE_SANDBOX_REVIEW_DNS=off`: skip MCP DNS (assume wildcard already covers `*.apex`); still call `sandbox expose`.
+If `OPENCODE_SANDBOX_REVIEW_DNS=off`: still upsert tunnel public hostname → origin; skip MCP DNS (assume wildcard already covers `*.apex`).
 
 ## Evidence
 
