@@ -172,10 +172,10 @@ Provider-level `timeout` (e.g. 300000ms) and per-model **`temperature` / `top_p`
 | Senior depth | `senior-dev` | Kimi K3 |
 | Architecture audit | `architecture-auditor` | GPT-5.6 Terra |
 | Security depth | `security-reviewer` | Claude Opus 4.8 |
-| Fast utility | `debugger`, `helper`, `refactor`, `verifier`, `review`, `performance-reviewer` | DeepSeek V4 Flash |
+| Fast utility | `debugger`, `helper`, `refactor`, `verifier`, `review`, `performance-reviewer`, `scribe` | DeepSeek V4 Flash |
 | Teaching | `mentor` | Qwen3.7 Max |
 | Vision | `vision` | Qwen3 VL |
-| Writing / docs | `scribe`, `document`, `doc-reviewer`, `stack-bootstrap`, `worktree-env`, `preflight` | GPT-5 Nano |
+| Writing / docs | `document`, `doc-reviewer`, `stack-bootstrap`, `worktree-env`, `preflight` | GPT-5 Nano |
 
 Runtime authority: `opencode.json`. Agent frontmatter `model:` should match for changed agents.
 
