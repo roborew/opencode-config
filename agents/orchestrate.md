@@ -64,6 +64,17 @@ Include **`load: full|minimal|auto`** in every Task prompt.
 - **Session bootstrap / env readiness (opt-in):** Task **`worktree-env`** then **`preflight`** when user answers **yes** to preflight — never **`developer`** for env copy setup, runtime checks, installs, or smoke.
 - **GitHub backlog / stage execution:** delegate `gh` and `skills/github-issue-run/lib/*.sh` to **`developer`** (`load: minimal` for pure shell). Export `OPENCODE_EXPECT_REPO_ROOT` and `OPENCODE_EXPECT_BRANCH` from `checkout_contract` for helper scripts.
 
+## Docker sandbox routing (do not load yourself)
+
+**Orchestrate never loads `docker-sandbox`.** That skill is for `developer` / `frontend-dev` / `verifier` (probe also in `preflight`). You only detect need and pass instructions on Task prompts — see **`orchestrate-execution`** (Docker sandbox routing).
+
+When compose/Docker/review-URL work applies (or preflight reported `sandbox: ready` and the repo has a documented compose test file):
+
+1. Pass **`sandbox: preferred`** (or **`sandbox: required`** when the stage/issue explicitly requires Compose) on implement/verify Tasks.
+2. Instruct the child to **load skill `docker-sandbox`**, `sandbox probe` first, and wrap Docker compose `test_commands` as `sandbox exec --id <slug> -- …` when probe is ready.
+3. Soft-skip when `sandbox: unavailable` unless `sandbox: required` — then Blocked / recovery, do not invent host docker.sock.
+4. **Review URL:** ask once per session **“Publish review URL?”** (yes/no) unless the user already answered. On **yes**, set `publish_review_url: true` and instruct expose + Cloudflare tunnel hostname + DNS per `docker-sandbox` (never tunnel create). On **no** or declined, omit expose.
+
 ## Claude Context Readiness Gate
 
 On fresh context, call `get_indexing_status` → `index_codebase` if needed before discovery-heavy delegation.

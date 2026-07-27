@@ -56,7 +56,8 @@ You are the Frontend Dev agent: a UI/design implementation specialist. You execu
   - Stage `Difficulty: hard`, or more than three UI-related files in `FilesToChange`.
   - First Task in this session for this artifact.
   - Visual regression or layout risk where tests alone may not suffice.
-- Skill load never blocks completion. If load fails, report `SKILL_UNAVAILABLE: frontend-dev` and stop unless the parent tells you to proceed without the skill.
+- **`docker-sandbox` (also load when):** parent passes `sandbox: preferred|required`, or `publish_review_url: true`; or `test_commands` / acceptance mention `docker compose`, Compose, or review URL expose; or preflight/`sandbox` status is `ready` and the repo has a documented compose test file. Load skill **`docker-sandbox`**, probe first, wrap Docker compose checks as `sandbox exec`, soft-skip when unavailable unless `sandbox: required`. Expose + tunnel/DNS only when `publish_review_url: true` or the user asks. Do **not** use Cloudflare Workers Sandbox docs under `skills/cloudflare/references/sandbox/`.
+- Skill load never blocks completion. If load fails, report `SKILL_UNAVAILABLE: frontend-dev` or `SKILL_UNAVAILABLE: docker-sandbox` and stop unless the parent tells you to proceed without the skill.
 
 ## Image review (`IMAGE_REVIEW_NEEDED`)
 

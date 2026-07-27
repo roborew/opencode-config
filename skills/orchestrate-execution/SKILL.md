@@ -72,7 +72,7 @@ Track during bootstrap:
    - If `Status: Blocked` with a **repairable** cause (missing `node_modules`, wrong PATH node vs `.mise.toml`, not indexed): when `preflight_repair_attempted` is false, instruct **`preflight`** to run the repair pass once, set `preflight_repair_attempted: true`, then re-Task **`preflight`** **once**. If still Blocked, stop with **one** `recommended_env_fix` — no `(a)/(b)/(c)` menus.
    - If `Status: Blocked` with an **unsafe** cause (missing env copy, runtime missing entirely, install failed after repair): stop with one remediation line.
 
-3. **On success:** set `env_gate_passed: true`. Return a brief structured report (deltas only).
+3. **On success:** set `env_gate_passed: true`. If the preflight report includes `sandbox` / `expose`, store `sandbox_status` (`ready` | `unavailable`) for **Docker sandbox routing**. Return a brief structured report (deltas only).
 
 **Loop guard:** If **`worktree-env`** or preflight returns the same success/blocker report twice with identical canonical evidence, treat as `LOOP_DETECTED` — do not re-invoke that subagent; report the contradiction or blocker once.
 
@@ -116,7 +116,50 @@ main_checkout_root: <absolute root when detectable>
 branch_policy: do not create, switch, checkout, or rename branches unless user explicitly requests in this turn
 ```
 
+When **Docker sandbox routing** applies (below), also include `sandbox: preferred|required`, optional `publish_review_url: true|false`, and the load/`sandbox exec` instructions from that section.
+
 Subagents must `cd` to `impl_repo_path`, verify branch matches, and report `CHECKOUT_CONTRACT_FAILED` on mismatch. They must **never** create branches or run `git switch`/`git checkout <branch>`/`git branch` on their own.
+
+## Docker sandbox routing
+
+**Orchestrate does not load skill `docker-sandbox`.** Instruct implementer/verifier Tasks to load it when compose/Docker or review publish applies. Do not conflate with Cloudflare Workers Sandbox (`skills/cloudflare/references/sandbox/` — different product).
+
+### Session state
+
+Track when known:
+- `sandbox_status`: `ready` | `unavailable` | `unknown` (from preflight report when env gate ran; else `unknown` until a child probes)
+- `publish_review_url`: `true` | `false` | unset
+- `sandbox_compose_path`: documented compose file when detected (e.g. `docker-compose.test.yml`)
+
+### When routing applies
+
+Treat as compose/Docker work if **any** are true:
+
+- `test_commands`, acceptance, or stage objective mention `docker compose`, `docker-compose`, Compose, or Sysbox/`sandbox exec`
+- Issue/stage asks for a feature review URL / `{slug}.{apex}` / web expose
+- Parent/user asks for sandbox compose build/test or review publish
+- Preflight reported `sandbox: ready` **and** the impl repo has a documented compose test file (`docker-compose.test.yml`, `compose.test.yaml`, or README-documented equivalent)
+
+### Review URL ask (once per session)
+
+When routing applies and `publish_review_url` is unset: ask **“Publish review URL?” (yes/no)** once. Set `publish_review_url` from the answer. Do not ask again this session unless the user changes it. Skip the ask when the user already requested or declined review publish in this turn.
+
+### Task prompt instructions (developer / frontend-dev / verifier)
+
+When routing applies, include on implement and verify Tasks (in addition to the execution dispatch contract):
+
+```text
+sandbox: preferred   # or required when stage/issue explicitly requires Compose
+load skill: docker-sandbox
+# probe first; if ready: create → sandbox exec for compose test_commands → destroy (always)
+# if unavailable: soft-skip Docker path unless sandbox: required → then Blocked
+publish_review_url: true|false
+# when true and sandbox ready: after stack is up, sandbox expose + cloudflare-api tunnel hostname + optional DNS per docker-sandbox; never tunnel create
+```
+
+- Prefer wrapping Docker/`docker compose` entries in `test_commands` as `sandbox exec --id <slug> -- <command>` when probe is ready; keep non-Docker lint/type/unit commands on the host/worktree as usual.
+- Soft-skip when unavailable unless `sandbox: required`.
+- Never instruct ad-hoc `docker run --runtime=sysbox-runc` or host `docker.sock` into app compose.
 
 ## Session Bootstrap (mandatory, first in fresh context)
 
@@ -200,7 +243,8 @@ Load **`github-issue-run`** together with this skill when the user chooses GitHu
    - `issue_number`, `repo`, `title`
    - `opencode_meta` verbatim
    - `impl_repo_path`, `expected_branch`, `is_linked_worktree`, `main_checkout_root`, `branch_policy` from `checkout_contract`
-6. **Verify (flat or per-stage):** Task `verifier` with `load: full` and the same contract plus completion report.
+   - When **Docker sandbox routing** applies: `sandbox: preferred|required`, `publish_review_url`, and load/`sandbox exec` instructions from that section
+6. **Verify (flat or per-stage):** Task `verifier` with `load: full` and the same contract plus completion report (include sandbox fields when routing applies).
 7. **Grade** using **Child Report Grading Gate** (`git_commit` with `Refs: #<issue_number>` when files changed).
 8. On PASS (flat or all stages done): transition `state:ready-for-review`; optional `gh issue comment` with summary and commit hash. **Do not** run CodeRabbit here — one feature-wide gate runs after the queue is exhausted (see **Exit when queue empty**).
 9. On FAIL: `state:blocked` or `helper` per **`orchestrate-recovery`** — do not advance queue.
@@ -215,7 +259,8 @@ When `stages[]` is present, for **each** stage in order:
    - `issue_number`, `repo`, `stage_id`, `stage` object (objective, files, acceptance, test_commands, commit_message)
    - `issue_ref: #<n>` for commits
    - `impl_repo_path`, `expected_branch`, `is_linked_worktree`, `main_checkout_root`, `branch_policy` from `checkout_contract`
-2. Task `verifier` with same stage contract + completion report.
+   - When **Docker sandbox routing** applies: `sandbox: preferred|required`, `publish_review_url`, and load/`sandbox exec` instructions from that section
+2. Task `verifier` with same stage contract + completion report (include sandbox fields when routing applies).
 3. Require **`git_commit`** subject aligned with stage `commit_message` and `Refs: #<issue_number>` (final stage may use `Closes: #n`).
 4. On stage FAIL: retry or `helper`; do not advance stage index.
 5. After last stage PASS: proceed to step 8 (ready-for-review only — **no** CodeRabbit per issue).
@@ -248,8 +293,9 @@ When discovery fails (queue exhausted):
    - `Owner: ux-dev` → invoke `ux-dev` (prototype generation from design artifacts; outputs to `.prototype/<slug>/`)
      Do not dispatch to the wrong subagent for a stage.
    - Include `impl_repo_path`, `expected_branch`, `branch_policy` from `checkout_contract` on every execution Task.
+   - When **Docker sandbox routing** applies: pass `sandbox` / `publish_review_url` / load-skill instructions on implement and verify Tasks (not on `ux-dev` unless compose is in scope).
 4. Collect completion report.
-5. Run `verifier`.
+5. Run `verifier` (same sandbox contract fields when routing applies).
 6. If verifier passes, continue to next stage.
 7. If verifier fails or stage is blocked, invoke `helper` — then follow **`orchestrate-recovery`** if the situation persists or matches loop/env/escalation patterns.
 

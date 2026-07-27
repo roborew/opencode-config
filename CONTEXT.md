@@ -57,11 +57,11 @@ Optional semantic code index via `mcp.claude-context` in `opencode.json`. Speeds
 _Avoid_: Running host and server `claude-context` together
 
 **Sandbox (Sysbox sibling)**:
-Optional opencode-server feature: ephemeral Sysbox sibling containers via the `sandbox` CLI for self-contained compose build/test (app + Caddy) and optional review publish. Gated by `OPENCODE_SANDBOX_ENABLED`; typically off on Mac. Agents use only the CLI — never invent host `docker.sock` or ad-hoc `sysbox-runc`. Preflight only probes; create/exec/expose/destroy live in skill `docker-sandbox`.
-_Avoid_: Mounting host Docker socket into app compose; GPU/CUDA in sandbox; forcing Sysbox on Desktop; cloudflared in app compose
+Optional opencode-server feature: ephemeral Sysbox sibling containers via the `sandbox` CLI for self-contained compose build/test (app + Caddy) and optional review publish. Gated by `OPENCODE_SANDBOX_ENABLED`; typically off on Mac. Agents use only the CLI — never invent host `docker.sock` or ad-hoc `sysbox-runc`. Preflight only probes; create/exec/expose/destroy live in skill `docker-sandbox`. **Orchestrate does not load that skill** — it instructs `developer` / `frontend-dev` / `verifier` Tasks to load it when compose/Docker/review URL applies. Unrelated to Cloudflare Workers Sandbox under `skills/cloudflare/references/sandbox/`.
+_Avoid_: Mounting host Docker socket into app compose; GPU/CUDA in sandbox; forcing Sysbox on Desktop; cloudflared in app compose; expecting orchestrate to run `sandbox` CLI itself
 
 **Review hostname**:
-Public feature review URL pattern `{feature-slug}.{apex}` (e.g. `blockshed.blockshared.com`), where apex comes from repo `review_domain` / `apex_domain` (or README). Nested Caddy is published to `127.0.0.1:<hostPort>` via `sandbox expose`; host cloudflared serves a public hostname on the **existing** tunnel; agents may create/update **tunnel public hostname + DNS**.
+Public feature review URL pattern `{feature-slug}.{apex}` (e.g. `blockshed.blockshared.com`), where apex comes from repo `review_domain` / `apex_domain` (or README). Nested Caddy is published to `127.0.0.1:<hostPort>` via `sandbox expose`; host cloudflared serves a public hostname on the **existing** tunnel; agents may create/update **tunnel public hostname + DNS**. Orchestrate asks **“Publish review URL?”** once before instructing expose.
 _Avoid_: Global `reviews.*` suffix; `cloudflared tunnel create`
 
 **App vs server Infisical**:
