@@ -171,8 +171,8 @@ When no artifact path or `feature:<slug>` is provided (new session, greeting, un
    - **Already `env_gate_passed` or `env_gate_declined`** → do not ask again; continue.
 2. **Checkout identity gate** (above) — mandatory even when preflight was declined.
 3. **Claude Context readiness gate** (below).
-4. **Fresh Context: Work selection** — present the **(1)/(2)/(3)/(4)** menu only after steps 1–3 are resolved.
-5. **Issue-expand readiness gate** (GitHub backlog only — after slug is captured from menu choice) — see below.
+4. **Fresh Context: Work selection** — present the **(1)/(2)/(3)/(4)/(5)** menu only after steps 1–3 are resolved.
+5. **Issue-expand readiness gate** (GitHub backlog **(1)** only — after slug is captured from menu choice) — see below.
 
 When the user provides a **`.plan` path** or **`feature:<slug>`** before bootstrap completed: if neither `env_gate_passed` nor `env_gate_declined`, ask the preflight **yes/no** first; run **checkout identity gate**; run **Claude Context readiness gate**; run **issue-expand readiness gate** for `feature:<slug>` only (after slug is captured); then enter the stage or GitHub loop.
 
@@ -200,13 +200,61 @@ After **checkout identity gate**, **Claude Context readiness gate**, and **after
 
 After session bootstrap (steps 1-3 above), when no artifact path or `feature:<slug>` is provided:
 
-1. **Present the work-selection menu** verbatim from the orchestrate agent **Fresh Context: Session Bootstrap + Work Selection** block (**(1)** GitHub backlog first; **(4)** legacy `.plan` last; numbers match display order).
+1. **Present the work-selection menu** verbatim from the orchestrate agent **Fresh Context: Session Bootstrap + Work Selection** block (**(1)** GitHub backlog first; **(2)** sandbox build/refresh; **(5)** legacy `.plan` last; numbers match display order).
 2. **On (1):** obtain kebab slug if missing; run **issue-expand readiness gate** if not already done; then proceed to **GitHub feature backlog loop**.
-3. **On (2):** stop and prompt: switch to `architect` with the user's goal (e.g. Mode F sign-off, new planning).
-4. **On (3):** ask for a one-line description; route to `architect` for non-backlog work unless the user supplies a `feature:<slug>`, issue #, or explicit execution scope—then use **(1)** or targeted issue flow as appropriate.
-5. **On (4) — legacy only:** continue to **Legacy `.plan` selection** below. Do not glob or list `.plan/` before the user chooses **(4)**.
+3. **On (2):** proceed to **Sandbox feature build mode** (below). Do **not** run issue-expand.
+4. **On (3):** stop and prompt: switch to `architect` with the user's goal (e.g. Mode F sign-off, new planning).
+5. **On (4):** ask for a one-line description; route to `architect` for non-backlog work unless the user supplies a `feature:<slug>`, issue #, or explicit execution scope—then use **(1)** or targeted issue flow as appropriate. If they ask only for sandbox build/refresh, use **(2)**.
+6. **On (5) — legacy only:** continue to **Legacy `.plan` selection** below. Do not glob or list `.plan/` before the user chooses **(5)**.
 
-## Legacy `.plan` selection (only after user chooses (4))
+## Sandbox feature build mode (menu (2) — parallel workflow)
+
+**Purpose:** Build / test / optionally publish the **current checkout** feature branch in a Sysbox sibling **without** running the GitHub issue queue. Typical use: start a sandbox build while doing other work (e.g. frontend) in another session; later say **refresh** after code changes.
+
+**Orchestrate does not load `docker-sandbox`.** Task **`developer`** (`load: full`) with that skill.
+
+### Session state
+
+Track:
+- `sandbox_build_active`: true after a successful create (or reuse) for this session
+- `sandbox_slug`: DNS-label slug (from branch / feature / user)
+- `sandbox_compose_file`: e.g. `docker-compose.test.yml`
+- `publish_review_url`: true | false
+- `review_url`: last reported `https://{slug}.{apex}` when exposed
+
+### Procedure (first run or menu (2))
+
+1. Ensure **checkout identity gate** has run. If `protected_branch: true`, stop and ask user to switch to a feature/topic branch (same as other execution).
+2. Derive **`sandbox_slug`**: sanitize current `branch` to a DNS label, or ask once for kebab slug / `feature:<slug>`.
+3. Ask **build intent** once if unclear (default **a** when user said “build”):
+   - **(a) build + test** — `compose build` + `compose run --rm test` (or documented test service), then keep sibling for refresh **or** destroy if user prefers teardown
+   - **(b) live stack** — `compose up -d` (self-contained + Caddy) for review; keep sibling running
+   - **(c) refresh** — reuse existing sibling if `sandbox status` ready; re-build / re-up / re-test only
+4. Ask **“Publish review URL?”** when intent is **(b)** or user wants expose; set `publish_review_url`. For **(a)** default **no** unless asked.
+5. Task **`developer`** with:
+   ```text
+   execution_mode: sandbox_feature_build
+   load: full
+   load skill: docker-sandbox
+   sandbox: required
+   sandbox_action: create_build_test | up_live | refresh
+   publish_review_url: true|false
+   sandbox_slug: <slug>
+   impl_repo_path / expected_branch / branch_policy from checkout_contract
+   ```
+   Instruct: probe → env gate → create (or reuse) → exec documented compose → optional expose + CF tunnel/DNS per skill → report `sandbox_id`, commands run, `review_url` if any, keep-or-destroy. Soft-skip only if probe unavailable **and** user accepts — otherwise Blocked with one remediation (enable Sysbox / rebuild image).
+6. Grade child report: require probe result, compose commands + exit evidence, destroy-or-keep note. On PASS: set `sandbox_build_active`, store slug / URL; print a short status table.
+7. **Stay available for refresh:** after PASS, prompt once:
+   ```text
+   Sandbox ready. Say: refresh (rebuild after code changes) | expose (if not yet) | destroy | or pick another menu option (1)/(3)/(4)/(5).
+   ```
+   On **refresh** / **expose** / **destroy**: re-Task `developer` with the same `execution_mode` and `sandbox_action: refresh|expose|destroy` — do not re-run issue-expand or the backlog loop.
+
+### Soft-skip / unavailable
+
+If `sandbox probe` is unavailable (Mac / `OPENCODE_SANDBOX_MODE=off`): report once; do not invent docker.sock. Offer to return to the work menu.
+
+## Legacy `.plan` selection (only after user chooses (5))
 
 1. **Read `.plan/` from disk first (non-negotiable).** Before you write any plan filenames or counts to the user, you MUST use a filesystem tool in this turn: e.g. glob `.plan/*.md` (and `.plan/**/*.md` if you use nested plans), or list/read the `.plan/` directory. **Never** invent, guess, or recall-from-memory what is in `.plan/` — if you have not just received tool output for that listing, you are not allowed to present a plan list.
 2. **Derive active plans** from that tool output only: include `*.md` files whose basename does **not** end with `.completed.md`. Omit archived `.plan/<type>.<slug>.completed.md` after architect Mode B sign-off.

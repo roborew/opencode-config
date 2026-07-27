@@ -46,7 +46,7 @@ rm -rf node_modules
 **Pass criteria (first run):**
 1. **`worktree-env`** runs once; report includes `wt_root`, `main_root`, per-file `is_regular_file`; `worktree_env: ok`.
 2. **`preflight`** agent runs repair pass if needed (`mise exec -- pnpm install`, indexing).
-3. `Status: Ready`; `env_gate_passed`; work menu **(1)–(4)** appears.
+3. `Status: Ready`; `env_gate_passed`; work menu **(1)–(5)** appears.
 4. No `(a)/(b)/(c)` option menu for routine setup.
 
 **Pass criteria (second run — idempotency):** Same session or new session with env copies and `node_modules` already present → preflight reports `ok_existing` / skips repair; **`worktree-env` not invoked again** when `worktree_env_checked` is set from prior success in same bootstrap (or on rerun after user requests, copies show `ok_existing`).

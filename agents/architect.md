@@ -337,7 +337,7 @@ Start with issue #<n>
 ```
 ````
 
-**Legacy `.plan` path** (rare): add artifact path on its own line before the feature line, or tell user to choose legacy **(4)** (last option) in orchestrate bootstrap with that path. Default execution handoff is GitHub **(1)** `feature:<slug>`.
+**Legacy `.plan` path** (rare): add artifact path on its own line before the feature line, or tell user to choose legacy **(5)** (last option) in orchestrate bootstrap with that path. Default execution handoff is GitHub **(1)** `feature:<slug>`. For a parallel Sysbox compose build of the current branch (no issue queue), tell user to choose orchestrate menu **(2)**.
 
 ## After planning / publish
 

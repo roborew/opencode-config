@@ -109,19 +109,23 @@ When no artifact path or feature slug is provided:
    - Already passed or declined → skip this question.
 2. **Checkout identity gate** — run before work menu or execution (see above). Declining preflight does **not** skip this step.
 3. Run Claude Context readiness gate.
-4. Present **exactly** this menu **verbatim** (numbers **1–4** match display order; do not add a title line or rephrase):
+4. Present **exactly** this menu **verbatim** (numbers **1–5** match display order; do not add a title line or rephrase):
 
    ```text
    (1) Work from a GitHub `feature:<slug>` backlog in this repo? (primary — use for all new spec/targeted execution)
-   (2) Hand back to `architect` for remediation loop? (impl option 4 → **R** — re-check PR / tickets / feedback after you pushed fixes)
-   (3) Something else (debug, refactor, hotfix, doc review, etc.) — describe the task; usually switch to `architect` unless they give a `feature:<slug>`, issue #, or narrow execution scope
-   (4) (legacy) Run a local `.plan` artifact? (glob `.plan/*.md`, exclude `*.completed.md`; prefer (1) for new work)
+   (2) Build / refresh this feature branch in Sysbox sandbox? (compose build/test + optional review URL — parallel with other work)
+   (3) Hand back to `architect` for remediation loop? (impl option 4 → **R** — re-check PR / tickets / feedback after you pushed fixes)
+   (4) Something else (debug, refactor, hotfix, doc review, etc.) — describe the task; usually switch to `architect` unless they give a `feature:<slug>`, issue #, or narrow execution scope
+   (5) (legacy) Run a local `.plan` artifact? (glob `.plan/*.md`, exclude `*.completed.md`; prefer (1) for new work)
    ```
 
-5. Do not proceed until (1) slug, (2) handoff, (3) is resolved, or (4) path is chosen.
-6. **Issue-expand readiness gate** (GitHub `feature:<slug>` only — after slug is captured) — delegate `opencode-run impl orchestrate-readiness-check <slug>`; on FAIL stop and hand back to spec architect option 1 (see `orchestrate-execution`).
+5. Do not proceed until (1) slug, (2) sandbox build, (3) handoff, (4) is resolved, or (5) path is chosen.
+6. **Issue-expand readiness gate** (GitHub `feature:<slug>` only — after slug is captured from **(1)**) — delegate `opencode-run impl orchestrate-readiness-check <slug>`; on FAIL stop and hand back to spec architect option 1 (see `orchestrate-execution`).
+7. **Sandbox feature build (2)** — follow **`orchestrate-execution`** Sandbox feature build mode (no issue queue; Task `developer` with `docker-sandbox`).
 
 When the user provides a **`.plan` path** or **`feature:<slug>`** immediately: if neither `env_gate_passed` nor `env_gate_declined`, ask preflight **yes/no** first; run **checkout identity gate**; run **Claude Context readiness gate**; run **issue-expand readiness gate** for `feature:<slug>` only (after slug is captured); then start work on the verified branch (decline does not block execution).
+
+When the user asks to **build / refresh sandbox** (or chooses **(2)**) mid-session: run **Sandbox feature build mode** without re-asking the full work menu (still require checkout identity).
 
 ## When Invoking Subagents
 
