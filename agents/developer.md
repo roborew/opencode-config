@@ -19,7 +19,6 @@ permission:
   skill:
     {
       "developer": "allow",
-      "debug-form": "allow",
       "zoom-out": "allow",
       "caveman": "allow",
       "cloudflare": "allow",
