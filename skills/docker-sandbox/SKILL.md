@@ -1,8 +1,8 @@
 ---
 name: docker-sandbox
-description: "Sysbox sibling sandboxes via opencode-server sandbox CLI: self-contained Compose build/test and deterministic BlocShed previews. Load when stages need Docker Compose or a web preview."
+description: "Sysbox sibling sandboxes via opencode-server sandbox CLI: self-contained Compose build/test and deterministic local web previews. Load when stages need Docker Compose or a web preview."
 modelTier: "fast"
-roleReminder: "Probe + env gate first. For BlocShed, sandbox preview is mandatory: it derives APP_SUBDOMAIN and the Traefik hostname from one sandbox ID. Never manually combine Compose up and sandbox expose. Host cloudflared only — never cloudflared-in-compose. No .env.example."
+roleReminder: "Probe + env gate first. sandbox preview derives the route hostname from one sandbox ID and waits for the requested app port before exposure. Follow project-specific runtime contracts. Never manually combine Compose up and sandbox expose. Host cloudflared only — never cloudflared-in-compose. No .env.example."
 ---
 
 ## Skill reference (optional load)
@@ -43,16 +43,12 @@ Names: sibling `opencode-sandbox-<slug>`, publish helper `opencode-sandbox-route
    - If Infisical used: non-empty key *names* `INFISICAL_PROJECT_ID`, `INFISICAL_DOMAIN`|`INFISICAL_API_URL`, and `INFISICAL_TOKEN` **or** `CLIENT_ID`+`CLIENT_SECRET` (+ `INFISICAL_ENV` if used).
    - Never `.env.example` / invent values. Fix: `./scripts/setup.sh projects …` create+paste, then worktree-env if linked.
 3. Prefer documented compose (`docker-compose.test.yml`, `compose.test.yaml`, README). Ask once if ambiguous; never invent a stack.
-4. **Self-contained compose required for live/review stacks:**
-   - Private compose network only.
-   - Include **Caddy** (or equivalent) reverse-proxying to app services.
-   - Publish Caddy (typically `:80` or `:443`). Edge TLS is at Cloudflare; origin often uses self-signed/private TLS.
-   - Do **not** add cloudflared to compose (one host tunnel).
+4. **Self-contained compose required for live/review stacks:** use the app’s documented listener and private service topology. Do not add cloudflared to app Compose.
 5. Always **destroy** what you create (finally). `destroy` unexposes first.
 6. Never mount host `docker.sock` into nested app compose; never GPU/CUDA sandboxes.
-7. **Expose only when asked.** Hostname = `{slug}.{apex}` (not `reviews.*`). App must publish its requested `--port` on the sibling before exposure.
-8. **BlocShed preview is mandatory and atomic:** use `sandbox preview --id <slug> --app-apex blocshed.app --compose-file docker-compose.test.yml --port 3000`. It starts Compose with `APP_SUBDOMAIN=<slug>` and exposes only `https://<slug>.blocshed.app` through Traefik. Never run BlocShed Compose up and `sandbox expose` separately; never override `APP_SUBDOMAIN`; never provide a different hostname.
-9. **Publish:** use `sandbox preview` for BlocShed; use `sandbox expose` / `unexpose` only for other documented app flows.
+7. **Expose only when asked.** Hostname = `{slug}.{apex}` (not `reviews.*`). The app must bind the requested `--port` in the sibling before exposure.
+8. **Preview atomically:** use `sandbox preview`, never a manual combination of Compose up and `sandbox expose`. It derives `<slug>.<apex>` and waits for the requested port before creating the Traefik route. Project instructions own any app-specific environment variables and host/tenant behavior.
+9. **Verify before reporting success:** request a meaningful route through the derived hostname; verify no unexpected redirect host and that primary assets load. Treat 403, 502, port-readiness timeout, or an unexpected redirect as a failed preview. Diagnose the project’s documented host/runtime contract; never invent domain or tenant records.
 10. Server Infisical ≠ app Infisical.
 
 ## ID hygiene
@@ -77,23 +73,22 @@ sandbox exec --id <slug> -- docker compose -f docker-compose.test.yml run --rm t
 sandbox destroy --id <slug>
 ```
 
-## BlocShed preview — deterministic Traefik route
+## Deterministic local preview
 
-After `sandbox create`, use exactly this command for a BlocShed preview:
+After `sandbox create`, use the app’s documented apex, compose file, and listener port:
 
 ```bash
-sandbox preview --id <slug> --app-apex blocshed.app --compose-file docker-compose.test.yml --port 3000
-# APP_SUBDOMAIN=<slug>
-# URL=https://<slug>.blocshed.app
+sandbox preview --id <slug> --app-apex <apex> --compose-file <compose-file> --port <port>
+# URL=https://<slug>.<apex>
 ```
 
-The sandbox ID is the single source of truth. For example, `test-feature-branch` always means `APP_SUBDOMAIN=test-feature-branch` and `https://test-feature-branch.blocshed.app`. The command rejects a supplied hostname that differs from this value and creates the required Traefik adapter itself.
+The sandbox ID is the single source of truth for the route hostname. `preview` rejects a supplied hostname that differs from `<id>.<app-apex>`, waits for the requested port in the sibling, and creates the Traefik adapter itself.
 
-Do not use standalone `sandbox expose` for BlocShed, and do not trust a pre-existing `.env` `APP_SUBDOMAIN` value. Verify the actual preview URL (including `/users/sign_in`) after the command completes. On teardown, run `sandbox destroy --id <slug>`.
+When public DNS is not configured, use the project’s local hostname setup or an HTTPS request resolved to `127.0.0.1` to verify the route. On teardown, run `sandbox destroy --id <slug>`.
 
 ## Other app review URLs
 
-For non-BlocShed documented flows, use the app's specified `sandbox expose` procedure and any required host tunnel/DNS management. Never create a tunnel or add cloudflared to app Compose.
+Use an app’s documented `sandbox expose` procedure only when it requires a non-preview flow. Never create a tunnel or add cloudflared to app Compose.
 
 ## Evidence
 
