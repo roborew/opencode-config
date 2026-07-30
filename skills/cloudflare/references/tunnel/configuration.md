@@ -92,6 +92,8 @@ originRequest:
   caPool: /path/to/ca.pem                # Custom CA
 ```
 
+**Review / sandbox hostnames (OpenCode):** When upserting a tunnel public hostname for `{slug}.{apex}` via MCP/dashboard, always use **service type HTTPS** → `https://127.0.0.1:<hostPort>` with **No TLS Verify ON** (`noTLSVerify: true`). Do not use HTTP service type — browsers need HTTPS on the public hostname, and local/self-signed origin certs fail without skipping verify. See skill `docker-sandbox`.
+
 ### HTTP Settings
 ```yaml
 originRequest:

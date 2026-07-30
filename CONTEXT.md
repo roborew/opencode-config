@@ -61,8 +61,8 @@ Optional opencode-server feature: ephemeral Sysbox sibling containers via the `s
 _Avoid_: Mounting host Docker socket into app compose; GPU/CUDA in sandbox; forcing Sysbox on Desktop; cloudflared in app compose; expecting orchestrate to run `sandbox` CLI itself
 
 **Review hostname**:
-Public feature review URL pattern `{feature-slug}.{apex}` (e.g. `blockshed.blockshared.com`), where apex comes from repo `review_domain` / `apex_domain` (or README). Nested Caddy is published to `127.0.0.1:<hostPort>` via `sandbox expose`; host cloudflared serves a public hostname on the **existing** tunnel; agents may create/update **tunnel public hostname + DNS**. Orchestrate asks **“Publish review URL?”** once before instructing expose.
-_Avoid_: Global `reviews.*` suffix; `cloudflared tunnel create`
+Public feature review URL pattern `{feature-slug}.{apex}` (e.g. `blockshed.blockshared.com`), where apex comes from repo `review_domain` / `apex_domain` (or README). Nested Caddy is published to `127.0.0.1:<hostPort>` via `sandbox expose`; host cloudflared serves a public hostname on the **existing** tunnel; agents may create/update **tunnel public hostname + DNS**. Tunnel public hostname must use **service type HTTPS**, URL `https://127.0.0.1:<hostPort>`, and **No TLS Verify ON** — never HTTP service type (browsers need HTTPS). Orchestrate asks **“Publish review URL?”** once before instructing expose.
+_Avoid_: Global `reviews.*` suffix; `cloudflared tunnel create`; HTTP tunnel service type for review hostnames
 
 **App vs server Infisical**:
 OpenCode **server** Infisical injects secrets into the OpenCode process only. **App** Infisical for sandbox Compose comes from the mounted repo `.env` (setup create + paste). Sibling must reach Infisical over the network.
