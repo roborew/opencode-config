@@ -149,11 +149,6 @@
     }
   },
   "mcp": {
-    "docs-mcp-server": {
-      "type": "remote",
-      "url": "http://127.0.0.1:6280/sse",
-      "enabled": true
-    },
     "mcpjungle": {
       "type": "remote",
       "url": "https://mcpjungle.roborew.xyz/mcp",
