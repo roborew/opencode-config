@@ -178,7 +178,7 @@
       ],
       "enabled": true
     },
-    "context7": {
+    "mcpjungle": {
       "type": "remote",
       "url": "https://mcpjungle.roborew.xyz/mcp",
       "enabled": true,
