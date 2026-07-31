@@ -180,8 +180,12 @@
     },
     "context7": {
       "type": "remote",
-      "url": "https://mcp.context7.com/mcp",
-      "enabled": true
+      "url": "https://mcpjungle.roborew.xyz/mcp",
+      "enabled": true,
+      "oauth": false,
+      "headers": {
+        "Authorization": "Bearer {env:MCPJUNGLE_OPENCODE_TOKEN}"
+      }
     },
     "claude-context": {
       "type": "local",
