@@ -19,8 +19,8 @@ Orchestrate does not load this skill; it passes `sandbox: preferred|required` an
 |---------|-------------|--------------|
 | Install host cloudflared (one tunnel) | Human / host ops (opencode-server docs/sandbox.md) | Never install cloudflared; never create a tunnel |
 | Localhost publish for a sandbox | `sandbox expose` / `unexpose` CLI | Call CLI only — returns `host_port` + hint `origin` (scheme may be `http://`; **do not** copy that scheme into the tunnel) |
-| Tunnel public hostname `{slug}.{apex}` → origin | `cloudflare-api` MCP | Upsert/delete on the **existing** host tunnel — **always HTTPS + No TLS Verify ON** (see below) |
-| DNS for `{slug}.{apex}` | `cloudflare-api` MCP (+ `cloudflare` skill if needed) | Upsert/delete CNAME → tunnel target when `OPENCODE_SANDBOX_REVIEW_DNS=on` |
+| Tunnel public hostname `{slug}.{apex}` → origin | `cloudflare-api` via MCPJungle | Upsert/delete on the **existing** host tunnel — **always HTTPS + No TLS Verify ON** (see below) |
+| DNS for `{slug}.{apex}` | `cloudflare-api` via MCPJungle (+ `cloudflare` skill if needed) | Upsert/delete CNAME → tunnel target when `OPENCODE_SANDBOX_REVIEW_DNS=on` |
 | App Infisical / `.env` | Setup paste + worktree-env | Gate only; never invent secrets |
 
 Host tunnel is a prerequisite; this skill orchestrates sibling lifecycle + optional tunnel hostname + DNS. Do not invent a tunnel-create skill.

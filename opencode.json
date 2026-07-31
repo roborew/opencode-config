@@ -168,16 +168,6 @@
       "url": "http://127.0.0.1:6280/sse",
       "enabled": true
     },
-    "dash-api": {
-      "type": "local",
-      "command": [
-        "uvx",
-        "--from",
-        "git+https://github.com/Kapeli/dash-mcp-server.git",
-        "dash-mcp-server"
-      ],
-      "enabled": true
-    },
     "mcpjungle": {
       "type": "remote",
       "url": "https://mcpjungle.roborew.xyz/mcp",
@@ -195,18 +185,6 @@
         "-y",
         "@zilliz/claude-context-mcp@latest"
       ]
-    },
-    "cloudflare-api": {
-      "type": "remote",
-      "url": "https://mcp.cloudflare.com/mcp",
-      "enabled": true,
-      "oauth": {}
-    },
-    "cloudflare-docs": {
-      "type": "remote",
-      "url": "https://docs.mcp.cloudflare.com/mcp",
-      "enabled": true,
-      "oauth": {}
     }
   },
   "agent": {

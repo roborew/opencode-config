@@ -154,7 +154,7 @@ load skill: docker-sandbox
 # probe first; if ready: create → sandbox exec for compose test_commands → destroy (always)
 # if unavailable: soft-skip Docker path unless sandbox: required → then Blocked
 publish_review_url: true|false
-# when true and sandbox ready: after stack is up, sandbox expose + cloudflare-api tunnel hostname + optional DNS per docker-sandbox; never tunnel create
+# when true and sandbox ready: after stack is up, sandbox expose + cloudflare-api via MCPJungle tunnel hostname + optional DNS per docker-sandbox; never tunnel create
 ```
 
 - Prefer wrapping Docker/`docker compose` entries in `test_commands` as `sandbox exec --id <slug> -- <command>` when probe is ready; keep non-Docker lint/type/unit commands on the host/worktree as usual.

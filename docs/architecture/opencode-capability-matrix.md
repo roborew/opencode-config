@@ -21,5 +21,5 @@ Other read-only specialists (`debugger`, `refactor`, `designer`, `strategist`, `
 ## Preserved strengths
 
 - Per-agent model routing in `opencode.json`.
-- MCP: `context7`, `docs-mcp-server`, `dash-api`, `claude-context` (command path unchanged), Cloudflare remote MCP (`cloudflare-api`, `cloudflare-docs`; OAuth). Narrow Cloudflare skills: `cloudflare`, `wrangler`, `workers-best-practices` (from [cloudflare/skills](https://github.com/cloudflare/skills)).
+- MCP: `context7`, `docs-mcp-server`, `mcpjungle`, and `claude-context` (command path unchanged). MCPJungle manages Cloudflare API and Docs upstream authentication. Narrow Cloudflare skills: `cloudflare`, `wrangler`, `workers-best-practices` (from [cloudflare/skills](https://github.com/cloudflare/skills)).
 - `strategist`, `preflight`, architect plan/review split.

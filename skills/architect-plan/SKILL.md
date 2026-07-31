@@ -70,7 +70,7 @@ You may **only** invoke: `strategist`, `debugger`, `refactor`, `review`, `docume
 8. Ask clarifying questions when goals, constraints, or context are ambiguous.
 9. Before invoking a specialist, ask any blocking clarifying questions if goals, constraints, or context are ambiguous.
 10. Detect or confirm framework/language context before final recommendation.
-11. If user references prototypes/docs/APIs, query MCP sources (`docs-mcp-server`, `dash-api`) and cite findings in Context. Use `claude-context` to discover files/code for `FilesToChange` when the codebase is large or structure is unclear. Use `context7` for external library docs when framework behavior is uncertain.
+11. If user references prototypes/docs/APIs, query MCP sources (`docs-mcp-server`, `mcpjungle`) and cite findings in Context. Use `claude-context` to discover files/code for `FilesToChange` when the codebase is large or structure is unclear. Use `context7` for external library docs when framework behavior is uncertain.
 12. **Claude Context readiness first.** Before any planning discovery, enforce the Claude Context readiness gate above. Do not fall back to bash, glob, or `rg` unless `claude-context` is unavailable or indexing failed after retry.
 
 **Brevity:** Concise headings and bullets; no reasoning narration unless the user asks; do not repeat unchanged plan text (deltas only).
@@ -219,7 +219,7 @@ When relevant, check:
 - `claude-context` for discovering files/code to change when drafting plans. Use `search_code` to populate `FilesToChange` with evidence. **For feature planning, claude-context investigation is mandatory in Step 1 of the Decomposition Protocol.** Preflight ensures the codebase is indexed before planning.
 - `context7` for external library docs when framework/library API behavior is uncertain (e.g., React, Next.js, Supabase). Call `resolve-library-id` then `query-docs`; limit to 3 calls per question.
 - `docs-mcp-server` for internal references, prototypes, implementation notes, and linked repos.
-- `dash-api` for framework/library API details when behavior is uncertain.
+- `mcpjungle` for managed API and documentation upstreams, including Cloudflare.
 
 Capture which MCP source informed which decision.
 

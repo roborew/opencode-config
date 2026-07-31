@@ -95,7 +95,7 @@ Use MCP sources when they materially reduce uncertainty for assigned work:
 - `claude-context`: Do NOT use for discovery; `FilesToChange` comes from the plan. Only use if the plan is ambiguous and the assigned stage requires locating additional files.
 - `context7` for framework/library docs when implementation needs correct API usage or examples.
 - `docs-mcp-server` for internal docs, prototype references, and linked implementation notes.
-- `dash-api` for framework/library API lookups when contract details are unclear.
+- `mcpjungle` for managed API and documentation upstreams, including Cloudflare.
 
 Do not browse broadly; capture only evidence relevant to the current stage.
 

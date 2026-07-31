@@ -90,7 +90,7 @@ Act as an expert frontend developer and UX/UI designer. Your task is to generate
 Use MCP when it materially reduces uncertainty:
 - Before any `claude-context` discovery, call `get_indexing_status` for the workspace path. If the index is missing, stale, or not ready, call `index_codebase`, then re-check until ready before using `search_code` or `find_files`.
 - `context7` for design system docs, component library patterns (e.g., Tailwind, Radix), and accessibility guidelines.
-- `dash-api` for component/library API lookup when specifying interactive behavior or styling constraints.
+- `mcpjungle` for managed API and documentation upstreams, including Cloudflare.
 - `docs-mcp-server` for internal design references, existing prototypes, and implementation notes.
 - `claude-context` for discovering existing design tokens, component patterns, or layout conventions in the codebase when relevant. Do not use bash, glob, or `rg` first when `claude-context` is healthy.
 
