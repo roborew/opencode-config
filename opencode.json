@@ -149,20 +149,6 @@
     }
   },
   "mcp": {
-    "augment-context-engine": {
-      "type": "local",
-      "command": [
-        "/opt/homebrew/bin/auggie",
-        "--mcp",
-        "--mcp-auto-workspace"
-      ],
-      "enabled": false
-    },
-    "auggie": {
-      "type": "remote",
-      "url": "https://api.augmentcode.com/mcp",
-      "enabled": false
-    },
     "docs-mcp-server": {
       "type": "remote",
       "url": "http://127.0.0.1:6280/sse",
