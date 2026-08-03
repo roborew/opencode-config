@@ -151,7 +151,7 @@
   "mcp": {
     "mcpjungle": {
       "type": "remote",
-      "url": "https://mcpjungle.roborew.xyz/mcp",
+      "url": "https://mcpjungle.roborew.xyz/mcp?mode=lazy",
       "enabled": true,
       "oauth": false,
       "headers": {
