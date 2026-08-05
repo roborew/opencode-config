@@ -70,7 +70,7 @@
       "name": "OpenRouter",
       "options": {
         "timeout": 300000,
-        "chunkTimeout": 60000
+        "chunkTimeout": 120000
       },
       "models": {
         "minimax/minimax-m3": {
@@ -124,7 +124,8 @@
                 "digitalocean",
                 "morph"
               ],
-              "allow_fallbacks": false
+              "allow_fallbacks": true,
+              "sort": "latency"
             }
           }
         },
