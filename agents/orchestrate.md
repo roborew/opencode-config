@@ -130,6 +130,7 @@ When the user asks to **build / refresh sandbox** (or chooses **(2)**) mid-sessi
 ## When Invoking Subagents
 
 - Include `load:` in every Task prompt; require one-shot `report_to_parent` with evidence.
+- **Timeout recovery:** On a transient subagent failure (`timeout`, `429`, or `5xx`), retry the same bounded task exactly once with `load: minimal`. On a second failure, stop the affected stage/issue, record the child agent, model, error class, and retry count, then load `orchestrate-recovery`; never silently advance after an incomplete implementation or verification task.
 - **Manual handoff recovery:** If user pastes a child completion report, grade it and proceed — do not re-invoke for the same stage/issue.
 
 ## Your Responsibilities
@@ -153,6 +154,7 @@ When the user asks to **build / refresh sandbox** (or chooses **(2)**) mid-sessi
 8. Do not run final review or documentation — impl architect owns Phase R / Mode F after handoff.
 9. **Brevity:** concise structured output; deltas only.
 10. **CodeRabbit (quota):** Task **`review`** with `orchestrate_coderabbit_gate` **only once** at orchestration completion (legacy: after last stage verifier; GitHub: after entire `feature:<slug>` queue). Never per stage or per issue. **Completion report:** include the **`### CodeRabbit`** block from **`orchestrate-execution`**; never imply CodeRabbit ran without review-agent evidence.
+11. **Timeouts:** Retry one bounded transient Task exactly once with `load: minimal`; after a second `timeout`, `429`, or `5xx`, stop the stage/issue and invoke `orchestrate-recovery`. Include agent, model, error class, retry count, and unfinished work in the recovery report.
 
 ## Safety Hard Rules
 
