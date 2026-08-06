@@ -1,7 +1,7 @@
 ---
 description: Escalation when developer is stuck. Invoked by orchestrate via Task when operator asks. Diagnose root cause, implement fix. Hand back to orchestrator when blocker fixed.
 mode: subagent
-model: opencode/kimi-k3
+model: opencode-go/kimi-k3
 steps: 40
 tools:
   write: true

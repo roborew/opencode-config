@@ -1,7 +1,7 @@
 ---
 description: Scoped feature planning specialist. Receives an isolated sub-problem from architect and returns a concise investigation report. Read-only; does not write files.
 mode: subagent
-model: opencode/deepseek-v4-pro
+model: opencode-go/deepseek-v4-pro
 tools:
   write: false
   edit: false

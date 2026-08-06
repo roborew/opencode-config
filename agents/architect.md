@@ -1,7 +1,7 @@
 ---
 description: Planning coordinator — delegates all mutations via Task subagents; read-only bash for discovery and bin/* wrappers only.
 mode: primary
-model: opencode/deepseek-v4-flash
+model: opencode-go/deepseek-v4-flash
 tools:
   write: false
   edit: false

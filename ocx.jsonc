@@ -4,35 +4,35 @@
 		"skills": {
 			"to-prd": {
 				"description": "PRD authoring + GitHub issue publish",
-				"defaultModel": "opencode/deepseek-v4-flash"
+				"defaultModel": "opencode-go/deepseek-v4-flash"
 			},
 			"triage": {
 				"description": "Issue state machine + gh batch helpers",
-				"defaultModel": "opencode/deepseek-v4-flash"
+				"defaultModel": "opencode-go/deepseek-v4-flash"
 			},
 			"research": {
 				"description": "Cached .research/<slug>.md pre-planning",
-				"defaultModel": "opencode/deepseek-v4-flash"
+				"defaultModel": "opencode-go/deepseek-v4-flash"
 			},
 			"improve-codebase-architecture": {
 				"description": "Periodic codebase audit (HTML + optional security); remediation via to-issues → orchestrate",
-				"defaultModel": "opencode/claude-opus-4-8"
+				"defaultModel": "opencode-go/qwen3.7-max"
 			},
 			"fanout-issues": {
 				"description": "Spec-repo cross-repo child issue fanout",
-				"defaultModel": "opencode/deepseek-v4-flash"
+				"defaultModel": "opencode-go/deepseek-v4-flash"
 			},
 			"setup-project": {
 				"description": "Spec-repo stack bootstrap interview + registry",
-				"defaultModel": "opencode/deepseek-v4-flash"
+				"defaultModel": "opencode-go/deepseek-v4-flash"
 			},
 			"issue-expand": {
 				"description": "Impl-repo codebase-backed issue planning + gates",
-				"defaultModel": "opencode/deepseek-v4-flash"
+				"defaultModel": "opencode-go/deepseek-v4-flash"
 			},
 			"feature-complete": {
 				"description": "Spec-repo cross-repo feature close-out",
-				"defaultModel": "opencode/deepseek-v4-flash"
+				"defaultModel": "opencode-go/deepseek-v4-flash"
 			}
 		}
 	}
