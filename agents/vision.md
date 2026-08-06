@@ -1,7 +1,7 @@
 ---
 description: Image/layout reviewer for when the model needs to see the UI
 mode: subagent
-model: openrouter/qwen/qwen3-vl-235b-a22b-instruct
+model: opencode/gemini-3-flash
 tools:
   write: false
   edit: false

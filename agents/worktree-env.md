@@ -1,7 +1,7 @@
 ---
 description: Copy .env and .env.local from main checkout into a linked git worktree (before execution)
 mode: subagent
-model: openrouter/openai/gpt-5-nano
+model: opencode/gpt-5-nano
 steps: 10
 tools:
   write: false

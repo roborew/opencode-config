@@ -1,7 +1,7 @@
 ---
 description: Markdown and docs writer (write-only). PRD, docs, registry — not .plan artifacts in GitHub-first flow.
 mode: subagent
-model: openrouter/deepseek/deepseek-v4-flash
+model: opencode/deepseek-v4-flash
 tools:
   write: true
   edit: false

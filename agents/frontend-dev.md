@@ -1,7 +1,7 @@
 ---
 description: UI specialist
 mode: subagent
-model: openrouter/minimax/minimax-m3
+model: opencode/minimax-m3
 steps: 45
 tools:
   write: true

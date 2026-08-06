@@ -1,7 +1,7 @@
 ---
 description: "Prototype code generator. Executes design artifact stages with Owner: ux-dev. Writes HTML-only framework-agnostic code to .prototype/<slug>/."
 mode: subagent
-model: openrouter/google/gemini-3-flash-preview
+model: opencode/gemini-3-flash
 tools:
   write: true
   edit: true

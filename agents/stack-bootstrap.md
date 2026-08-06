@@ -1,7 +1,7 @@
 ---
 description: Cross-repo template installer for setup-project (spec-coordinated stacks only)
 mode: subagent
-model: openrouter/openai/gpt-5-nano
+model: opencode/gpt-5-nano
 tools:
   write: true
   edit: true

@@ -1,7 +1,7 @@
 ---
 description: Teaching overlay
 mode: subagent
-model: openrouter/qwen/qwen3.7-max
+model: opencode/qwen3.7-max
 tools:
   write: false
   edit: false

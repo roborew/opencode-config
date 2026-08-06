@@ -1,7 +1,7 @@
 ---
 description: Environment readiness bootstrap — runtime, deps, smoke, claude-context indexing (no app code)
 mode: subagent
-model: openrouter/openai/gpt-5-nano
+model: opencode/gpt-5-nano
 steps: 15
 tools:
   write: false

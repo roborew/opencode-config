@@ -1,7 +1,7 @@
 ---
 description: Documentation accuracy review. Cross-checks docs against source.
 mode: subagent
-model: openrouter/openai/gpt-5-nano
+model: opencode/gpt-5-nano
 tools:
   write: false
   edit: false

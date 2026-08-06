@@ -1,7 +1,7 @@
 ---
 description: Terra-backed read-only architecture audit subagent. Finds shallow modules, seam leaks, and deepening opportunities; writes audit reports via scribe only.
 mode: subagent
-model: openrouter/openai/gpt-5.6-terra
+model: opencode/gpt-5.6-terra
 steps: 35
 tools:
   write: false
@@ -63,7 +63,7 @@ You are the Terra-backed architecture audit worker. You run periodic codebase st
 
 - `load: full` → load `improve-codebase-architecture` before first tool use.
 - `load: minimal` → hard rules only; use only when parent supplies a fully scoped audit brief.
-- If the configured model is unavailable, return `MODEL_UNAVAILABLE: openrouter/openai/gpt-5.6-terra` and stop. Do not silently fall back.
+- If the configured model is unavailable, return `MODEL_UNAVAILABLE: opencode/gpt-5.6-terra` and stop. Do not silently fall back.
 
 ## Responsibilities
 
