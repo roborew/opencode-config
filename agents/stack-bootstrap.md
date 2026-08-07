@@ -8,46 +8,7 @@ tools:
   bash: true
   skill: true
 permission:
-  external_directory:
-    "~/.ssh/**": deny
-    "~/.gnupg/**": deny
-    "~/.aws/**": deny
-    "~/.kube/**": deny
-    "~/.docker/**": deny
-    "~/.password-store/**": deny
-    "~/.npmrc": deny
-    "~/.pypirc": deny
-    "~/.netrc": deny
-    "*": allow
-  bash:
-    "*": allow
-    "rm -rf /*": deny
-    "rm -rf ~/*": deny
-    "rm -rf $HOME/*": deny
-    "rm -rf /": deny
-    "rm -rf ~": deny
-    "rm -rf $HOME": deny
-    "rm -rf ~/.config/*": deny
-    "rm -rf $HOME/.config/*": deny
-    "sudo *": deny
-    "doas *": deny
-    "diskutil *": deny
-    "curl * | sh": deny
-    "curl * | bash": deny
-    "wget * | sh": deny
-    "wget * | bash": deny
-    "* | sudo *": deny
-    "* |sudo *": deny
-    "* > ~/.config/opencode*": deny
-    "* >> ~/.config/opencode*": deny
-    "tee ~/.config/opencode*": deny
-    "tee -a ~/.config/opencode*": deny
-    "cp * ~/.config/opencode*": deny
-    "mv * ~/.config/opencode*": deny
   skill: { "stack-bootstrap": "allow" }
-  edit:
-    "~/.config/opencode/**": deny
-    "*": allow
   task:
     "*": deny
 ---
