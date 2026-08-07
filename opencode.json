@@ -171,7 +171,7 @@
       "type": "local",
       "enabled": false,
       "command": [
-        "/Users/robo/.local/share/mise/installs/node/22.22.1/bin/npx",
+        "npx",
         "-y",
         "@zilliz/claude-context-mcp@latest"
       ]

@@ -10,7 +10,6 @@ tools:
 permission:
   external_directory:
     "~/.config/opencode/**": allow
-    "/Users/robo/.config/opencode/**": allow
     "~/.ssh/**": deny
     "~/.gnupg/**": deny
     "~/.aws/**": deny
@@ -29,7 +28,6 @@ permission:
   skill: { "stack-bootstrap": "allow" }
   edit:
     "~/.config/opencode/**": deny
-    "/Users/robo/.config/opencode/**": deny
     "*": allow
   task:
     "*": deny
