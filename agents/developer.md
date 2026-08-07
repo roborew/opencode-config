@@ -26,7 +26,6 @@ permission:
     }
   edit:
     "~/.config/opencode/**": deny
-    "/Users/robo/.config/opencode/**": deny
     "*": allow
   bash:
     "*": allow
@@ -42,6 +41,43 @@ permission:
     "git branch *": deny
     "git switch -c *": deny
     "git switch -C *": deny
+    "rm -rf /": deny
+    "rm -rf ~": deny
+    "rm -rf $HOME": deny
+    "rm -rf ~/.config/*": deny
+    "rm -rf $HOME/.config/*": deny
+    "sudo *": deny
+    "doas *": deny
+    "diskutil *": deny
+    "chmod 777*": deny
+    "chmod -R 777*": deny
+    "curl * | sh": deny
+    "curl * | bash": deny
+    "wget * | sh": deny
+    "wget * | bash": deny
+    "* | sudo *": deny
+    "* |sudo *": deny
+    "git push -f*": deny
+    "git push --force": deny
+    "git push --force *": deny
+    "git push * --force": deny
+    "git push * --force *": deny
+    "git push * -f*": deny
+    "git reset --hard*": deny
+    "git clean -fd*": deny
+    "git clean -f *": deny
+    "git checkout .": deny
+    "git checkout -- *": deny
+    "git restore *": deny
+    "git rm *": deny
+    "git stash drop *": deny
+    "git stash clear": deny
+    "* > ~/.config/opencode*": deny
+    "* >> ~/.config/opencode*": deny
+    "tee ~/.config/opencode*": deny
+    "tee -a ~/.config/opencode*": deny
+    "cp * ~/.config/opencode*": deny
+    "mv * ~/.config/opencode*": deny
 ---
 # Developer Agent
 
