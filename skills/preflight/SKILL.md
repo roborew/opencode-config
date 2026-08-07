@@ -21,6 +21,15 @@ You run environment readiness checks when requested at startup (or after environ
 5. Return structured readiness output with canonical evidence for worktree env checks and **`preflight-runtime.sh`** output.
 6. Never tell the user to upgrade OpenCode/Docker base Node to match `engines.node`.
 
+## Permissions (OpenCode)
+
+- **Agent-level posture (already configured in `agents/preflight.md`):**
+  - `tools.read: false` — the agent must not use the `read` tool on env files; all checks go through bash scripts that emit JSON without file contents.
+  - `permission.edit: { "*": "deny", ".env": "allow", ".env.*": "allow", "*/.env": "allow", "*/.env.*": "allow", "**/.env": "allow", "**/.env.*": "allow" }` — explicit allow for env files so the agent never hits the global `opencode.json` deny and prompts the operator during preflight.
+  - `permission.bash: { "*": "allow", ...dangerous denies }` — mirrors `opencode.json` deny list (`rm -rf /*`, `sudo *`, etc.) so `test -f`, `test -L`, `test -e`, `grep` for key names, and any `sandbox probe` wrappers run without prompts.
+  - `permission.external_directory: { "*": "allow" }` — main checkout paths must be reachable so `preflight-worktree-verify.sh` and sandbox env notes can inspect them without prompting.
+- **Runtime rule:** prefer bash scripts that emit JSON. The agent's `read: false` plus `edit: deny` ensure no tool action falls back to the global deny. The agent-level `edit.allow` for `.env` / `.env.*` is the explicit override that closes the prompt loop so preflight completes unattended even when the global `opencode.json` denies `.env` for everyone else.
+
 ## Runtime command prefix
 
 Do **not** assume bare `node` on PATH is the project runtime. OpenCode/image Node (often 22) is for the host and MCP (e.g. claude-context); project builds may require a different major via mise/asdf/fnm/nvm/volta.

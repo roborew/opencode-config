@@ -6,10 +6,41 @@ steps: 10
 tools:
   write: false
   edit: false
+  read: false
   bash: true
   skill: true
 permission:
-  edit: deny
+  external_directory:
+    "*": "allow"
+  edit:
+    "*": "deny"
+    ".env": "allow"
+    ".env.*": "allow"
+    "*/.env": "allow"
+    "*/.env.*": "allow"
+    "**/.env": "allow"
+    "**/.env.*": "allow"
+  bash:
+    "*": "allow"
+    "rm -rf /*": "deny"
+    "rm -rf ~/*": "deny"
+    "rm -rf ~": "deny"
+    "rm -rf $HOME/*": "deny"
+    "rm -rf $HOME": "deny"
+    "rm -rf /": "deny"
+    "rm -rf ~/.config/*": "deny"
+    "rm -rf $HOME/.config/*": "deny"
+    "sudo *": "deny"
+    "doas *": "deny"
+    "diskutil *": "deny"
+    "chmod 777*": "deny"
+    "chmod -R 777*": "deny"
+    "curl * | sh": "deny"
+    "curl * | bash": "deny"
+    "wget * | sh": "deny"
+    "wget * | bash": "deny"
+    "* | sudo *": "deny"
+    "* |sudo *": "deny"
   skill: { "worktree-env": "allow" }
 ---
 
