@@ -10,12 +10,10 @@ tools:
   skill: true
 permission:
   external_directory:
-    "~/.config/opencode/**": allow
-    "/Users/robo/.config/opencode/**": allow
     "~/.ssh/**": deny
     "~/.gnupg/**": deny
     "~/.aws/**": deny
-    "*": ask
+    "*": allow
   skill:
     {
       "frontend-dev": "allow",
