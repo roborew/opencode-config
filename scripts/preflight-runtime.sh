@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # Resolve project vs host Node for preflight. Flexible: mise / asdf / fnm / nvm / volta / PATH.
+# Sandbox mode: when the opencode-server Sysbox sibling is the runtime
+#   (OPENCODE_SANDBOX_ENABLED=1|true|yes, or `sandbox` CLI on PATH, or docker.sock + OPENCODE_SANDBOX_MODE set),
+#   host toolchain detection is skipped and the pinned toolchain is validated inside the sibling
+#   via `sandbox create/exec/destroy`. See execution_env / sandbox_toolchain / sandbox_id in the JSON.
 # Usage: preflight-runtime.sh [--repair]
-#   --repair  once: mise trust / mise install when a mise pin exists and tool is available
+#   --repair  once: mise trust / mise install when a mise pin exists and the tool is available
+#             (sandbox mode: no host repair; the sibling probe performs mise trust/install inside the sibling)
 # Emits JSON on stdout. Does not print secrets.
 # Exit 0: ok | ok_with_notes | skipped_no_node_project
 # Exit 1: project toolchain missing / engines mismatch on project node
@@ -32,6 +37,251 @@ json_escape_array() {
   # stdin: lines → JSON string array
   jq -Rnc '[inputs]'
 }
+
+# --- Execution environment: sandbox sibling vs local host ---
+execution_env="local"
+if [[ "${OPENCODE_SANDBOX_ENABLED:-}" == "1" || "${OPENCODE_SANDBOX_ENABLED:-}" == "true" || "${OPENCODE_SANDBOX_ENABLED:-}" == "yes" ]] || command -v sandbox >/dev/null 2>&1 || { [[ -e /var/run/docker.sock ]] && [[ -n "${OPENCODE_SANDBOX_MODE:-}" ]]; }; then
+  execution_env="sandbox"
+fi
+
+version_maj() {
+  local v="${1#v}"
+  echo "${v%%.*}"
+}
+
+if [[ "$execution_env" == "sandbox" ]]; then
+  # Sibling (opencode-server Sysbox) is the runtime: host toolchain detection is skipped entirely.
+  # Sibling id: worktree basename → DNS label (docker-sandbox skill ID hygiene).
+  sandbox_id="$(basename "$ROOT" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/-{2,}/-/g; s/^-+//; s/-+$//')"
+  [[ -n "$sandbox_id" ]] || sandbox_id="preflight"
+
+  sb_created=false
+  sandbox_teardown() {
+    if [[ "$sb_created" == true ]]; then
+      sandbox destroy --id "$sandbox_id" >/dev/null 2>&1 || true
+    fi
+  }
+  trap sandbox_teardown EXIT
+
+  sb_pin_file=""
+  if [[ -f .mise.toml ]]; then sb_pin_file=".mise.toml"
+  elif [[ -f mise.toml ]]; then sb_pin_file="mise.toml"
+  elif [[ -f .tool-versions ]]; then sb_pin_file=".tool-versions"
+  elif [[ -f .node-version ]]; then sb_pin_file=".node-version"
+  elif [[ -f .nvmrc ]]; then sb_pin_file=".nvmrc"
+  elif [[ -f package.json ]] && jq -e '.volta.node // empty' package.json >/dev/null 2>&1; then sb_pin_file="package.json#volta"
+  fi
+  sb_via="path"
+  [[ -f .mise.toml || -f mise.toml ]] && sb_via="mise"
+
+  sb_toolchain_status="ready"
+  sb_engines_status="skipped_no_engines"
+  sb_overall="ok"
+  sb_exit=0
+  sb_blocker=""
+  sb_recommended=""
+  sb_node=""
+  sb_ruby=""
+  sb_yarn=""
+  sb_engines=""
+
+  add_note "execution_env: sandbox — toolchain validated inside sibling 'opencode-sandbox-$sandbox_id'; host toolchain not inspected."
+  if [[ "$REPAIR" == true ]]; then
+    add_note "--repair performs no host repair in sandbox mode; the sibling probe runs mise trust/install inside the sibling."
+  fi
+
+  # Probe — gating in sandbox mode (unavailable is the only sandbox capability path that Blocks).
+  probe_ok=false
+  probe_out=""
+  if command -v sandbox >/dev/null 2>&1; then
+    add_cmd "sandbox probe"
+    if probe_out="$(sandbox probe 2>&1)"; then
+      if printf '%s' "$probe_out" | jq -e '.available == true' >/dev/null 2>&1; then
+        probe_ok=true
+      elif ! printf '%s' "$probe_out" | jq -e 'has("available")' >/dev/null 2>&1; then
+        if ! printf '%s' "$probe_out" | grep -q "SANDBOX_UNAVAILABLE"; then
+          probe_ok=true
+        fi
+      fi
+    fi
+  else
+    add_note "sandbox CLI not found on PATH."
+  fi
+
+  if [[ "$probe_ok" != true ]]; then
+    sb_toolchain_status="sandbox_unavailable"
+    sb_engines_status="sandbox_unavailable"
+    sb_overall="blocked"
+    sb_exit=1
+    sb_blocker="ENV_BLOCKED"
+    sb_recommended="sandbox CLI unavailable — start opencode-server sandbox or unset OPENCODE_SANDBOX_ENABLED"
+  else
+    # Create or reuse (status guard avoids double-create).
+    add_cmd "sandbox status --id $sandbox_id"
+    if sandbox status --id "$sandbox_id" >/dev/null 2>&1; then
+      add_note "Reusing existing sandbox '$sandbox_id'; preflight does not destroy sandboxes it did not create."
+    else
+      add_cmd "sandbox create --id $sandbox_id --worktree $ROOT"
+      if sandbox create --id "$sandbox_id" --worktree "$ROOT" >/dev/null 2>&1 || sandbox create --id "$sandbox_id" --worktree "$ROOT" >/dev/null 2>&1; then
+        sb_created=true
+      else
+        sb_toolchain_status="sandbox_error"
+        sb_engines_status="sandbox_error"
+        sb_overall="blocked"
+        sb_exit=1
+        sb_blocker="ENV_BLOCKED"
+        sb_recommended="sibling could not run pinned toolchain — run \`sandbox exec --id $sandbox_id -- mise install\` manually and re-run preflight"
+      fi
+    fi
+  fi
+
+  # One in-sibling probe covering the project pin in a single round trip.
+  if [[ "$sb_exit" -eq 0 ]]; then
+    sb_probe_script='set -e
+if [ -f .mise.toml ] || [ -f mise.toml ]; then mise trust --yes >/dev/null 2>&1 || true
+  mise install
+  mise exec -- bash -lc "node -v; (bundle -v 2>/dev/null || true); (yarn -v 2>/dev/null || true)"
+else
+  node -v; (bundle -v 2>/dev/null || true); (yarn -v 2>/dev/null || true)
+fi'
+    add_cmd "sandbox exec --id $sandbox_id -- bash -lc '<pinned toolchain probe: mise trust/install + node/bundle/yarn versions>'"
+    exec_ok=false
+    exec_out=""
+    if exec_out="$(sandbox exec --id "$sandbox_id" -- bash -lc "$sb_probe_script" 2>&1)"; then
+      exec_ok=true
+    elif exec_out="$(sandbox exec --id "$sandbox_id" -- bash -lc "$sb_probe_script" 2>&1)"; then
+      exec_ok=true
+    fi
+    if [[ "$exec_ok" != true ]]; then
+      sb_toolchain_status="sandbox_error"
+      sb_engines_status="sandbox_error"
+      sb_overall="blocked"
+      sb_exit=1
+      sb_blocker="ENV_BLOCKED"
+      sb_recommended="sibling could not run pinned toolchain — run \`sandbox exec --id $sandbox_id -- mise install\` manually and re-run preflight"
+      add_note "sandbox exec failed: $(printf '%s' "$exec_out" | head -c 200)"
+    else
+      sb_node="$(printf '%s\n' "$exec_out" | grep -Eo '^v[0-9]+(\.[0-9]+)*' | head -n1 | tr -d '\r')"
+      sb_ruby="$(printf '%s\n' "$exec_out" | grep -i 'bundler version' | head -n1 | sed -E 's/.*[Bb]undler version[[:space:]]+([0-9.]+).*/\1/' | tr -d '\r')"
+      sb_yarn="$(printf '%s\n' "$exec_out" | grep -Eo '^[0-9]+\.[0-9]+(\.[0-9]+)?$' | head -n1 | tr -d '\r')"
+      if [[ -z "$sb_node" ]]; then
+        sb_toolchain_status="sandbox_error"
+        sb_engines_status="sandbox_error"
+        sb_overall="blocked"
+        sb_exit=1
+        sb_blocker="ENV_BLOCKED"
+        sb_recommended="sibling could not run pinned toolchain — run \`sandbox exec --id $sandbox_id -- mise install\` manually and re-run preflight"
+        add_note "sandbox exec succeeded but no node version was captured in its output."
+      fi
+    fi
+  fi
+
+  # engines.node compared against the sibling-reported node (same semantics as the local branch).
+  if [[ "$sb_exit" -eq 0 ]]; then
+    if [[ -f package.json ]]; then
+      sb_engines="$(jq -r '.engines.node // empty' package.json 2>/dev/null || true)"
+    fi
+    if [[ -z "$sb_engines" ]]; then
+      sb_engines_status="skipped_no_engines"
+    else
+      sb_maj="$(version_maj "$sb_node")"
+      sb_engines_status="unknown_range"
+      if [[ "$sb_engines" =~ \^([0-9]+) ]]; then
+        if [[ "$sb_maj" == "${BASH_REMATCH[1]}" ]]; then sb_engines_status="sandbox_ok"; else sb_engines_status="mismatch_project"; fi
+      elif [[ "$sb_engines" =~ ~([0-9]+) ]]; then
+        if [[ "$sb_maj" == "${BASH_REMATCH[1]}" ]]; then sb_engines_status="sandbox_ok"; else sb_engines_status="mismatch_project"; fi
+      elif [[ "$sb_engines" =~ \>\=?([0-9]+) ]]; then
+        if [[ "$sb_maj" -ge "${BASH_REMATCH[1]}" ]]; then sb_engines_status="sandbox_ok"; else sb_engines_status="mismatch_project"; fi
+      elif [[ "$sb_engines" =~ (^|[[:space:]])([0-9]+)(\.x|\.\*|\.0\.0)?($|[[:space:]]) ]]; then
+        if [[ "$sb_maj" == "${BASH_REMATCH[2]}" ]]; then sb_engines_status="sandbox_ok"; else sb_engines_status="mismatch_project"; fi
+      else
+        add_note "Could not parse engines.node '$sb_engines' against sibling node $sb_node; not treating as failure."
+      fi
+      if [[ "$sb_engines_status" == "mismatch_project" ]]; then
+        sb_overall="blocked"
+        sb_exit=1
+        sb_blocker="ENV_BLOCKED"
+        sb_recommended="Sibling Node is $sb_node but package.json engines.node is '$sb_engines'. Fix the sibling pin${sb_pin_file:+ ($sb_pin_file)} and run \`sandbox exec --id $sandbox_id -- mise install\` — do not install Node on the host."
+      elif [[ "$sb_engines_status" == "sandbox_ok" ]]; then
+        add_note "Sibling Node $sb_node satisfies engines.node ($sb_engines)."
+      fi
+    fi
+  fi
+
+  if [[ "$sb_exit" -eq 0 && ${#notes[@]} -gt 0 ]]; then
+    sb_overall="ok_with_notes"
+  fi
+
+  notes_json='[]'
+  if [[ ${#notes[@]} -gt 0 ]]; then
+    notes_json="$(printf '%s\n' "${notes[@]}" | json_escape_array)"
+  fi
+  cmds_json='[]'
+  if [[ ${#commands_run[@]} -gt 0 ]]; then
+    cmds_json="$(printf '%s\n' "${commands_run[@]}" | json_escape_array)"
+  fi
+
+  sb_toolchain_json="null"
+  if [[ -n "$sb_node" ]]; then
+    sb_toolchain_json="$(jq -nc --arg node "$sb_node" --arg ruby "$sb_ruby" --arg yarn "$sb_yarn" --arg via "$sb_via" \
+      '{node: (if $node == "" then null else $node end), ruby: (if $ruby == "" then null else $ruby end), yarn: (if $yarn == "" then null else $yarn end), via: $via}')"
+  fi
+
+  jq -nc \
+    --arg status "$sb_overall" \
+    --arg root "$ROOT" \
+    --arg execution_env "sandbox" \
+    --arg sandbox_id "$sandbox_id" \
+    --argjson sandbox_toolchain "$sb_toolchain_json" \
+    --arg project_version "$sb_node" \
+    --arg via "$sb_via" \
+    --arg pin_file "$sb_pin_file" \
+    --arg toolchain_status "$sb_toolchain_status" \
+    --arg command_prefix "sandbox exec --id $sandbox_id --" \
+    --arg engines_node "$sb_engines" \
+    --arg engines_status "$sb_engines_status" \
+    --argjson notes "$notes_json" \
+    --argjson commands_run "$cmds_json" \
+    --arg recommended_env_fix "$sb_recommended" \
+    --arg blocker_code "$sb_blocker" \
+    '{
+      status: $status,
+      root: $root,
+      execution_env: $execution_env,
+      sandbox_id: $sandbox_id,
+      sandbox_toolchain: $sandbox_toolchain,
+      host_node: {
+        version: null,
+        path: null,
+        role: "host_or_image"
+      },
+      project_node: {
+        version: (if $project_version == "" then null else $project_version end),
+        path: null,
+        via: (if $via == "" then null else $via end),
+        pin_file: (if $pin_file == "" then null else $pin_file end),
+        toolchain_status: $toolchain_status,
+        command_prefix: $command_prefix,
+        error: null
+      },
+      engines_node: (if $engines_node == "" then null else $engines_node end),
+      engines_status: $engines_status,
+      package_managers: {
+        pnpm: null,
+        npm: null
+      },
+      repair_applied: false,
+      notes: $notes,
+      commands_run: $commands_run,
+      recommended_env_fix: (if $recommended_env_fix == "" then null else $recommended_env_fix end)
+    }
+    + (if $blocker_code == "" then {} else {blocker_code: $blocker_code} end)
+    + {
+        policy: "In execution_env: sandbox the opencode-server Sysbox sibling is the build/test runtime. Compare engines.node to sandbox_toolchain.node (project_node.version), never to host Node; never recommend installing toolchains on the host."
+      }'
+
+  exit "$sb_exit"
+fi
 
 # --- Host / image Node (OpenCode + MCP; may intentionally be 22) ---
 host_version=""
@@ -356,6 +606,7 @@ fi
 jq -nc \
   --arg status "$overall" \
   --arg root "$ROOT" \
+  --arg execution_env "$execution_env" \
   --arg host_version "$host_version" \
   --arg host_path "$host_path" \
   --arg project_version "$project_version" \
@@ -377,6 +628,9 @@ jq -nc \
   '{
     status: $status,
     root: $root,
+    execution_env: $execution_env,
+    sandbox_id: null,
+    sandbox_toolchain: null,
     host_node: {
       version: (if $host_version == "" then null else $host_version end),
       path: (if $host_path == "" then null else $host_path end),
