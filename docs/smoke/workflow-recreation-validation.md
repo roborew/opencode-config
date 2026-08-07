@@ -24,7 +24,7 @@ Existing stack should report wired impl repos. Registry may show `NEXT:` / TBD u
 
 ```bash
 export GH_ORG=roborew
-~/.config/opencode/bin/setup-project --check-only /Users/robo/05_Repos/01_PROJECTS/apps/blocshed
+~/.config/opencode/bin/setup-project --check-only ~/code/apps/blocshed
 ```
 
 **Pass criteria:**
@@ -36,7 +36,7 @@ export GH_ORG=roborew
 
 ```bash
 export GH_ORG=roborew
-cd /Users/robo/05_Repos/01_PROJECTS/apps/fidget
+cd ~/code/apps/fidget
 ~/.config/opencode/bin/setup-project --keep-branch
 ```
 
@@ -46,7 +46,7 @@ Then in OpenCode (`fidget-spec`):
 2. Re-check:
 
 ```bash
-~/.config/opencode/bin/setup-project --check-only /Users/robo/05_Repos/01_PROJECTS/apps/fidget
+~/.config/opencode/bin/setup-project --check-only ~/code/apps/fidget
 ```
 
 **Pass criteria:** `--check-only` exit 0; `fidget-web` and `fidget-ingest` have `docs/agents/issue-tracker.md` with `SPEC_REPO:` (no copied `bin/` tooling required).

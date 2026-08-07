@@ -11,7 +11,6 @@ tools:
 permission:
   external_directory:
     "~/.config/opencode/**": allow
-    "/Users/robo/.config/opencode/**": allow
     "~/.ssh/**": deny
     "~/.gnupg/**": deny
     "~/.aws/**": deny
@@ -25,7 +24,6 @@ permission:
     }
   edit:
     "~/.config/opencode/**": deny
-    "/Users/robo/.config/opencode/**": deny
     "*": allow
   bash:
     "*": allow
