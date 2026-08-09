@@ -118,6 +118,17 @@ branch_policy: do not create, switch, checkout, or rename branches unless user e
 
 When **Docker sandbox routing** applies (below), also include `sandbox: preferred|required`, optional `publish_review_url: true|false`, and the load/`sandbox exec` instructions from that section.
 
+**Additional verifier-only fields (required every verify Task):**
+```text
+diff_base: <parent commit SHA or base ref>
+files_changed: <list from implementer report>
+acceptance_to_test: <mapping from implementer report>
+red_phase: <RED test evidence from implementer report>
+green_phase: <GREEN test evidence from implementer report>
+assertion_delta: <from implementer report>
+security_review: auto  # default; verifier computes required|not_applicable from triggers
+```
+
 Subagents must `cd` to `impl_repo_path`, verify branch matches, and report `CHECKOUT_CONTRACT_FAILED` on mismatch. They must **never** create branches or run `git switch`/`git checkout <branch>`/`git branch` on their own.
 
 ## Docker sandbox routing
@@ -320,12 +331,60 @@ When discovery fails (queue exhausted):
 1. **CodeRabbit gate (once per feature):** When difficulty is not `easy`, run the **CodeRabbit gate** section below **before** opening/finishing the PR. Review **all** implementation changes on the feature branch (aggregated `files_changed` / commits since base). **Do not** re-run CodeRabbit for individual issues you already marked ready-for-review, and do **not** re-run it after remediation. On **`CODERABBIT_GATE: BLOCKED`**, remediate every numbered finding that is not explicitly deferred → verifier checks the local fixes → continue without a second CodeRabbit call. On **`CODERABBIT_GATE: PASS`** (or `easy`), continue.
 2. Task **`developer`** `load: minimal` with `OPENCODE_EXPECT_*` from `checkout_contract`: `bash "$OC/skills/github-issue-run/lib/feature-finish-pr.sh" "<slug>"` — parse JSON (`branch`, `base`, `pr_url`, `action`, `message`).
 3. Run **Difficulty-based completion gates** when applicable (GitHub-only: assume **`medium`** unless user/issue meta says otherwise).
-4. Report `pr_url` or skip reason (`skipped-opt-out`, `skipped-protected-branch`) inside the mandatory **Completion report template** below.
-5. Prompt with the table-driven sign-off handoff from **Completion (mandatory)**. Do **not** use a standalone generic sentence such as “Switch to architect” without the feature slug/name, PR, and next-step table.
+4. **Enter Post-PR stabilization** (see section below) — do not immediately hand off to architect.
+5. After stabilization is finalized, report the sealed bundle including `pr_url` or skip reason inside the mandatory **Completion report template** below.
+6. Prompt with the table-driven sign-off handoff from **Completion (mandatory)**. Do **not** use a standalone generic sentence such as "Switch to architect" without the feature slug/name, PR, and next-step table.
 
 **Opt-out:** `ORCHESTRATE_AUTO_PR=0` or user instruction not to open a PR. **Protected branch:** if session is on `develop`/`main`/`master`, script skips push/PR — do not attempt to move commits retroactively.
 
-**Remediation session** (user first message includes `Remediation:` or architect remediation handoff): when queue empties, **skip CodeRabbit gate** (already ran on initial orchestration). Push to existing PR via `feature-finish-pr.sh` (`pr-exists` expected). Emit **remediation-return script** (not first-complete script) pointing to **impl architect option 4 → R**.
+**Remediation session** (user first message includes `Remediation:` or architect remediation handoff): when queue empties, **skip CodeRabbit gate** (already ran on initial orchestration). Push to existing PR via `feature-finish-pr.sh` (`pr-exists` expected). After stabilization, emit the **remediation-return script** (not first-complete script) pointing to **impl architect option 4 → R**.
+
+### Post-PR stabilization (bounded — after PR, before architect handoff)
+
+After `feature-finish-pr.sh` creates or updates the PR, do **not** immediately issue the architect Phase R handoff. Enter `execution_mode: pr_stabilization` inside the same orchestrator session.
+
+**Stabilization checklist (user-controlled):**
+
+1. **Collect current state:**
+   - Current PR checks, mergeability, review threads/comments, CodeRabbit/Kilo/bot comments, and the one-shot CodeRabbit CLI inventory already captured by orchestrate.
+   - Never poll indefinitely for external review bots; report the current feedback timestamp and hand control to the user when external feedback is still pending.
+
+2. **Ask for product acceptance feedback:**
+   - Use a concise structured prompt: tested flows, failures, visual/runtime concerns, and intentional deferrals.
+
+3. **Classify each finding:**
+   - `fix-now`: must be traceable to a named issue/remediation item and executed through the normal developer → verifier lane.
+   - `defer`: with rationale.
+   - `not-applicable`: with reason.
+   - `awaiting-external-review`: still pending.
+
+4. **Execute fix-now findings:**
+   - Execute through developer → verifier lane.
+   - After remediation, re-check only affected tests, PR checks, and affected feedback threads; push the changes.
+   - Never re-run CodeRabbit CLI.
+
+5. **Stabilization checkpoint:**
+   - Present a checkpoint instead of architect handoff while feedback is pending or the user wants another review round.
+   - Each round collects the latest hosted comments/checks and user feedback together, groups fix-now findings into one remediation queue.
+   - The checkpoint must offer only two exits: `review another round` or `finalize stabilization`.
+   - On `review another round`, collect only deltas since the previous checkpoint and repeat.
+   - On `finalize stabilization`, collect a final PR delta, record a cutoff timestamp, and create the sealed evidence bundle.
+   - External feedback that arrives after the cutoff is architect-relevant only if new and material.
+
+**Stabilization remediation scope:**
+- Automatically execute only concrete CodeRabbit/Kilo/human/CI findings with clear acceptance conditions and no product-scope ambiguity.
+- Publish a remediation issue before implementation when the finding is a material change, crosses stage boundaries, or lacks a clear acceptance condition.
+- Defer speculative style suggestions and non-blocking observations with rationale.
+- Do not use architect for deciding ordinary local fixes.
+
+**Sealed PR stabilization report:**
+- PR URL, branch/base, CI/check state, mergeability.
+- All review comments with status and resolution evidence.
+- One-shot CodeRabbit inventory and resolution status.
+- Verifier results, coverage/security/sandbox evidence.
+- User acceptance feedback and whether each item was fixed/deferred.
+- Open remediation issues (must be none unless explicitly deferred).
+- `stabilization_status: ready_for_architect|blocked` and a `feedback_cutoff_at` timestamp.
 
 **Prerequisite (enforced):** **Issue-expand readiness gate** — substantive **Implementation plan** and non-empty `stages[]` in **`opencode-task-json`**. Orchestrate does not run issue-expand.
 
@@ -405,6 +464,18 @@ Decision policy:
 - `NEEDS_RETRY` -> send corrective feedback and rerun same child task
 - `BLOCKED` -> invoke `helper`, amend artifact via `scribe`, then request user confirmation if environment-related — see **`orchestrate-recovery`** for deeper loop and env policy.
 
+### Verifier report grading (additional requirements)
+
+For `verifier` completion reports, **PASS** also requires:
+
+- All criteria have coverage classification (`direct-exercised`, `indirect-integration`, `manual-required`, or `missing`).
+- `manual-required` criteria have recorded explicit manual evidence or an explicitly accepted deviation from the user.
+- `host_fallback` sandbox status is acceptable only when sandbox was `preferred`, not `required`, and the specific acceptance criteria do not require Docker/runtime topology proof.
+- No `missing` coverage on an acceptance criterion.
+- `security_review` status is not `blocked` or `findings` with unresolved primary findings.
+
+Verifier `NEEDS_RETRY`, `FAILED`, or `BLOCKED` invokes existing recovery behavior (`helper` + `scribe` amendment).
+
 ## CodeRabbit gate (once per orchestration — after final verifier, before difficulty gates / PR / architect)
 
 **Invocation budget:** Exactly **one** CodeRabbit CLI invocation per orchestration session (per `.plan` artifact or per `feature:<slug>` GitHub run). CodeRabbit is a one-shot recommendation source, not a validation loop. **Never** Task `review` with `orchestrate_coderabbit_gate` between stages, between GitHub issues, after a single issue while more issues remain in the queue, or after CodeRabbit remediation.
@@ -428,6 +499,14 @@ When **every** stage is complete and the **final** `verifier` has **APPROVED** (
 
 Orchestrate must **track** across the session: `coderabbit_runs` (must be `1` when this gate runs), `coderabbit_findings` (full numbered inventory from the one-shot run), `coderabbit_resolutions` (per-finding `fixed` / `deferred` / `not_applicable` evidence from developer/frontend-dev), `coderabbit_remediation_fixes` (items fixed after the one-shot run), and finding counts from the CodeRabbit run. Pass these into the **Completion (mandatory)** block below — never omit the CodeRabbit section.
 
+### Verifier escape analysis (CodeRabbit gate)
+
+When the CodeRabbit gate completes and any blocker findings were present, include a `### Verifier escape analysis` section in the completion report:
+- For each CodeRabbit blocker (Critical/Major/Minor), classify by category: `correctness`, `test/coverage`, `security`, `performance`, `contract/API`, `configuration`, or `other`.
+- For each, note whether the verifier should have caught it, which stage or issue it originated from, and a recommended missing verifier trigger or checklist rule.
+- Do not automatically modify configuration from findings. The analysis is an operator-visible calibration backlog, preventing speculative rule growth.
+- Skip this section when CodeRabbit had zero blockers or was skipped/not applicable.
+
 ## Difficulty-based completion gates (after CodeRabbit gate when applicable)
 
 When **every** stage is complete, the **final** `verifier` passes, and any required **CodeRabbit gate** has **`CODERABBIT_GATE: PASS`** or local CodeRabbit remediation has been verified complete after the one-shot run (or was skipped because **`easy`**):
@@ -436,9 +515,9 @@ When **every** stage is complete, the **final** `verifier` passes, and any requi
 2. **`easy`:** Skip extra gates. Go to **Completion (mandatory)** and prompt the user to switch to architect.
 3. **`medium`:** Invoke `review` via Task with: artifact path; aggregated completion summary (each `stage_id`, `files_changed`, `tests_run` outcomes, verifier verdict); **include CodeRabbit gate findings** when that gate ran. Require a concise post-execution assessment (sign-off vs remediation). If review indicates remediation, use `scribe` to update or create `.plan/review.<slug>.md` per existing review flow, then stop and prompt user to address remediation before final sign-off with architect.
 4. **`hard`:**  
-   - **(a)** Invoke `senior-dev` via Task for **scheduled post-implementation review** (not STAGE_STUCK escalation): pass artifact path, aggregated implementation summary, Goal + AcceptanceChecks excerpts, and **CodeRabbit gate findings** when that gate ran. Instruct: read-only assessment unless explicit fix is in scope; return `APPROVED` or a numbered remediation list. **No user confirmation required** for this scheduled gate (unlike escalation).  
-   - **(b)** Invoke `helper` via Task for **strategy conformance**: pass artifact path, Goal, AcceptanceChecks, and short summary of what was implemented. Instruct helper to compare implementation intent vs plan and list any logical/architectural mismatches (reasoning only; no code).  
-   - If senior-dev or helper flags blockers, invoke `helper` + `scribe` to amend the artifact as usual before prompting the user.
+    - **(a)** Invoke `senior-dev` via Task with `execution_mode: scheduled_review`: pass artifact path, aggregated implementation summary, Goal + AcceptanceChecks excerpts, verifier reports, coverage assessment, sandbox/security evidence, and **CodeRabbit gate findings** when that gate ran. Instruct: **read-only** in this mode; return `APPROVED`, `NEEDS_CHANGES`, or `BLOCKED` with numbered, evidence-backed findings. **No user confirmation required** for this scheduled gate (unlike escalation). Do not accept `HANDOFF_TO_DEVELOPER` in this mode.  
+    - **(b)** Invoke `helper` via Task for **strategy conformance**: pass artifact path, Goal, AcceptanceChecks, and short summary of what was implemented. Instruct helper to compare implementation intent vs plan and list any logical/architectural mismatches (reasoning only; no code).  
+    - If senior-dev or helper flags blockers, invoke `helper` + `scribe` to amend the artifact as usual before prompting the user.
 
 ## Environment gate rerun (after remediation)
 

@@ -1,7 +1,7 @@
 ---
-description: Security-focused review subagent. High-confidence findings only.
+description: Security-focused review subagent. High-confidence findings only. Invoked by review or verifier on risk-triggered boundaries.
 mode: subagent
-model: opencode-go/minimax-m3
+model: opencode-go/gpt-5.6-luna
 tools:
   write: false
   edit: false

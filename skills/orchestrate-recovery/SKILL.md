@@ -26,14 +26,29 @@ Do not advance stages until helper updates are applied via `scribe`.
 
 ## Senior-Dev Escalation (operator-triggered, user confirmation required)
 
-**During stage execution**, when developer reports `STAGE_STUCK` or repeated failures and the **operator asks to escalate**:
+**Precise mid-stage escalation path:**
+- developer/frontend-dev/ux-dev returns `blocker_code: STAGE_STUCK`, a repeated functional failure occurs, or verifier identifies a criterion failure that cannot be resolved by a narrow retry;
+- orchestrate first invokes `helper` to produce the minimal recovery strategy;
+- orchestrate escalates to senior-dev only when the operator explicitly requests it and confirms the escalation;
+- senior-dev receives the stage contract, checkout contract, diff base, failure output, verifier evidence, helper recovery strategy, and retry history;
+- senior-dev may edit only the minimal unblocker, then returns `HANDOFF_TO_DEVELOPER` with changed files, commands, and remaining work; developer resumes the stage and verifier runs again.
 
+**Procedure:**
 1. **Stop the current process.** Do not invoke senior-dev yet.
-2. **Ask the user to confirm:** "Senior-dev is available for escalation. Do you want to use senior-dev to diagnose and fix this blocker? Reply yes to confirm."
-3. **Wait for explicit user confirmation.** Do not proceed until the user confirms (e.g. "yes", "confirm", "go ahead").
-4. After confirmation, invoke `senior-dev` via Task with artifact path, stage_id, and failure evidence (blocker report).
-5. Senior-dev diagnoses, implements fix, and reports with `handoff_to_developer: true` when blocker is fixed.
-6. When senior-dev reports `HANDOFF_TO_DEVELOPER`, grade the report, then **resume with developer** for remaining stage work. Do not re-invoke senior-dev for the same stage.
+2. First invoke `helper` to produce the minimal recovery strategy.
+3. **Ask the user to confirm:** "Senior-dev is available for escalation. Do you want to use senior-dev to diagnose and fix this blocker? Reply yes to confirm."
+4. **Wait for explicit user confirmation.** Do not proceed until the user confirms (e.g. "yes", "confirm", "go ahead").
+5. After confirmation, invoke `senior-dev` via Task with `execution_mode: escalation_fix`, artifact path, stage_id, failure evidence (blocker report), helper recovery strategy, and retry history.
+6. Senior-dev diagnoses, implements fix, and reports with `HANDOFF_TO_DEVELOPER` when blocker is fixed.
+7. When senior-dev reports `HANDOFF_TO_DEVELOPER`, grade the report, then **resume with developer** for remaining stage work. Do not re-invoke senior-dev for the same stage.
+8. Developer resumes the stage and verifier runs again.
+
+### Verifier-driven escalation (bounded to high-risk defects)
+
+A third optional escalation route for `verifier` findings:
+- Trigger only when verifier finds a cross-cutting correctness/security/design concern that cannot be assessed from the stage contract, or when the same criterion fails two implementation-verification cycles;
+- Require the same explicit operator confirmation as mid-stage escalation;
+- Do not use it for ordinary test failures, missing evidence, lint issues, or environment blockers.
 
 **Do not** use this confirmation flow for the **hard** Difficulty scheduled post-implementation review (see **`orchestrate-execution`** Difficulty-based completion gates).
 

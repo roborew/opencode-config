@@ -240,6 +240,7 @@ impl architect option 4 → R — re-check PR feedback, CI, tickets, and user in
 - **Handoff / zoom-out / caveman:** load respective utility skill.
 - **To issues:** Targeted change, debug, refactor slices → **`to-issues`**.
 - **Codebase audit:** Impl option 7 → Task **`architecture-auditor`** for phase 1 architecture audit; optional security via **`review`** → **`security-reviewer`**; optional phase 2 remediation tickets via **`to-issues`** after user confirmation.
+- **Pre-PRD architecture-auditor (feature-impact assessment):** In spec repo or impl repo, when planning a hard feature or a medium feature that changes service boundaries, shared modules, schemas, public APIs, cross-repo contracts, or introduces a new integration, Task **`architecture-auditor`** with `execution_mode: feature_impact_assessment`. Pass focused affected modules and intended seams — not the entire repo. This returns architectural constraints, coupling hazards, recommended stage boundaries, and characterization-test needs. Do **not** run the full HTML audit report unless the user explicitly requests it. Architect incorporates applicable constraints into PRD tickets/issue-expand context. Do **not** automatically invoke for easy features, isolated UI work, documentation, or local bug fixes.
 - **To PRD / fanout / issue-expand / feature-complete / setup-project / research / triage:** load namesake skill.
 
 If the skill tool fails, output `SKILL_UNAVAILABLE: <skill-name>` and report to the user.

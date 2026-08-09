@@ -212,6 +212,13 @@
             "temperature": 0.2,
             "top_p": 0.9
           }
+        },
+        "gpt-5.6-luna": {
+          "name": "GPT-5.6 Luna (Go)",
+          "options": {
+            "temperature": 0.1,
+            "top_p": 0.9
+          }
         }
       }
     }
@@ -243,7 +250,7 @@
     },
     "architecture-auditor": {
       "mode": "subagent",
-      "model": "opencode/gpt-5.6-terra",
+      "model": "opencode-go/gpt-5.6-luna",
       "steps": 25
     },
     "orchestrate": {
@@ -260,7 +267,7 @@
       "steps": 12
     },
     "build": {
-      "model": "opencode-go/minimax-m3",
+      "model": "opencode-go/deepseek-v4-flash",
       "steps": 30
     },
     "developer": {
@@ -320,8 +327,8 @@
     },
     "verifier": {
       "mode": "subagent",
-      "model": "opencode-go/minimax-m3",
-      "steps": 10
+      "model": "opencode-go/deepseek-v4-flash",
+      "steps": 25
     },
     "review": {
       "mode": "subagent",
@@ -330,7 +337,7 @@
     },
     "security-reviewer": {
       "mode": "subagent",
-      "model": "opencode-go/minimax-m3",
+      "model": "opencode-go/gpt-5.6-luna",
       "steps": 15
     },
     "performance-reviewer": {
