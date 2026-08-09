@@ -70,20 +70,15 @@ Skill detail: [skills/architect-review/SKILL.md](../skills/architect-review/SKIL
 
 Skill detail: [skills/feature-complete/SKILL.md](../skills/feature-complete/SKILL.md).
 
-#### Mode B — legacy `.plan`
-
-After local plan execution: review → docs → **`archive_plan`** to `*.completed.md`.
-
 #### Remediation (work-repo loop)
 
 From Mode F **R**, if changes are needed: select **orchestrate** in the **same work repo** (prefer new session), then return to **architect** → `hi` → **4** → **R**. Repeat until happy. Issues stay open until Spec merge. **Do not** start feature-complete until this loop is done in every work repo.
 
-## Two execution modes
+## Execution mode
 
 | Mode | Where | Source of truth | What you select |
 |------|--------|-----------------|-----------------|
 | **Spec / GitHub** (default) | spec + work repos | GitHub issues with `feature:<slug>` after planning | Spec **architect** → **1**; work **orchestrate**; work **architect** → **4**; spec **architect** → **3** |
-| **Legacy local plan** | single work repo | `.plan/feature.<slug>.md` | Work **architect** targeted path (rare) |
 
 Fanout alone is not enough for the stage loop — planning must finish issue-expand before **orchestrate** on the spec path. Orchestrate blocks at bootstrap if expansion is incomplete.
 

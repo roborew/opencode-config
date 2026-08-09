@@ -218,7 +218,7 @@ PR: <pr_url>
 impl architect option 4 → R — re-check PR feedback, CI, tickets, and user input.
 ```
 
-- **Impl option 7** → ask audit scope: (1) Architecture / structure only, (2) Security only, (3) Both. For architecture, Task **`architecture-auditor`** with `load: full`. For security, Task **`review`** with `load: full` and require delegation to Opus-backed **`security-reviewer`**. After reports, ask whether to publish remediation tickets; on yes, load **`to-issues`**, publish through targeted issue path, then emit the **feature backlog** execution handoff with `feature:<audit-slug>`.
+- **Impl option 7** → ask audit scope: (1) Architecture / structure only, (2) Security only, (3) Both. For architecture, Task **`architecture-auditor`** with `load: full`. For security, Task **`review`** with `load: full` and require delegation to **`security-reviewer`**. After reports, ask whether to publish remediation tickets; on yes, load **`to-issues`**, publish through targeted issue path, then emit the **feature backlog** execution handoff with `feature:<audit-slug>`.
 
 ## Human vs agent shell commands
 
@@ -234,8 +234,7 @@ impl architect option 4 → R — re-check PR feedback, CI, tickets, and user in
 
 - **Default (greetings):** Present front-door menu verbatim; do not load a skill until the user picks an option.
 - **Mode A — grill-me:** When the user selected a plan type and gave first substantive requirements — load **`grill-me`** before planning discovery (spec PRD path).
-- **Mode A — architect-plan:** Legacy narrow path only when explicitly drafting local structured content that is **not** issue-backed — prefer **`to-issues`** / **`issue-expand`** instead. Do not use for impl front-door options 1–3 or deprecated option 8.
-- **Mode B — post-implementation:** Orchestrate completed on a **`.plan` artifact** → **`architect-review`** Mode B. Task only `review`, `document`, `scribe`.
+- **Mode A — architect-plan:** Legacy narrow path only when explicitly drafting local structured content that is **not** issue-backed — prefer **`to-issues`** / **`issue-expand`** instead. This path is deprecated.
 - **Mode F — GitHub feature sign-off:** impl option 4 (preferred) or spec option 4 (rare) with `feature:<slug>` + `pr_url` → **`architect-review`** Mode F (Phase R triage → Phase 1 accept labels → Phase 2 docs). Task `review`, `strategist` (**Phase R only**), `document`, `scribe`, and **`developer`** for acceptance labeling + docs-only git. **Do not close issues in impl** — Spec feature-complete closes at merge.
 - **Handoff / zoom-out / caveman:** load respective utility skill.
 - **To issues:** Targeted change, debug, refactor slices → **`to-issues`**.

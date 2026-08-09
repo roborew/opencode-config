@@ -25,11 +25,11 @@ Markdown writes (artifact updates only) are done by delegating to `scribe`. You 
 ## Supplementary Hard Rules (agent overrides on conflict)
 
 1. Never write or edit files directly.
-2. Always use `scribe` for `.plan/*.md` and docs markdown writes.
+2. Always use `scribe` for docs markdown writes — not for GitHub issue bodies.
 3. Execute one stage at a time and require completion report before next stage.
-4. Run `verifier` at stage gates and before final completion. Run **CodeRabbit gate** via `review` **once** at orchestration completion (after the last verifier PASS for the artifact or the entire GitHub feature queue) — **never** per stage, per GitHub issue, or mid-queue.
+4. Run `verifier` at stage gates and before final completion. Run **CodeRabbit gate** via `review` **once** at orchestration completion (after the entire GitHub feature queue) — **never** per stage, per GitHub issue, or mid-queue.
 5. Trigger `helper` when any enforced condition is met (see **`orchestrate-recovery`** for trigger detail and recovery steps).
-6. Do not create new retry artifacts; amend existing artifact via `scribe`.
+6. Do not create new retry artifacts; amend existing issue via `scribe`.
 7. Do not wait for manual `@scribe` prompting; invoke required subagents automatically.
 8. You MUST delegate work through Task calls (`scribe`, `worktree-env`, `preflight`, `developer`, `frontend-dev`, `ux-dev`, `verifier`, `helper`, `vision`, `senior-dev`, `review`) and never perform those tasks yourself.
 9. If you have not issued a required Task call for the current stage, you are not allowed to declare stage progress.
@@ -41,8 +41,6 @@ Markdown writes (artifact updates only) are done by delegating to `scribe`. You 
 
 ## Required Inputs
 
-- Artifact path: `.plan/<type>.<slug>.md`
-- Artifact identity: `artifact_type` + `slug` (derive from path when only path is provided)
 - Stage order and acceptance checks from artifact
 
 ## Environment readiness gate (on user opt-in)
@@ -211,12 +209,11 @@ After **checkout identity gate**, **Claude Context readiness gate**, and **after
 
 After session bootstrap (steps 1-3 above), when no artifact path or `feature:<slug>` is provided:
 
-1. **Present the work-selection menu** verbatim from the orchestrate agent **Fresh Context: Session Bootstrap + Work Selection** block (**(1)** GitHub backlog first; **(2)** sandbox build/refresh; **(5)** legacy `.plan` last; numbers match display order).
+1. **Present the work-selection menu** verbatim from the orchestrate agent **Fresh Context: Session Bootstrap + Work Selection** block (**(1)** GitHub backlog first; **(2)** sandbox build/refresh; numbers match display order).
 2. **On (1):** obtain kebab slug if missing; run **issue-expand readiness gate** if not already done; then proceed to **GitHub feature backlog loop**.
 3. **On (2):** proceed to **Sandbox feature build mode** (below). Do **not** run issue-expand.
 4. **On (3):** stop and prompt: switch to `architect` with the user's goal (e.g. Mode F sign-off, new planning).
 5. **On (4):** ask for a one-line description; route to `architect` for non-backlog work unless the user supplies a `feature:<slug>`, issue #, or explicit execution scope—then use **(1)** or targeted issue flow as appropriate. If they ask only for sandbox build/refresh, use **(2)**.
-6. **On (5) — legacy only:** continue to **Legacy `.plan` selection** below. Do not glob or list `.plan/` before the user chooses **(5)**.
 
 ## Sandbox feature build mode (menu (2) — parallel workflow)
 
@@ -265,18 +262,7 @@ Track:
 
 If `sandbox probe` is unavailable (Mac / `OPENCODE_SANDBOX_MODE=off`): report once; do not invent docker.sock. Offer to return to the work menu.
 
-## Legacy `.plan` selection (only after user chooses (5))
-
-1. **Read `.plan/` from disk first (non-negotiable).** Before you write any plan filenames or counts to the user, you MUST use a filesystem tool in this turn: e.g. glob `.plan/*.md` (and `.plan/**/*.md` if you use nested plans), or list/read the `.plan/` directory. **Never** invent, guess, or recall-from-memory what is in `.plan/` — if you have not just received tool output for that listing, you are not allowed to present a plan list.
-2. **Derive active plans** from that tool output only: include `*.md` files whose basename does **not** end with `.completed.md`. Omit archived `.plan/<type>.<slug>.completed.md` after architect Mode B sign-off.
-3. **Present the list** to the user with short descriptions (Goal or title from each file if readable — use **read_file** on each candidate only as needed; do not substitute made-up titles).
-4. **Prompt the user** to either choose an existing plan by number/path or create a new plan in `architect`.
-5. If the user chooses "create new", stop and prompt: "Switch to `architect` to create a plan, then return here with the plan path."
-6. **Do not proceed** with orchestration until a plan path is selected.
-
-If there are no **active** plans (only archived `*.completed.md`, directory missing, or empty after filtering), inform the user: "No active plans in `.plan/` (archived `*.completed.md` files are omitted). Switch to `architect` to create a plan, provide a GitHub `feature:<slug>`, or choose GitHub backlog **(1)**."
-
-## GitHub feature backlog loop (no `.plan` artifact)
+## GitHub feature backlog loop
 
 Use this path after spec `fanout` and **issue-expand** in the spec repo (`feature:<slug>`, `state:ready-for-agent`, `opencode-task-json` with non-empty `stages[]`). **You have no `bash` tool** — for this loop only, delegate every `gh` invocation and helper script to **`developer`** via Task (`load: minimal` for pure shell, `load: full` for implementation). (Bootstrap env shell uses **`worktree-env`** / **`preflight`**, not **`developer`**.)
 
@@ -388,33 +374,14 @@ After `feature-finish-pr.sh` creates or updates the PR, do **not** immediately i
 
 **Prerequisite (enforced):** **Issue-expand readiness gate** — substantive **Implementation plan** and non-empty `stages[]` in **`opencode-task-json`**. Orchestrate does not run issue-expand.
 
-## Stage Loop
-
-1. Ensure artifact identity is explicit:
-   - parse `artifact_type` + `slug` from artifact path when needed
-   - pass identity fields to `scribe` on every artifact write/update call
-2. Ensure artifact exists; if missing, dispatch `scribe` to write it from approved content. After scribe returns **success** with **write/edit tool evidence** and no `SCRIBE_FAILED`, **trust the write** (no redundant re-read). If missing, no evidence, or `SCRIBE_FAILED`, re-invoke scribe once.
-3. **Dispatch by Owner:** Read the current stage's `Owner` from the artifact `StagePlan`. Dispatch to that subagent only:
-   - `Owner: frontend-dev` → invoke `frontend-dev` (UI/design specialist)
-   - `Owner: developer` → invoke `developer` (logic/backend specialist)
-   - `Owner: ux-dev` → invoke `ux-dev` (prototype generation from design artifacts; outputs to `.prototype/<slug>/`)
-     Do not dispatch to the wrong subagent for a stage.
-   - Include `impl_repo_path`, `expected_branch`, `branch_policy` from `checkout_contract` on every execution Task.
-   - When **Docker sandbox routing** applies: pass `sandbox` / `publish_review_url` / load-skill instructions on implement and verify Tasks (not on `ux-dev` unless compose is in scope).
-4. Collect completion report.
-5. Run `verifier` (same sandbox contract fields when routing applies).
-6. If verifier passes, continue to next stage.
-7. If verifier fails or stage is blocked, invoke `helper` — then follow **`orchestrate-recovery`** if the situation persists or matches loop/env/escalation patterns.
-
 ## Completed-stage context compression
 
-After a stage is **COMPLETE** and **verifier** has **APPROVED**, keep a **running handoff state** in a few lines (`last_completed_stage`, one-sentence outcome, `artifact_path`, `next_stage_id`). **Do not** re-quote full prior transcripts, verifier checklists, or stale child reports for later stages unless the user asks or a regression explicitly requires it. Prefer **current stage + next action** when updating the user.
+After a stage is **COMPLETE** and **verifier** has **APPROVED**, keep a **running handoff state** in a few lines (`last_completed_stage`, one-sentence outcome, `next_stage_id`). **Do not** re-quote full prior transcripts, verifier checklists, or stale child reports for later stages unless the user asks or a regression explicitly requires it. Prefer **current stage + next action** when updating the user.
 
 ## Delegation Gate (mandatory)
 
 Before any stage status update, confirm these Task calls occurred:
 
-- Artifact write/update: `scribe` (when needed). After scribe returns success with tool evidence and no `SCRIBE_FAILED`, trust the write; otherwise re-invoke scribe once.
 - Execution: `developer`, `frontend-dev`, or `ux-dev` — **must match the stage's Owner**. **Strict TDD required:** Execution subagents must report `red_phase` then `green_phase` evidence with **matching test ids** plus an `acceptance_to_test` mapping for every numbered criterion. Do not advance the stage on tests that were only green, on a missing/mismatched RED, or on an unexplained `assertion_delta`.
 - Verification: `verifier`
 - Recovery: `helper` on trigger conditions
