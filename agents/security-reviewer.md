@@ -1,7 +1,7 @@
 ---
 description: Security-focused review subagent. High-confidence findings only.
 mode: subagent
-model: opencode/claude-opus-4-8
+model: opencode-go/minimax-m3
 tools:
   write: false
   edit: false

@@ -1,7 +1,7 @@
 ---
 description: Evidence-driven acceptance verifier
 mode: subagent
-model: opencode-go/deepseek-v4-flash
+model: opencode-go/minimax-m3
 tools:
   write: false
   edit: false

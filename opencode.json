@@ -265,7 +265,7 @@
     },
     "developer": {
       "mode": "subagent",
-      "model": "opencode-go/minimax-m3",
+      "model": "opencode-go/deepseek-v4-flash",
       "steps": 30
     },
     "senior-dev": {
@@ -320,7 +320,7 @@
     },
     "verifier": {
       "mode": "subagent",
-      "model": "opencode-go/deepseek-v4-flash",
+      "model": "opencode-go/minimax-m3",
       "steps": 10
     },
     "review": {
@@ -330,7 +330,7 @@
     },
     "security-reviewer": {
       "mode": "subagent",
-      "model": "opencode/claude-opus-4-8",
+      "model": "opencode-go/minimax-m3",
       "steps": 15
     },
     "performance-reviewer": {
