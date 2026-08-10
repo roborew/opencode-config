@@ -25,11 +25,11 @@ Markdown writes (artifact updates only) are done by delegating to `scribe`. You 
 ## Supplementary Hard Rules (agent overrides on conflict)
 
 1. Never write or edit files directly.
-2. Always use `scribe` for `.plan/*.md` and docs markdown writes.
+2. Always use `scribe` for docs markdown writes — not for GitHub issue bodies.
 3. Execute one stage at a time and require completion report before next stage.
-4. Run `verifier` at stage gates and before final completion. Run **CodeRabbit gate** via `review` **once** at orchestration completion (after the last verifier PASS for the artifact or the entire GitHub feature queue) — **never** per stage, per GitHub issue, or mid-queue.
+4. Run `verifier` at stage gates and before final completion. Run **CodeRabbit gate** via `review` **once** at orchestration completion (after the entire GitHub feature queue) — **never** per stage, per GitHub issue, or mid-queue.
 5. Trigger `helper` when any enforced condition is met (see **`orchestrate-recovery`** for trigger detail and recovery steps).
-6. Do not create new retry artifacts; amend existing artifact via `scribe`.
+6. Do not create new retry artifacts; amend existing issue via `scribe`.
 7. Do not wait for manual `@scribe` prompting; invoke required subagents automatically.
 8. You MUST delegate work through Task calls (`scribe`, `worktree-env`, `preflight`, `developer`, `frontend-dev`, `ux-dev`, `verifier`, `helper`, `vision`, `senior-dev`, `review`) and never perform those tasks yourself.
 9. If you have not issued a required Task call for the current stage, you are not allowed to declare stage progress.
@@ -41,8 +41,6 @@ Markdown writes (artifact updates only) are done by delegating to `scribe`. You 
 
 ## Required Inputs
 
-- Artifact path: `.plan/<type>.<slug>.md`
-- Artifact identity: `artifact_type` + `slug` (derive from path when only path is provided)
 - Stage order and acceptance checks from artifact
 
 ## Environment readiness gate (on user opt-in)
@@ -117,6 +115,17 @@ branch_policy: do not create, switch, checkout, or rename branches unless user e
 ```
 
 When **Docker sandbox routing** applies (below), also include `sandbox: preferred|required`, optional `publish_review_url: true|false`, and the load/`sandbox exec` instructions from that section.
+
+**Additional verifier-only fields (required every verify Task):**
+```text
+diff_base: <parent commit SHA or base ref>
+files_changed: <list from implementer report>
+acceptance_to_test: <mapping from implementer report>
+red_phase: <RED test evidence from implementer report>
+green_phase: <GREEN test evidence from implementer report>
+assertion_delta: <from implementer report>
+security_review: auto  # default; verifier computes required|not_applicable from triggers
+```
 
 Subagents must `cd` to `impl_repo_path`, verify branch matches, and report `CHECKOUT_CONTRACT_FAILED` on mismatch. They must **never** create branches or run `git switch`/`git checkout <branch>`/`git branch` on their own.
 
@@ -200,12 +209,11 @@ After **checkout identity gate**, **Claude Context readiness gate**, and **after
 
 After session bootstrap (steps 1-3 above), when no artifact path or `feature:<slug>` is provided:
 
-1. **Present the work-selection menu** verbatim from the orchestrate agent **Fresh Context: Session Bootstrap + Work Selection** block (**(1)** GitHub backlog first; **(2)** sandbox build/refresh; **(5)** legacy `.plan` last; numbers match display order).
+1. **Present the work-selection menu** verbatim from the orchestrate agent **Fresh Context: Session Bootstrap + Work Selection** block (**(1)** GitHub backlog first; **(2)** sandbox build/refresh; numbers match display order).
 2. **On (1):** obtain kebab slug if missing; run **issue-expand readiness gate** if not already done; then proceed to **GitHub feature backlog loop**.
 3. **On (2):** proceed to **Sandbox feature build mode** (below). Do **not** run issue-expand.
 4. **On (3):** stop and prompt: switch to `architect` with the user's goal (e.g. Mode F sign-off, new planning).
 5. **On (4):** ask for a one-line description; route to `architect` for non-backlog work unless the user supplies a `feature:<slug>`, issue #, or explicit execution scope—then use **(1)** or targeted issue flow as appropriate. If they ask only for sandbox build/refresh, use **(2)**.
-6. **On (5) — legacy only:** continue to **Legacy `.plan` selection** below. Do not glob or list `.plan/` before the user chooses **(5)**.
 
 ## Sandbox feature build mode (menu (2) — parallel workflow)
 
@@ -254,18 +262,7 @@ Track:
 
 If `sandbox probe` is unavailable (Mac / `OPENCODE_SANDBOX_MODE=off`): report once; do not invent docker.sock. Offer to return to the work menu.
 
-## Legacy `.plan` selection (only after user chooses (5))
-
-1. **Read `.plan/` from disk first (non-negotiable).** Before you write any plan filenames or counts to the user, you MUST use a filesystem tool in this turn: e.g. glob `.plan/*.md` (and `.plan/**/*.md` if you use nested plans), or list/read the `.plan/` directory. **Never** invent, guess, or recall-from-memory what is in `.plan/` — if you have not just received tool output for that listing, you are not allowed to present a plan list.
-2. **Derive active plans** from that tool output only: include `*.md` files whose basename does **not** end with `.completed.md`. Omit archived `.plan/<type>.<slug>.completed.md` after architect Mode B sign-off.
-3. **Present the list** to the user with short descriptions (Goal or title from each file if readable — use **read_file** on each candidate only as needed; do not substitute made-up titles).
-4. **Prompt the user** to either choose an existing plan by number/path or create a new plan in `architect`.
-5. If the user chooses "create new", stop and prompt: "Switch to `architect` to create a plan, then return here with the plan path."
-6. **Do not proceed** with orchestration until a plan path is selected.
-
-If there are no **active** plans (only archived `*.completed.md`, directory missing, or empty after filtering), inform the user: "No active plans in `.plan/` (archived `*.completed.md` files are omitted). Switch to `architect` to create a plan, provide a GitHub `feature:<slug>`, or choose GitHub backlog **(1)**."
-
-## GitHub feature backlog loop (no `.plan` artifact)
+## GitHub feature backlog loop
 
 Use this path after spec `fanout` and **issue-expand** in the spec repo (`feature:<slug>`, `state:ready-for-agent`, `opencode-task-json` with non-empty `stages[]`). **You have no `bash` tool** — for this loop only, delegate every `gh` invocation and helper script to **`developer`** via Task (`load: minimal` for pure shell, `load: full` for implementation). (Bootstrap env shell uses **`worktree-env`** / **`preflight`**, not **`developer`**.)
 
@@ -320,42 +317,71 @@ When discovery fails (queue exhausted):
 1. **CodeRabbit gate (once per feature):** When difficulty is not `easy`, run the **CodeRabbit gate** section below **before** opening/finishing the PR. Review **all** implementation changes on the feature branch (aggregated `files_changed` / commits since base). **Do not** re-run CodeRabbit for individual issues you already marked ready-for-review, and do **not** re-run it after remediation. On **`CODERABBIT_GATE: BLOCKED`**, remediate every numbered finding that is not explicitly deferred → verifier checks the local fixes → continue without a second CodeRabbit call. On **`CODERABBIT_GATE: PASS`** (or `easy`), continue.
 2. Task **`developer`** `load: minimal` with `OPENCODE_EXPECT_*` from `checkout_contract`: `bash "$OC/skills/github-issue-run/lib/feature-finish-pr.sh" "<slug>"` — parse JSON (`branch`, `base`, `pr_url`, `action`, `message`).
 3. Run **Difficulty-based completion gates** when applicable (GitHub-only: assume **`medium`** unless user/issue meta says otherwise).
-4. Report `pr_url` or skip reason (`skipped-opt-out`, `skipped-protected-branch`) inside the mandatory **Completion report template** below.
-5. Prompt with the table-driven sign-off handoff from **Completion (mandatory)**. Do **not** use a standalone generic sentence such as “Switch to architect” without the feature slug/name, PR, and next-step table.
+4. **Enter Post-PR stabilization** (see section below) — do not immediately hand off to architect.
+5. After stabilization is finalized, report the sealed bundle including `pr_url` or skip reason inside the mandatory **Completion report template** below.
+6. Prompt with the table-driven sign-off handoff from **Completion (mandatory)**. Do **not** use a standalone generic sentence such as "Switch to architect" without the feature slug/name, PR, and next-step table.
 
 **Opt-out:** `ORCHESTRATE_AUTO_PR=0` or user instruction not to open a PR. **Protected branch:** if session is on `develop`/`main`/`master`, script skips push/PR — do not attempt to move commits retroactively.
 
-**Remediation session** (user first message includes `Remediation:` or architect remediation handoff): when queue empties, **skip CodeRabbit gate** (already ran on initial orchestration). Push to existing PR via `feature-finish-pr.sh` (`pr-exists` expected). Emit **remediation-return script** (not first-complete script) pointing to **impl architect option 4 → R**.
+**Remediation session** (user first message includes `Remediation:` or architect remediation handoff): when queue empties, **skip CodeRabbit gate** (already ran on initial orchestration). Push to existing PR via `feature-finish-pr.sh` (`pr-exists` expected). After stabilization, emit the **remediation-return script** (not first-complete script) pointing to **impl architect option 4 → R**.
+
+### Post-PR stabilization (bounded — after PR, before architect handoff)
+
+After `feature-finish-pr.sh` creates or updates the PR, do **not** immediately issue the architect Phase R handoff. Enter `execution_mode: pr_stabilization` inside the same orchestrator session.
+
+**Stabilization checklist (user-controlled):**
+
+1. **Collect current state:**
+   - Current PR checks, mergeability, review threads/comments, CodeRabbit/Kilo/bot comments, and the one-shot CodeRabbit CLI inventory already captured by orchestrate.
+   - Never poll indefinitely for external review bots; report the current feedback timestamp and hand control to the user when external feedback is still pending.
+
+2. **Ask for product acceptance feedback:**
+   - Use a concise structured prompt: tested flows, failures, visual/runtime concerns, and intentional deferrals.
+
+3. **Classify each finding:**
+   - `fix-now`: must be traceable to a named issue/remediation item and executed through the normal developer → verifier lane.
+   - `defer`: with rationale.
+   - `not-applicable`: with reason.
+   - `awaiting-external-review`: still pending.
+
+4. **Execute fix-now findings:**
+   - Execute through developer → verifier lane.
+   - After remediation, re-check only affected tests, PR checks, and affected feedback threads; push the changes.
+   - Never re-run CodeRabbit CLI.
+
+5. **Stabilization checkpoint:**
+   - Present a checkpoint instead of architect handoff while feedback is pending or the user wants another review round.
+   - Each round collects the latest hosted comments/checks and user feedback together, groups fix-now findings into one remediation queue.
+   - The checkpoint must offer only two exits: `review another round` or `finalize stabilization`.
+   - On `review another round`, collect only deltas since the previous checkpoint and repeat.
+   - On `finalize stabilization`, collect a final PR delta, record a cutoff timestamp, and create the sealed evidence bundle.
+   - External feedback that arrives after the cutoff is architect-relevant only if new and material.
+
+**Stabilization remediation scope:**
+- Automatically execute only concrete CodeRabbit/Kilo/human/CI findings with clear acceptance conditions and no product-scope ambiguity.
+- Publish a remediation issue before implementation when the finding is a material change, crosses stage boundaries, or lacks a clear acceptance condition.
+- Defer speculative style suggestions and non-blocking observations with rationale.
+- Do not use architect for deciding ordinary local fixes.
+
+**Sealed PR stabilization report:**
+- PR URL, branch/base, CI/check state, mergeability.
+- All review comments with status and resolution evidence.
+- One-shot CodeRabbit inventory and resolution status.
+- Verifier results, coverage/security/sandbox evidence.
+- User acceptance feedback and whether each item was fixed/deferred.
+- Open remediation issues (must be none unless explicitly deferred).
+- `stabilization_status: ready_for_architect|blocked` and a `feedback_cutoff_at` timestamp.
 
 **Prerequisite (enforced):** **Issue-expand readiness gate** — substantive **Implementation plan** and non-empty `stages[]` in **`opencode-task-json`**. Orchestrate does not run issue-expand.
 
-## Stage Loop
-
-1. Ensure artifact identity is explicit:
-   - parse `artifact_type` + `slug` from artifact path when needed
-   - pass identity fields to `scribe` on every artifact write/update call
-2. Ensure artifact exists; if missing, dispatch `scribe` to write it from approved content. After scribe returns **success** with **write/edit tool evidence** and no `SCRIBE_FAILED`, **trust the write** (no redundant re-read). If missing, no evidence, or `SCRIBE_FAILED`, re-invoke scribe once.
-3. **Dispatch by Owner:** Read the current stage's `Owner` from the artifact `StagePlan`. Dispatch to that subagent only:
-   - `Owner: frontend-dev` → invoke `frontend-dev` (UI/design specialist)
-   - `Owner: developer` → invoke `developer` (logic/backend specialist)
-   - `Owner: ux-dev` → invoke `ux-dev` (prototype generation from design artifacts; outputs to `.prototype/<slug>/`)
-     Do not dispatch to the wrong subagent for a stage.
-   - Include `impl_repo_path`, `expected_branch`, `branch_policy` from `checkout_contract` on every execution Task.
-   - When **Docker sandbox routing** applies: pass `sandbox` / `publish_review_url` / load-skill instructions on implement and verify Tasks (not on `ux-dev` unless compose is in scope).
-4. Collect completion report.
-5. Run `verifier` (same sandbox contract fields when routing applies).
-6. If verifier passes, continue to next stage.
-7. If verifier fails or stage is blocked, invoke `helper` — then follow **`orchestrate-recovery`** if the situation persists or matches loop/env/escalation patterns.
-
 ## Completed-stage context compression
 
-After a stage is **COMPLETE** and **verifier** has **APPROVED**, keep a **running handoff state** in a few lines (`last_completed_stage`, one-sentence outcome, `artifact_path`, `next_stage_id`). **Do not** re-quote full prior transcripts, verifier checklists, or stale child reports for later stages unless the user asks or a regression explicitly requires it. Prefer **current stage + next action** when updating the user.
+After a stage is **COMPLETE** and **verifier** has **APPROVED**, keep a **running handoff state** in a few lines (`last_completed_stage`, one-sentence outcome, `next_stage_id`). **Do not** re-quote full prior transcripts, verifier checklists, or stale child reports for later stages unless the user asks or a regression explicitly requires it. Prefer **current stage + next action** when updating the user.
 
 ## Delegation Gate (mandatory)
 
 Before any stage status update, confirm these Task calls occurred:
 
-- Artifact write/update: `scribe` (when needed). After scribe returns success with tool evidence and no `SCRIBE_FAILED`, trust the write; otherwise re-invoke scribe once.
 - Execution: `developer`, `frontend-dev`, or `ux-dev` — **must match the stage's Owner**. **Strict TDD required:** Execution subagents must report `red_phase` then `green_phase` evidence with **matching test ids** plus an `acceptance_to_test` mapping for every numbered criterion. Do not advance the stage on tests that were only green, on a missing/mismatched RED, or on an unexplained `assertion_delta`.
 - Verification: `verifier`
 - Recovery: `helper` on trigger conditions
@@ -405,6 +431,18 @@ Decision policy:
 - `NEEDS_RETRY` -> send corrective feedback and rerun same child task
 - `BLOCKED` -> invoke `helper`, amend artifact via `scribe`, then request user confirmation if environment-related — see **`orchestrate-recovery`** for deeper loop and env policy.
 
+### Verifier report grading (additional requirements)
+
+For `verifier` completion reports, **PASS** also requires:
+
+- All criteria have coverage classification (`direct-exercised`, `indirect-integration`, `manual-required`, or `missing`).
+- `manual-required` criteria have recorded explicit manual evidence or an explicitly accepted deviation from the user.
+- `host_fallback` sandbox status is acceptable only when sandbox was `preferred`, not `required`, and the specific acceptance criteria do not require Docker/runtime topology proof.
+- No `missing` coverage on an acceptance criterion.
+- `security_review` status is not `blocked` or `findings` with unresolved primary findings.
+
+Verifier `NEEDS_RETRY`, `FAILED`, or `BLOCKED` invokes existing recovery behavior (`helper` + `scribe` amendment).
+
 ## CodeRabbit gate (once per orchestration — after final verifier, before difficulty gates / PR / architect)
 
 **Invocation budget:** Exactly **one** CodeRabbit CLI invocation per orchestration session (per `.plan` artifact or per `feature:<slug>` GitHub run). CodeRabbit is a one-shot recommendation source, not a validation loop. **Never** Task `review` with `orchestrate_coderabbit_gate` between stages, between GitHub issues, after a single issue while more issues remain in the queue, or after CodeRabbit remediation.
@@ -428,6 +466,14 @@ When **every** stage is complete and the **final** `verifier` has **APPROVED** (
 
 Orchestrate must **track** across the session: `coderabbit_runs` (must be `1` when this gate runs), `coderabbit_findings` (full numbered inventory from the one-shot run), `coderabbit_resolutions` (per-finding `fixed` / `deferred` / `not_applicable` evidence from developer/frontend-dev), `coderabbit_remediation_fixes` (items fixed after the one-shot run), and finding counts from the CodeRabbit run. Pass these into the **Completion (mandatory)** block below — never omit the CodeRabbit section.
 
+### Verifier escape analysis (CodeRabbit gate)
+
+When the CodeRabbit gate completes and any blocker findings were present, include a `### Verifier escape analysis` section in the completion report:
+- For each CodeRabbit blocker (Critical/Major/Minor), classify by category: `correctness`, `test/coverage`, `security`, `performance`, `contract/API`, `configuration`, or `other`.
+- For each, note whether the verifier should have caught it, which stage or issue it originated from, and a recommended missing verifier trigger or checklist rule.
+- Do not automatically modify configuration from findings. The analysis is an operator-visible calibration backlog, preventing speculative rule growth.
+- Skip this section when CodeRabbit had zero blockers or was skipped/not applicable.
+
 ## Difficulty-based completion gates (after CodeRabbit gate when applicable)
 
 When **every** stage is complete, the **final** `verifier` passes, and any required **CodeRabbit gate** has **`CODERABBIT_GATE: PASS`** or local CodeRabbit remediation has been verified complete after the one-shot run (or was skipped because **`easy`**):
@@ -436,9 +482,9 @@ When **every** stage is complete, the **final** `verifier` passes, and any requi
 2. **`easy`:** Skip extra gates. Go to **Completion (mandatory)** and prompt the user to switch to architect.
 3. **`medium`:** Invoke `review` via Task with: artifact path; aggregated completion summary (each `stage_id`, `files_changed`, `tests_run` outcomes, verifier verdict); **include CodeRabbit gate findings** when that gate ran. Require a concise post-execution assessment (sign-off vs remediation). If review indicates remediation, use `scribe` to update or create `.plan/review.<slug>.md` per existing review flow, then stop and prompt user to address remediation before final sign-off with architect.
 4. **`hard`:**  
-   - **(a)** Invoke `senior-dev` via Task for **scheduled post-implementation review** (not STAGE_STUCK escalation): pass artifact path, aggregated implementation summary, Goal + AcceptanceChecks excerpts, and **CodeRabbit gate findings** when that gate ran. Instruct: read-only assessment unless explicit fix is in scope; return `APPROVED` or a numbered remediation list. **No user confirmation required** for this scheduled gate (unlike escalation).  
-   - **(b)** Invoke `helper` via Task for **strategy conformance**: pass artifact path, Goal, AcceptanceChecks, and short summary of what was implemented. Instruct helper to compare implementation intent vs plan and list any logical/architectural mismatches (reasoning only; no code).  
-   - If senior-dev or helper flags blockers, invoke `helper` + `scribe` to amend the artifact as usual before prompting the user.
+    - **(a)** Invoke `senior-dev` via Task with `execution_mode: scheduled_review`: pass artifact path, aggregated implementation summary, Goal + AcceptanceChecks excerpts, verifier reports, coverage assessment, sandbox/security evidence, and **CodeRabbit gate findings** when that gate ran. Instruct: **read-only** in this mode; return `APPROVED`, `NEEDS_CHANGES`, or `BLOCKED` with numbered, evidence-backed findings. **No user confirmation required** for this scheduled gate (unlike escalation). Do not accept `HANDOFF_TO_DEVELOPER` in this mode.  
+    - **(b)** Invoke `helper` via Task for **strategy conformance**: pass artifact path, Goal, AcceptanceChecks, and short summary of what was implemented. Instruct helper to compare implementation intent vs plan and list any logical/architectural mismatches (reasoning only; no code).  
+    - If senior-dev or helper flags blockers, invoke `helper` + `scribe` to amend the artifact as usual before prompting the user.
 
 ## Environment gate rerun (after remediation)
 

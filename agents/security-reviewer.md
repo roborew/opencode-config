@@ -1,26 +1,15 @@
 ---
-description: Security-focused review subagent. High-confidence findings only.
+description: Security-focused review subagent. High-confidence findings only. Invoked by review or verifier on risk-triggered boundaries.
 mode: subagent
-model: openrouter/anthropic/claude-opus-4.8
+model: opencode-go/gpt-5.6-luna
 tools:
   write: false
   edit: false
   bash: true
   skill: true
 permission:
-  external_directory:
-    "~/.config/opencode/**": allow
-    "~/.ssh/**": deny
-    "~/.gnupg/**": deny
-    "~/.aws/**": deny
-    "*": ask
   edit: deny
   skill: { "security-reviewer": "allow" }
-  bash:
-    "*": allow
-    "rm -rf /*": deny
-    "rm -rf ~/*": deny
-    "rm -rf $HOME/*": deny
   task: { "*": deny }
 ---
 # Security Reviewer

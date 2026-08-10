@@ -13,25 +13,51 @@
       "*": "allow",
       "~/.ssh/**": "deny",
       "~/.gnupg/**": "deny",
-      "~/.aws/**": "deny"
+      "~/.aws/**": "deny",
+      "~/.kube/**": "deny",
+      "~/.docker/**": "deny",
+      "~/.password-store/**": "deny",
+      "~/.npmrc": "deny",
+      "~/.pypirc": "deny",
+      "~/.netrc": "deny"
     },
     "bash": {
       "*": "allow",
       "rm -rf /*": "deny",
       "rm -rf ~/*": "deny",
       "rm -rf ~": "deny",
+      "rm -rf $HOME/*": "deny",
+      "rm -rf $HOME": "deny",
+      "rm -rf /": "deny",
+      "rm -rf ~/.config/*": "deny",
+      "rm -rf $HOME/.config/*": "deny",
+      "sudo *": "deny",
+      "doas *": "deny",
+      "diskutil *": "deny",
+      "chmod 777*": "deny",
+      "chmod -R 777*": "deny",
+      "curl * | sh": "deny",
+      "curl * | bash": "deny",
+      "wget * | sh": "deny",
+      "wget * | bash": "deny",
+      "* | sudo *": "deny",
+      "* |sudo *": "deny",
       "git push * --force*": "deny",
       "git push * -f*": "deny",
+      "git push -f*": "deny",
+      "git push --force *": "deny",
+      "git push --force": "deny",
+      "git push * --force": "deny",
+      "git push * --force *": "deny",
       "git reset --hard*": "deny",
       "git clean -fd*": "deny",
       "git clean -f *": "deny",
-      "git branch -d *": "deny",
-      "git branch -D *": "deny",
-      "git branch -m *": "deny",
-      "git branch -M *": "deny",
-      "git branch [!-]*": "deny",
+      "git branch *": "deny",
       "git checkout .": "deny",
+      "git checkout -- *": "deny",
       "git restore .": "deny",
+      "git restore *": "deny",
+      "git rm *": "deny",
       "git switch *": "deny",
       "git checkout develop": "deny",
       "git checkout main": "deny",
@@ -39,11 +65,20 @@
       "git checkout -b *": "deny",
       "git checkout -B *": "deny",
       "git switch -c *": "deny",
-      "git switch -C *": "deny"
+      "git switch -C *": "deny",
+      "git stash drop *": "deny",
+      "git stash clear": "deny",
+      "* > ~/.config/opencode*": "deny",
+      "* >> ~/.config/opencode*": "deny",
+      "tee ~/.config/opencode*": "deny",
+      "tee -a ~/.config/opencode*": "deny",
+      "cp * ~/.config/opencode*": "deny",
+      "mv * ~/.config/opencode*": "deny"
     },
     "edit": {
       "*": "allow",
       "opencode.json": "ask",
+      "~/.config/opencode/**": "deny",
       "package-lock.json": "deny",
       "pnpm-lock.yaml": "deny",
       "yarn.lock": "deny",
@@ -65,53 +100,48 @@
     }
   },
   "provider": {
-    "openrouter": {
-      "npm": "@openrouter/ai-sdk-provider",
-      "name": "OpenRouter",
+    "opencode": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "OpenCode Zen",
       "options": {
-        "timeout": 300000,
-        "chunkTimeout": 120000
+        "baseURL": "https://opencode.ai/zen/v1",
+        "timeout": 900000,
+        "chunkTimeout": 600000
       },
       "models": {
-        "minimax/minimax-m3": {
+        "minimax-m3": {
           "name": "MiniMax M3",
           "options": {
             "temperature": 0.3,
             "top_p": 0.95
           }
         },
-        "openai/gpt-5-nano": {
+        "gpt-5-nano": {
           "name": "GPT-5 Nano",
           "options": {
             "temperature": 0.2
           }
         },
-        "openai/gpt-5.6-terra": {
+        "gpt-5.6-terra": {
           "name": "GPT-5.6 Terra",
           "options": {
             "temperature": 0.2
           }
         },
-        "qwen/qwen3.7-max": {
+        "qwen3.7-max": {
           "name": "Qwen3.7 Max",
           "options": {
             "temperature": 0.1,
             "top_p": 0.9
           }
         },
-        "qwen/qwen3-vl-235b-a22b-instruct": {
-          "name": "Qwen3 VL 235B (vision)",
-          "options": {
-            "temperature": 0.2
-          }
-        },
-        "google/gemini-3-flash-preview": {
-          "name": "Gemini 3 Flash Preview",
+        "gemini-3-flash": {
+          "name": "Gemini 3 Flash",
           "options": {
             "temperature": 0.5
           }
         },
-        "deepseek/deepseek-v4-flash": {
+        "deepseek-v4-flash": {
           "name": "DeepSeek V4 Flash",
           "options": {
             "temperature": 0.3,
@@ -119,22 +149,76 @@
             "frequency_penalty": 0.3
           }
         },
-        "deepseek/deepseek-v4-pro": {
+        "deepseek-v4-pro": {
           "name": "DeepSeek V4 Pro",
           "options": {
             "temperature": 0.2,
             "top_p": 0.9
           }
         },
-        "moonshotai/kimi-k3": {
+        "kimi-k3": {
           "name": "Kimi K3",
           "options": {
             "temperature": 0.2,
             "top_p": 0.9
           }
         },
-        "anthropic/claude-opus-4.8": {
+        "claude-opus-4-8": {
           "name": "Claude Opus 4.8"
+        }
+      }
+    },
+    "opencode-go": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "OpenCode Go",
+      "options": {
+        "baseURL": "https://opencode.ai/zen/go/v1",
+        "timeout": 900000,
+        "chunkTimeout": 600000
+      },
+      "models": {
+        "minimax-m3": {
+          "name": "MiniMax M3 (Go)",
+          "options": {
+            "temperature": 0.3,
+            "top_p": 0.95
+          }
+        },
+        "qwen3.7-max": {
+          "name": "Qwen3.7 Max (Go)",
+          "options": {
+            "temperature": 0.1,
+            "top_p": 0.9
+          }
+        },
+        "deepseek-v4-flash": {
+          "name": "DeepSeek V4 Flash (Go)",
+          "options": {
+            "temperature": 0.3,
+            "top_p": 0.9,
+            "frequency_penalty": 0.3
+          }
+        },
+        "deepseek-v4-pro": {
+          "name": "DeepSeek V4 Pro (Go)",
+          "options": {
+            "temperature": 0.2,
+            "top_p": 0.9
+          }
+        },
+        "kimi-k3": {
+          "name": "Kimi K3 (Go)",
+          "options": {
+            "temperature": 0.2,
+            "top_p": 0.9
+          }
+        },
+        "gpt-5.6-luna": {
+          "name": "GPT-5.6 Luna (Go)",
+          "options": {
+            "temperature": 0.1,
+            "top_p": 0.9
+          }
         }
       }
     }
@@ -161,129 +245,129 @@
   },
   "agent": {
     "architect": {
-      "model": "openrouter/deepseek/deepseek-v4-flash",
+      "model": "opencode-go/deepseek-v4-flash",
       "steps": 30
     },
     "architecture-auditor": {
       "mode": "subagent",
-      "model": "openrouter/openai/gpt-5.6-terra",
+      "model": "opencode-go/gpt-5.6-luna",
       "steps": 25
     },
     "orchestrate": {
-      "model": "openrouter/deepseek/deepseek-v4-flash",
+      "model": "opencode-go/deepseek-v4-flash",
       "steps": 100
     },
     "plan": {
-      "model": "openrouter/deepseek/deepseek-v4-flash",
+      "model": "opencode-go/deepseek-v4-flash",
       "steps": 20
     },
     "strategist": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v4-pro",
+      "model": "opencode-go/deepseek-v4-pro",
       "steps": 12
     },
     "build": {
-      "model": "openrouter/minimax/minimax-m3",
+      "model": "opencode-go/deepseek-v4-flash",
       "steps": 30
     },
     "developer": {
       "mode": "subagent",
-      "model": "openrouter/minimax/minimax-m3",
+      "model": "opencode-go/deepseek-v4-flash",
       "steps": 30
     },
     "senior-dev": {
       "mode": "subagent",
-      "model": "openrouter/moonshotai/kimi-k3",
+      "model": "opencode-go/kimi-k3",
       "steps": 30
     },
     "vision": {
       "mode": "subagent",
-      "model": "openrouter/qwen/qwen3-vl-235b-a22b-instruct",
+      "model": "opencode/gemini-3-flash",
       "steps": 5
     },
     "designer": {
       "mode": "subagent",
-      "model": "openrouter/google/gemini-3-flash-preview",
+      "model": "opencode/gemini-3-flash",
       "steps": 10
     },
     "ux-dev": {
       "mode": "subagent",
-      "model": "openrouter/google/gemini-3-flash-preview",
+      "model": "opencode/gemini-3-flash",
       "steps": 30
     },
     "helper": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v4-flash",
+      "model": "opencode-go/deepseek-v4-flash",
       "steps": 15
     },
     "debugger": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v4-flash",
+      "model": "opencode-go/deepseek-v4-flash",
       "steps": 15
     },
     "scribe": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v4-flash",
+      "model": "opencode-go/deepseek-v4-flash",
       "steps": 5
     },
     "stack-bootstrap": {
       "mode": "subagent",
-      "model": "openrouter/openai/gpt-5-nano",
+      "model": "opencode/gpt-5-nano",
       "steps": 15
     },
     "worktree-env": {
       "mode": "subagent",
-      "model": "openrouter/openai/gpt-5-nano",
+      "model": "opencode/gpt-5-nano",
       "steps": 10
     },
     "preflight": {
       "mode": "subagent",
-      "model": "openrouter/openai/gpt-5-nano",
+      "model": "opencode/gpt-5-nano",
       "steps": 15
     },
     "verifier": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v4-flash",
-      "steps": 10
+      "model": "opencode-go/deepseek-v4-flash",
+      "steps": 25
     },
     "review": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v4-flash",
+      "model": "opencode-go/deepseek-v4-flash",
       "steps": 15
     },
     "security-reviewer": {
       "mode": "subagent",
-      "model": "openrouter/anthropic/claude-opus-4.8",
+      "model": "opencode-go/gpt-5.6-luna",
       "steps": 15
     },
     "performance-reviewer": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v4-flash",
+      "model": "opencode-go/deepseek-v4-flash",
       "steps": 15
     },
     "doc-reviewer": {
       "mode": "subagent",
-      "model": "openrouter/openai/gpt-5-nano",
+      "model": "opencode/gpt-5-nano",
       "steps": 10
     },
     "document": {
       "mode": "subagent",
-      "model": "openrouter/openai/gpt-5-nano",
+      "model": "opencode/gpt-5-nano",
       "steps": 10
     },
     "mentor": {
       "mode": "subagent",
-      "model": "openrouter/qwen/qwen3.7-max",
+      "model": "opencode-go/qwen3.7-max",
       "steps": 10
     },
     "refactor": {
       "mode": "subagent",
-      "model": "openrouter/deepseek/deepseek-v4-flash",
+      "model": "opencode-go/deepseek-v4-flash",
       "steps": 15
     },
     "frontend-dev": {
       "mode": "subagent",
-      "model": "openrouter/minimax/minimax-m3",
+      "model": "opencode-go/minimax-m3",
       "steps": 30
     }
   }

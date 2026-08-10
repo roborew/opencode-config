@@ -1,34 +1,14 @@
 ---
 description: Cross-repo template installer for setup-project (spec-coordinated stacks only)
 mode: subagent
-model: openrouter/openai/gpt-5-nano
+model: opencode/gpt-5-nano
 tools:
   write: true
   edit: true
   bash: true
   skill: true
 permission:
-  external_directory:
-    "~/.config/opencode/**": allow
-    "~/.ssh/**": deny
-    "~/.gnupg/**": deny
-    "~/.aws/**": deny
-    "~/.kube/**": deny
-    "~/.docker/**": deny
-    "~/.password-store/**": deny
-    "~/.npmrc": deny
-    "~/.pypirc": deny
-    "~/.netrc": deny
-    "*": allow
-  bash:
-    "*": allow
-    "rm -rf /*": deny
-    "rm -rf ~/*": deny
-    "rm -rf $HOME/*": deny
   skill: { "stack-bootstrap": "allow" }
-  edit:
-    "~/.config/opencode/**": deny
-    "*": allow
   task:
     "*": deny
 ---

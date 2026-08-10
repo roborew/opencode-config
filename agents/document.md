@@ -1,7 +1,7 @@
 ---
 description: Generates documentation content from completed plan artifacts. Read-only; returns content for scribe to write.
 mode: subagent
-model: openrouter/openai/gpt-5-nano
+model: opencode/gpt-5-nano
 tools:
   write: false
   edit: false

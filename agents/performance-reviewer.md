@@ -1,26 +1,15 @@
 ---
 description: Performance-focused review subagent. Real bottlenecks only.
 mode: subagent
-model: openrouter/deepseek/deepseek-v4-flash
+model: opencode-go/deepseek-v4-flash
 tools:
   write: false
   edit: false
   bash: true
   skill: true
 permission:
-  external_directory:
-    "~/.config/opencode/**": allow
-    "~/.ssh/**": deny
-    "~/.gnupg/**": deny
-    "~/.aws/**": deny
-    "*": ask
   edit: deny
   skill: { "performance-reviewer": "allow" }
-  bash:
-    "*": allow
-    "rm -rf /*": deny
-    "rm -rf ~/*": deny
-    "rm -rf $HOME/*": deny
   task: { "*": deny }
 ---
 # Performance Reviewer

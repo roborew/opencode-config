@@ -46,9 +46,13 @@ If the script path does not exist, run these **short** commands (never one mega-
 
 ## Permissions (OpenCode)
 
-- **Prefer `cp` via `bash` only** (no `edit` tool on `.env`). Global `opencode.json` may deny edits to `.env`; many stacks still allow file copy through **bash**—try that first.
-- **`external_directory`:** main checkout paths must be **allow** (not `ask`) so `cp` can read sources outside the worktree root without mid-session prompts.
-- If `cp` is **denied by the sandbox**, add under **`agents/worktree-env.md`** `permission.edit` with `"*": deny` and `".env": allow` at repo root (mirror `scribe` patterns), then retry—or run the same `cp` command manually in a terminal.
+- **Agent-level posture (already configured in `agents/worktree-env.md`):**
+  - `tools.read: false` — the agent must not use the `read` tool on env files; all checks go through bash scripts that emit JSON without file contents.
+  - `permission.edit: { "*": "deny", ".env": "allow", ".env.*": "allow", "*/.env": "allow", "*/.env.*": "allow", "**/.env": "allow", "**/.env.*": "allow" }` — explicit allow for env files so the agent never hits the global `opencode.json` deny and prompts the user during preflight.
+  - `permission.bash: { "*": "allow", ...dangerous denies }` — mirrors `opencode.json` deny list (`rm -rf /*`, `sudo *`, etc.) so `cp`, `rm -f`, `test -f`, and `test -L` work without prompts.
+  - `permission.external_directory: { "*": "allow" }` — main checkout paths are read-only sources outside the worktree root; `cp` must reach them without mid-session prompts.
+- **Runtime rule:** prefer `cp` via `bash` only (no `edit` tool on `.env`); the agent's `edit: deny` and `read: false` make this the only path. Global `opencode.json` denies edits to `.env` for everyone; the agent-level allow above lets `worktree-env` complete its setup step without prompting the operator.
+- If `cp` is **denied by the sandbox**, the agent-level permission block above already covers it. If the sandbox still rejects (e.g. macOS Gatekeeper or Sysbox mount policy), run the same `cp` command manually in a terminal — never hand-edit the global `opencode.json`.
 
 ## Output (structured)
 

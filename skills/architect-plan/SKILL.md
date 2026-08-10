@@ -83,11 +83,19 @@ When the user selects Feature, follow this protocol. You **must not** send one h
 
 After initial understanding, set **Difficulty** for the feature (write it into the plan artifact as `## Difficulty` with value `easy`, `medium`, or `hard`):
 
-| Level | Typical signal | Strategist use |
-|-------|----------------|----------------|
-| **easy** | 1–2 stages, single concern, few files, no cross-cutting changes | **Do not** spawn strategists; you synthesize the full plan from investigation. |
-| **medium** | 3–4 stages, multiple files, moderate complexity | **Default:** synthesize the full plan yourself if **single-domain** (one stack, bounded area) and investigation is sufficient. **Spawn** scoped strategists when **multi-domain** (e.g. backend + frontend + infra), **high uncertainty** after investigation, or **cross-cutting** risk. |
-| **hard** | 5+ stages, cross-cutting concerns, high risk | **Must** decompose and spawn strategists; investigate more thoroughly and pass **richer** context per sub-problem than for medium. |
+| Level | Typical signal | Strategist use | Architecture auditor |
+|-------|----------------|----------------|---------------------|
+| **easy** | 1–2 stages, single concern, few files, no cross-cutting changes | **Do not** spawn strategists; you synthesize the full plan from investigation. | **Do not** invoke. |
+| **medium** | 3–4 stages, multiple files, moderate complexity | **Default:** synthesize the full plan yourself if **single-domain** (one stack, bounded area) and investigation is sufficient. **Spawn** scoped strategists when **multi-domain** (e.g. backend + frontend + infra), **high uncertainty** after investigation, or **cross-cutting** risk. | Invoke `architecture-auditor` with `execution_mode: feature_impact_assessment` only when the feature changes service boundaries, shared modules, schemas, public APIs, cross-repo contracts, or introduces a new integration. |
+| **hard** | 5+ stages, cross-cutting concerns, high risk | **Must** decompose and spawn strategists; investigate more thoroughly and pass **richer** context per sub-problem than for medium. | **Must** invoke `architecture-auditor` with `execution_mode: feature_impact_assessment`. |
+
+**Mandatory strategist triggers (any difficulty):** When any feature has cross-repo dependencies, non-trivial data/domain-model changes, auth/payments/security boundaries, external provider integration, migration/rollback needs, or uncertain architectural ownership, strategist is mandatory — regardless of difficulty level. Treat these as `medium` or `hard` accordingly.
+
+**Mandatory architecture-auditor triggers:** Invoke for hard features or medium features that change service boundaries, shared modules, schemas, public APIs, cross-repo contracts, or introduce a new integration. Pass focused affected modules and intended seams, not the entire repo. Return architectural constraints, likely coupling hazards, recommended stage boundaries, and characterization-test needs. Do not write the normal HTML audit report unless the user explicitly requests a full audit. Do **not** invoke for easy features, isolated UI work, documentation, or local bug fixes.
+
+**Red-team pass:** For hard features and medium features with a high-risk trigger, add a single `strategist` red-team pass (`mode: red-team`) over the merged planning/issue draft. It should identify missing acceptance checks, cross-ticket dependencies, test gaps, rollback/operational gaps, and scope conflicts before fanout/issue-expand.
+
+**Expanded issue metadata:** For features with triggered strategist or architecture-auditor passes, add an explicit architecture/security planning evidence section to expanded GitHub issue metadata: architectural constraints, security boundary classification, required specialist results, and corresponding acceptance/test commands.
 
 ### Step 1: Investigate with claude-context
 

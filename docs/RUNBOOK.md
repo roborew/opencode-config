@@ -7,7 +7,6 @@
 | Mode | Planning | Execution source of truth |
 |------|----------|----------------------------|
 | **Spec / GitHub** (default) | Spec: PRD + fanout + **issue-expand** (architect option 1, same session) | GitHub child issues (`feature:<slug>`, `opencode-task-json` + `stages[]`) |
-| **Legacy local** | Architect option 1 (targeted) → scribe writes `.plan/feature.<slug>.md` | Active `.plan/*.md` (excludes `*.completed.md`) |
 
 See [FEATURE-PIPELINE.md](FEATURE-PIPELINE.md) for the numbered pipeline. **Fanout alone does not populate `stages[]`** — issue-expand runs in the spec architect session before orchestrate.
 
@@ -44,16 +43,16 @@ Full setup: [GITHUB-PROJECT-BOARD.md](GITHUB-PROJECT-BOARD.md). Requires `gh` >=
 
 ## Overview
 
-- **Built-in agents:** `plan` uses DeepSeek V4 Flash; `build` uses MiniMax M3 in `opencode.json` for generic/quick tasks.
+- **Built-in agents:** `plan` uses DeepSeek V4 Flash; `build` uses DeepSeek V4 Flash for generic/quick tasks.
 - **Primary planning mode** (`architect`) — read-only with **allow-by-default bash** (explicit deny for destructive/mutating shell): exploration, `gh`, `opencode-run`, `setup-project --check-only`; artifact writes via **scribe** / **stack-bootstrap** Tasks only.
 - **Primary execution mode** (`orchestrate`) runs delegated stage execution and recovery flow. Reads `## Difficulty` from the artifact (`easy` \| `medium` \| `hard`; default `medium` if missing). After **all** stages/issues pass the final verifier (one gate per artifact or `feature:<slug>`): **medium/hard** — **CodeRabbit gate** via `review` + `code-review` skill (single CLI review of accumulated changes against `develop` by default; no CodeRabbit validation reruns); **easy** — skips CodeRabbit. **Never** runs CodeRabbit per GitHub issue, mid-stage, or after CodeRabbit remediation. Then: **easy** — no further gates; **medium** — `review` post-execution check; **hard** — `senior-dev` (scheduled review, no user confirmation) then `helper` (strategy conformance). On completion, prints a table-based sign-off handoff naming the exact feature/artifact, PR, work completed, gates, CodeRabbit, findings/risks, and the copy/paste prompt for architect. **Skills:** `orchestrate-execution` (bootstrap: preflight yes/no, optional env gate, work selection, stage loop, grading, completion gates); `orchestrate-recovery` (helper triggers, loops, env, escalation, manual paste). The monolithic `orchestrate` skill package is removed.
-- **Planning specialists** (`debugger`, `refactor`, `review`, `designer`) — read-only subagents of architect; return plan drafts, never write code. `designer` synthesizes design briefs for Prototype Design. The **`review`** agent may Task **`security-reviewer`**, **`performance-reviewer`**, and **`doc-reviewer`** when change scope warrants (see `skills/review/SKILL.md`).
+- **Planning specialists** (`debugger`, `refactor`, `review`, `designer`) — read-only subagents of architect; return plan drafts, never write code. `designer` synthesizes design briefs for Prototype Design using Gemini 3 Flash. The **`review`** agent may Task **`security-reviewer`**, **`performance-reviewer`**, and **`doc-reviewer`** when change scope warrants (see `skills/review/SKILL.md`). `review` may also be invoked by orchestrate on **medium** Difficulty after execution.
 - **Documentation generator** (`document`) — read-only; generates changelog/guides/architecture content; architect invokes, then scribe writes.
-- **Execution subagents** (`developer`, `frontend-dev`, `ux-dev`) — coding agents invoked by orchestrate only; architect never invokes them. `ux-dev` generates HTML-only framework-agnostic prototypes from design briefs into `.prototype/<slug>/`.
-- **Senior-dev** (`senior-dev`) — orchestrator subagent. **Escalation:** operator-triggered when developer is stuck; orchestrator asks user to confirm before invoking. **Scheduled gate:** for `Difficulty: hard`, after all stages pass verifier, orchestrate invokes senior-dev for post-implementation review **without** that confirmation. Diagnosis + fix on escalation; read-only review on scheduled gate unless scope says otherwise.
+- **Execution subagents** (`developer`, `frontend-dev`, `ux-dev`) — coding agents invoked by orchestrate only; architect never invokes them. `frontend-dev` uses MiniMax M3 for JSX/CSS/visual output. `ux-dev` generates HTML-only framework-agnostic prototypes from design briefs into `.prototype/<slug>/`.
+- **Senior-dev** (`senior-dev`) — orchestrator subagent with two explicit modes: `escalation_fix` (mid-stage unblocker, operator-triggered) and `scheduled_review` (hard-difficulty read-only gate). Orchestrator asks user to confirm before escalation; scheduled review runs without confirmation.
 - **Artifact writer** (`scribe`) — only write path; writes plan artifacts, docs, `README.md`, and `.env.example` when delegated (invoked by architect and orchestrate).
 - **Recovery replanner** (`helper`) diagnoses stuck/failed states and amends existing artifacts through `scribe`. On **hard** Difficulty, orchestrate may also invoke helper for **strategy conformance** (reasoning-only compare plan vs implementation summary).
-- **Verifier** (`verifier`) is an independent evidence gate and never writes code.
+- **Verifier** (`verifier`) is an independent evidence gate, never writes code, and may conditionally delegate to `security-reviewer` when security triggers fire.
 - **Mentor** (`mentor`) is optional and explanatory only.
 
 ## Agent Matrix
@@ -91,32 +90,30 @@ Rules:
 - **Skill:** Each agent may load only its core skill(s). No `skill: { "*": "allow" }`. Explicit allow per skill (e.g. `architect-plan` + `architect-review` for architect; `orchestrate-execution` + `orchestrate-recovery` for orchestrate; `developer` for developer; `preflight` for **`preflight`**; `worktree-env` for **`worktree-env`**).
 - **Architect subagents** (`debugger`, `refactor`, `review`, `document`, `designer`): `task: { "*": deny }` — they cannot invoke scribe or any other agent. Return content only to parent; architect handles scribe handoff.
 
-## OpenRouter preset (limit “Others” model spend)
+## Model routing policy (Go-first, cost-tiered)
 
-OpenCode does not define an in-repo model allowlist beyond [`opencode.json`](../opencode.json). To avoid accidental traffic to untuned models (often grouped as “Others” in OpenRouter Activity):
-
-1. In the [OpenRouter](https://openrouter.ai/) dashboard, create a **preset** whose allowed model list matches **only** the models you use in `opencode.json` (including `:nitro` variants if you use them).
-2. Bind that preset to the **API key** OpenCode uses, per OpenRouter’s current key/preset UX.
+Go subscription allowance is consumed first before paid Zen fallbacks. Route by task shape, not agent prestige. Keep one deliberate fallback per important role.
 
 ## Canonical Flow
 
 1. `architect` asks for plan type (Feature/Debug/Refactor/Review/Document/Prototype Design) when request is greeting/unspecified.
-2. **Features:** architect classifies **`## Difficulty`** (`easy` \| `medium` \| `hard`), runs a Claude Context readiness check (`get_indexing_status` → `index_codebase` if needed), then investigates with `claude-context`. **Easy** or **medium** (single-domain, sufficient investigation) → architect synthesizes the plan without strategists; **medium** (multi-domain / high uncertainty / cross-cutting) or **hard** → architect decomposes and spawns scoped **`strategist`** subagents. **Strategist** and other planning specialists also run the same Claude Context readiness gate before discovery; bash/glob fallback is allowed only when MCP is unavailable or indexing still fails after retry (`MCP_FALLBACK` in output). Stage sizing: aim **3–7 stages**; split stages that would exceed **~15 developer tool rounds** or **>3 substantive files** each. Other types: architect invokes matching specialist (`debugger`/`refactor`/`review`/`designer`) as needed. For Prototype Design: design intake → `designer` → scribe writes `.plan/design.<slug>.md`.
-3. `architect` invokes `scribe` to write the artifact to `.plan/<type>.<slug>.md` (mandatory step).
+2. **Features:** architect classifies **`## Difficulty`** (`easy` \| `medium` \| `hard`), runs a Claude Context readiness check (`get_indexing_status` → `index_codebase` if needed), then investigates with `claude-context`. **Strategist** is mandatory when any feature has cross-repo dependencies, non-trivial data/domain-model changes, auth/payments/security boundaries, external provider integration, migration/rollback needs, or uncertain architectural ownership. **Architecture-auditor** (feature-impact assessment via `opencode-go/gpt-5.6-luna`) is invoked for hard features or medium features that change service boundaries, shared modules, schemas, public APIs, cross-repo contracts, or introduce a new integration. Not invoked for easy features, isolated UI work, documentation, or local bug fixes. **Hard** features also get a red-team strategist pass before fanout. **Easy** or **medium** (single-domain, sufficient investigation, no mandatory triggers) → architect synthesizes the plan without strategists; **medium** (multi-domain / high uncertainty / cross-cutting) or **hard** → architect decomposes and spawns scoped **`strategist`** subagents. **Strategist** and other planning specialists also run the same Claude Context readiness gate before discovery; bash/glob fallback is allowed only when MCP is unavailable or indexing still fails after retry (`MCP_FALLBACK` in output). Stage sizing: aim **3–7 stages**; split stages that would exceed **~15 developer tool rounds** or **>3 substantive files** each. Other types: architect invokes matching specialist (`debugger`/`refactor`/`review`/`designer`) as needed. For Prototype Design: design intake → `designer` → scribe writes `.plan/design.<slug>.md`.
+3. `architect` invokes `scribe` to write artifacts to approved docs paths (mandatory step). Issue-backed paths use `to-issues` / `publish-targeted-issue` — never `.plan/feature.*` files.
 4. User switches to `orchestrate`.
-5. `orchestrate` ensures artifact exists; if missing, dispatches `scribe` to write it.
-6. `orchestrate` asks **“Run preflight now? (yes/no)”** unless preflight already passed or was declined this session; does not show work options until answered. **yes** → repair-first bootstrap: **`worktree-env`** (once, with completion trust) then **`preflight`** agent (auto-repair deps/runtime/indexing once); **no** → skip preflight for the session. **Either way:** run **checkout identity gate** (`checkout-contract.sh`) to capture current `impl_repo_path` and `branch` before work selection or implementation. Subagents must not create or switch branches.
+5. `orchestrate` ensures issue backlog is available; if missing, dispatches `scribe` to write it.
+6. `orchestrate` asks **"Run preflight now? (yes/no)"** unless preflight already passed or was declined this session; does not show work options until answered. **yes** → repair-first bootstrap: **`worktree-env`** (once, with completion trust) then **`preflight`** agent (auto-repair deps/runtime/indexing once); **no** → skip preflight for the session. **Either way:** run **checkout identity gate** (`checkout-contract.sh`) to capture current `impl_repo_path` and `branch` before work selection or implementation. Subagents must not create or switch branches.
 7. `orchestrate` runs Claude Context readiness (`get_indexing_status` → `index_codebase` if needed).
-8. `orchestrate` shows the **work-selection menu** verbatim (**(1)** GitHub backlog first; **(2)** Sysbox sandbox build/refresh for the current feature branch; **(5)** legacy `.plan` last; numbers match display order). On **(1)**, run the GitHub `feature:<slug>` backlog. On **(2)**, run **Sandbox feature build mode** (Task `developer` + `docker-sandbox`; no issue queue; support later **refresh** / **expose** / **destroy**). On **(5)** only, **read `.plan/` via a filesystem tool** (glob or list), list **active** plans (omit `*.completed.md`) from that output only—never from memory—and ask the user to select one. **(3)** / **(4)** route to `architect` or clarified scope as in the orchestrate agent.
+8. `orchestrate` shows the **work-selection menu** verbatim (**(1)** GitHub backlog first; **(2)** Sysbox sandbox build/refresh for the current feature branch). On **(1)**, run the GitHub `feature:<slug>` backlog. On **(2)**, run **Sandbox feature build mode** (Task `developer` + `docker-sandbox`; no issue queue; support later **refresh** / **expose** / **destroy**). **(3)** / **(4)** route to `architect` or clarified scope as in the orchestrate agent.
 9. Preflight may be re-run only when the user asks or after `ENV_BLOCKED` remediation.
 10. `orchestrate` dispatches one stage at a time to `developer`, `frontend-dev`, or `ux-dev` (by stage Owner). Pass `impl_repo_path`, `expected_branch`, and `branch_policy` on every implementation Task. Design artifacts use `Owner: ux-dev`; `ux-dev` outputs HTML-only files to `.prototype/<slug>/`.
 11. Execution subagent returns completion report (`stage_id`, files, tests, checks, blockers, risks, next input).
 12. `orchestrate` dispatches next stage only after successful handoff.
 13. For final completion, run `verifier` per stage; run final verifier when all stages complete.
 14. **CodeRabbit gate** (once per orchestration, after final verifier / entire GitHub queue, before difficulty gates and architect): **medium/hard** — orchestrate Tasks **`review`** with `execution_mode: orchestrate_coderabbit_gate` and **`code-review`** skill on **all** changed files against `develop` by default; **never** per stage, per issue, or after remediation. BLOCKED → developer/frontend-dev fixes every non-deferred numbered finding → verifier confirms local fixes. **easy** — skip.
-15. **Difficulty completion gates** (after CodeRabbit PASS when applicable): **easy** — none. **medium** — orchestrate invokes **`review`** with artifact + completion summary (+ CodeRabbit findings). **hard** — orchestrate invokes **`senior-dev`** (scheduled review), then **`helper`** (strategy conformance). Remediation from these gates may update review artifact via scribe before handoff.
-16. When gates complete: orchestrate prints the mandatory table-based completion handoff pointing to **impl architect option 4 Phase R** (not spec close). The handoff must name the exact `feature:<slug>` or `.plan` artifact and PR/skip reason.
-17. **Impl architect** (post-PR): Mode F Phase R triages PR feedback; remediation loop with orchestrate; Phase 1 accepts issues (`state:done`, open); Phase 2 docs on feature branch. **Spec feature-complete** closes issues at merge, runs merge gate, closes PRD. Legacy `.plan`: architect Mode B review → docs → `archive_plan`.
+15. **Difficulty completion gates** (after CodeRabbit PASS when applicable): **easy** — none. **medium** — orchestrate invokes **`review`** with artifact + completion summary (+ CodeRabbit findings). **hard** — orchestrate invokes **`senior-dev`** (`execution_mode: scheduled_review`), then **`helper`** (strategy conformance). Remediation from these gates may update review artifact via scribe before handoff.
+16. **Post-PR stabilization:** After `feature-finish-pr.sh` creates/updates the PR, orchestrate enters `pr_stabilization`: collects PR checks/comments and user acceptance feedback, classifies findings, executes fix-now items through developer→verifier, and presents checkpoints until the user finalizes stabilization. Produces a sealed PR stabilization report with `ready_for_architect` or `blocked` status and a feedback cutoff timestamp.
+17. When stabilization complete: orchestrate prints the mandatory table-based completion handoff pointing to **impl architect option 4 Phase R** (not spec close). The handoff must name the exact `feature:<slug>` or `.plan` artifact, PR/skip reason, stabilization status, and feedback cutoff.
+18. **Impl architect** (post-PR): Mode F Phase R distinguishes sealed (`ready_for_architect`) bundles from unsealed — sealed bundles skip routine comment triage and only create remediation for new material issues after the cutoff. Remediation loop with orchestrate; Phase 1 accepts issues (`state:done`, open); Phase 2 docs on feature branch. **Spec feature-complete** closes issues at merge, runs merge gate, closes PRD. Legacy `.plan`: architect Mode B review → docs → `archive_plan`.
 
 At each stage handoff, orchestrate grades child output:
 
@@ -153,31 +150,29 @@ Preflight is user-opt-in at session start (`yes` / `no`); work selection follows
 
 When a subagent repeats the same completion message or stalls:
 
-1. **OpenCode config**: `steps` caps agentic iterations per session — e.g. scribe `5`, developer/frontend-dev `45`, architect `30`, orchestrate `50`, primaries and subagents are bounded. See `opencode.json` `agent` block.
+1. **OpenCode config**: `steps` caps agentic iterations per session — e.g. scribe `5`, developer/frontend-dev `45`, architect `30`, orchestrate `100`, primaries and subagents are bounded. See `opencode.json` `agent` block.
 2. **Orchestrator loop detection**: If the same or near-identical child report is received 2+ times, treat as `BLOCKED`, invoke `helper`, and amend the same artifact via `scribe` before any retry.
 3. **Scribe exit rule**: Scribe returns exactly once per task. After reporting path + operation + summary, it stops.
 4. **Developer anti-loop rule**: Developer must not repeat the same verbal intent (e.g. "Let me create X"); one statement, then execute. If the same failing command repeats twice without meaningful change, return `blocker_code: STAGE_STUCK` and stop.
 5. **Manual escape**: Use `Ctrl+C` or session interrupt. Resume in a new session with artifact path if needed.
 6. **Manual handoff (Task did not return):** If a subagent completed and produced a report but the Task did not return control to the orchestrator, switch to the `orchestrate` agent and paste the completion report. The orchestrator will grade it and proceed to the next stage. Do not message the subagent again—it has already completed.
 
-Provider-level `timeout` (e.g. 300000ms) and per-model **`temperature` / `top_p` / `frequency_penalty`** are set under `provider.openrouter.models.<id>.options` in `opencode.json` to reduce variance and wasted tokens (e.g. lower temp for execution, gentle `frequency_penalty` for DeepSeek).
+Provider-level `timeout` (e.g. 300000ms) and per-model **`temperature` / `top_p` / `frequency_penalty`** are set under `provider.<name>.models.<id>.options` in `opencode.json` to reduce variance and wasted tokens (e.g. lower temp for execution, gentle `frequency_penalty` for DeepSeek).
 
-## Model routing (OpenRouter)
+## Model routing (Go-first, cost-tiered)
 
-| Layer | Agents | Model |
-| --- | --- | --- |
-| Planning (primary) | `architect`, `plan` | DeepSeek V4 Flash |
-| Scoped planning | `strategist` | DeepSeek V4 Pro |
-| Orchestration | `orchestrate` | DeepSeek V4 Flash |
-| Primary implementation | `developer`, `frontend-dev`, `build` | MiniMax M3 |
-| Design / prototypes | `designer`, `ux-dev` | Gemini 3 Flash |
-| Senior depth | `senior-dev` | Kimi K3 |
-| Architecture audit | `architecture-auditor` | GPT-5.6 Terra |
-| Security depth | `security-reviewer` | Claude Opus 4.8 |
-| Fast utility | `debugger`, `helper`, `refactor`, `verifier`, `review`, `performance-reviewer`, `scribe` | DeepSeek V4 Flash |
-| Teaching | `mentor` | Qwen3.7 Max |
-| Vision | `vision` | Qwen3 VL |
-| Writing / docs | `document`, `doc-reviewer`, `stack-bootstrap`, `worktree-env`, `preflight` | GPT-5 Nano |
+| Layer | Agents | Primary model | Fallback |
+| --- | --- | --- | --- |
+| High-volume execution | `developer`, `frontend-dev`, `orchestrate`, `helper`, `debugger`, `refactor`, `scribe`, `review` | `opencode-go/deepseek-v4-flash` | `opencode/deepseek-v4-flash` when Go quota exhausted |
+| Fast utility / setup | `preflight`, `worktree-env`, `document`, `doc-reviewer` | `opencode/gpt-5-nano` | `opencode-go/deepseek-v4-flash` if Nano fails |
+| Independent verifier gate | `verifier` | `opencode-go/deepseek-v4-flash` | `opencode/go-gpt-5.6-luna` for escalation/high-risk only |
+| Architecture assessment | `architecture-auditor` | `opencode-go/gpt-5.6-luna` (feature-impact) | `opencode/gpt-5.6-terra` for full audits |
+| Feature decomposition | `strategist` | `opencode-go/deepseek-v4-pro` | `opencode-go/gpt-5.6-luna` for hard cross-repo |
+| Senior escalation / review | `senior-dev` | `opencode-go/kimi-k3` | `opencode-go/gpt-5.6-luna` when Kimi unavailable |
+| Security analysis | `security-reviewer` | `opencode-go/gpt-5.6-luna` | `opencode/claude-opus-4-8` only for user-approved high-severity escalation |
+| Vision / visual | `vision`, `designer`, `ux-dev` | `opencode/gemini-3-flash` (retained) | Current configured |
+| Teaching | `mentor` | `opencode-go/qwen3.7-max` | — |
+| Generic / built-in | `plan`, `build` | `opencode-go/deepseek-v4-flash` | — |
 
 Runtime authority: `opencode.json`. Agent frontmatter `model:` should match for changed agents.
 
@@ -239,8 +234,6 @@ impl_repo_path: <absolute verified git root>
 expected_branch: <current verified branch>
 is_linked_worktree: true|false
 branch_policy: do not create, switch, checkout, or rename branches unless user explicitly requests in this turn
-Artifact: .plan/<type>.<slug>.md
-Stage IDs: <stage-id-list>
 Scope in: <paths/components>
 Scope out: <explicit exclusions>
 Acceptance checks: <commands>
@@ -250,7 +243,7 @@ Completion report required: stage_id, files_changed, `changes` [{ file, summary,
 Use this when dispatching markdown writes to `scribe`:
 
 ```text
-Target path: .plan/<type>.<slug>.md, docs/<section>/<name>.md, README.md, or .env.example
+Target path: docs/<section>/<name>.md, README.md, or .env.example
 Operation: create|update
 Content: full body from parent (markdown or .env.example template lines)
 Constraints: approved paths only; markdown or .env.example only
@@ -266,9 +259,9 @@ On macOS/Linux, **CRLF** line endings in shell scripts break the shebang (`env: 
 
 ## Smoke Checklist
 
-- Artifact includes required schema sections (`Difficulty`, `StagePlan`, `StageAcceptanceChecks`, `CompletionReport`, `VerifierInputs`, `DocumentationOutputs`).
+- Architected features include required sections (`Difficulty`, `StagePlan`, `StageAcceptanceChecks`, `CompletionReport`, `VerifierInputs`, `DocumentationOutputs`).
 - Primary agents cannot edit files directly (`edit: deny`).
-- Scribe can write to `.plan`, docs markdown paths, `README.md`, and `.env.example` (when parent supplies path and content).
+- Scribe can write to approved docs markdown paths, `README.md`, and `.env.example` (when parent supplies path and content).
 - Helper never writes directly and only amends existing artifacts via `scribe`.
 - Helper is invoked on repeated verifier failure or unresolved blockers.
 - Environment/toolchain blockers (`ENV_BLOCKED`) halt stage progression and require helper+scribe amendment before retry.

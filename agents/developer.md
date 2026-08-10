@@ -1,7 +1,7 @@
 ---
 description: "Unified executor for GitHub issues and legacy .plan stages with Owner: developer."
 mode: subagent
-model: openrouter/minimax/minimax-m3
+model: opencode-go/deepseek-v4-flash
 steps: 45
 tools:
   write: true
@@ -9,12 +9,6 @@ tools:
   bash: true
   skill: true
 permission:
-  external_directory:
-    "~/.config/opencode/**": allow
-    "~/.ssh/**": deny
-    "~/.gnupg/**": deny
-    "~/.aws/**": deny
-    "*": allow
   skill:
     {
       "developer": "allow",
@@ -25,23 +19,6 @@ permission:
       "workers-best-practices": "allow",
       "docker-sandbox": "allow"
     }
-  edit:
-    "~/.config/opencode/**": deny
-    "*": allow
-  bash:
-    "*": allow
-    "rm -rf /*": deny
-    "rm -rf ~/*": deny
-    "rm -rf $HOME/*": deny
-    "git switch *": deny
-    "git checkout develop": deny
-    "git checkout main": deny
-    "git checkout master": deny
-    "git checkout -b *": deny
-    "git checkout -B *": deny
-    "git branch *": deny
-    "git switch -c *": deny
-    "git switch -C *": deny
 ---
 # Developer Agent
 

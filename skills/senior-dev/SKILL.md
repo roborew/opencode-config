@@ -1,6 +1,6 @@
 ---
 name: senior-dev
-description: "Escalation when developer is stuck. Invoked by orchestrate via Task when operator asks. Diagnose root cause, implement fix. Hand back to orchestrator when blocker fixed."
+description: "Escalation when developer is stuck. Invoked by orchestrate via Task. Two modes: escalation_fix (unblocker, returns HANDOFF_TO_DEVELOPER) and scheduled_review (read-only hard-difficulty gate, returns APPROVED/NEEDS_CHANGES/BLOCKED)."
 modelTier: "smart"
 roleReminder: "Diagnosis-first. Fix only what unblocks the stage. As soon as work no longer requires senior-dev, report HANDOFF_TO_DEVELOPER and return to orchestrate."
 ---
