@@ -105,8 +105,8 @@
       "name": "OpenCode Zen",
       "options": {
         "baseURL": "https://opencode.ai/zen/v1",
-        "timeout": 300000,
-        "chunkTimeout": 120000
+        "timeout": 900000,
+        "chunkTimeout": 600000
       },
       "models": {
         "minimax-m3": {
@@ -173,8 +173,8 @@
       "name": "OpenCode Go",
       "options": {
         "baseURL": "https://opencode.ai/zen/go/v1",
-        "timeout": 300000,
-        "chunkTimeout": 120000
+        "timeout": 900000,
+        "chunkTimeout": 600000
       },
       "models": {
         "minimax-m3": {
