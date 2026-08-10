@@ -1,7 +1,7 @@
 ---
 description: "Unified executor for GitHub issues and legacy .plan stages with Owner: developer."
 mode: subagent
-model: opencode-go/deepseek-v4-flash
+model: opencode/deepseek-v4-flash
 steps: 45
 tools:
   write: true

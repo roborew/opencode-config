@@ -254,7 +254,7 @@
       "steps": 25
     },
     "orchestrate": {
-      "model": "opencode-go/deepseek-v4-flash",
+      "model": "opencode/deepseek-v4-flash",
       "steps": 100
     },
     "plan": {
@@ -272,7 +272,7 @@
     },
     "developer": {
       "mode": "subagent",
-      "model": "opencode-go/deepseek-v4-flash",
+      "model": "opencode/deepseek-v4-flash",
       "steps": 30
     },
     "senior-dev": {
