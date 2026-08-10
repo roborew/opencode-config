@@ -106,7 +106,7 @@
       "options": {
         "baseURL": "https://opencode.ai/zen/v1",
         "timeout": 900000,
-        "chunkTimeout": 600000
+        "chunkTimeout": 180000
       },
       "models": {
         "minimax-m3": {
@@ -145,8 +145,7 @@
           "name": "DeepSeek V4 Flash",
           "options": {
             "temperature": 0.3,
-            "top_p": 0.9,
-            "frequency_penalty": 0.3
+            "top_p": 0.9
           }
         },
         "deepseek-v4-pro": {
@@ -174,7 +173,7 @@
       "options": {
         "baseURL": "https://opencode.ai/zen/go/v1",
         "timeout": 900000,
-        "chunkTimeout": 600000
+        "chunkTimeout": 180000
       },
       "models": {
         "minimax-m3": {
@@ -195,8 +194,7 @@
           "name": "DeepSeek V4 Flash (Go)",
           "options": {
             "temperature": 0.3,
-            "top_p": 0.9,
-            "frequency_penalty": 0.3
+            "top_p": 0.9
           }
         },
         "deepseek-v4-pro": {
@@ -245,7 +243,7 @@
   },
   "agent": {
     "architect": {
-      "model": "opencode-go/deepseek-v4-flash",
+      "model": "opencode/deepseek-v4-flash",
       "steps": 30
     },
     "architecture-auditor": {
@@ -258,16 +256,16 @@
       "steps": 100
     },
     "plan": {
-      "model": "opencode-go/deepseek-v4-flash",
+      "model": "opencode/deepseek-v4-flash",
       "steps": 20
     },
     "strategist": {
       "mode": "subagent",
-      "model": "opencode-go/deepseek-v4-pro",
+      "model": "opencode/deepseek-v4-pro",
       "steps": 12
     },
     "build": {
-      "model": "opencode-go/deepseek-v4-flash",
+      "model": "opencode/deepseek-v4-flash",
       "steps": 30
     },
     "developer": {
@@ -297,12 +295,12 @@
     },
     "helper": {
       "mode": "subagent",
-      "model": "opencode-go/deepseek-v4-flash",
+      "model": "opencode/deepseek-v4-flash",
       "steps": 15
     },
     "debugger": {
       "mode": "subagent",
-      "model": "opencode-go/deepseek-v4-flash",
+      "model": "opencode/deepseek-v4-pro",
       "steps": 15
     },
     "scribe": {
@@ -327,12 +325,12 @@
     },
     "verifier": {
       "mode": "subagent",
-      "model": "opencode-go/deepseek-v4-flash",
-      "steps": 25
+      "model": "opencode-go/minimax-m3",
+      "steps": 8
     },
     "review": {
       "mode": "subagent",
-      "model": "opencode-go/deepseek-v4-flash",
+      "model": "opencode/deepseek-v4-flash",
       "steps": 15
     },
     "security-reviewer": {
@@ -342,7 +340,7 @@
     },
     "performance-reviewer": {
       "mode": "subagent",
-      "model": "opencode-go/deepseek-v4-flash",
+      "model": "opencode/deepseek-v4-flash",
       "steps": 15
     },
     "doc-reviewer": {
@@ -362,7 +360,7 @@
     },
     "refactor": {
       "mode": "subagent",
-      "model": "opencode-go/deepseek-v4-flash",
+      "model": "opencode/deepseek-v4-flash",
       "steps": 15
     },
     "frontend-dev": {

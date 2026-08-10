@@ -1,7 +1,7 @@
 ---
 description: Performance-focused review subagent. Real bottlenecks only.
 mode: subagent
-model: opencode-go/deepseek-v4-flash
+model: opencode/deepseek-v4-flash
 tools:
   write: false
   edit: false

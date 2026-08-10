@@ -1,7 +1,7 @@
 ---
 description: Planning specialist for debugger-style plans
 mode: subagent
-model: opencode-go/deepseek-v4-flash
+model: opencode/deepseek-v4-pro
 tools:
   write: false
   edit: false
