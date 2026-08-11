@@ -1,7 +1,7 @@
 ---
 description: Execution orchestrator for GitHub issue queues
 mode: primary
-model: opencode/deepseek-v4-flash
+model: opencode-go/qwen3.7-plus
 tools:
   write: false
   edit: false

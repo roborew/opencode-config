@@ -135,6 +135,13 @@
             "top_p": 0.9
           }
         },
+        "qwen3.7-plus": {
+          "name": "Qwen3.7 Plus",
+          "options": {
+            "temperature": 0.1,
+            "top_p": 0.9
+          }
+        },
         "gemini-3-flash": {
           "name": "Gemini 3 Flash",
           "options": {
@@ -173,7 +180,7 @@
       "options": {
         "baseURL": "https://opencode.ai/zen/go/v1",
         "timeout": 900000,
-        "chunkTimeout": 180000
+        "chunkTimeout": 120000
       },
       "models": {
         "minimax-m3": {
@@ -185,6 +192,13 @@
         },
         "qwen3.7-max": {
           "name": "Qwen3.7 Max (Go)",
+          "options": {
+            "temperature": 0.1,
+            "top_p": 0.9
+          }
+        },
+        "qwen3.7-plus": {
+          "name": "Qwen3.7 Plus (Go)",
           "options": {
             "temperature": 0.1,
             "top_p": 0.9
@@ -243,7 +257,7 @@
   },
   "agent": {
     "architect": {
-      "model": "opencode/deepseek-v4-flash",
+      "model": "opencode-go/qwen3.7-plus",
       "steps": 30
     },
     "architecture-auditor": {
@@ -252,11 +266,11 @@
       "steps": 25
     },
     "orchestrate": {
-      "model": "opencode/deepseek-v4-flash",
-      "steps": 100
+      "model": "opencode-go/qwen3.7-plus",
+      "steps": 50
     },
     "plan": {
-      "model": "opencode/deepseek-v4-flash",
+      "model": "opencode-go/qwen3.7-plus",
       "steps": 20
     },
     "strategist": {
