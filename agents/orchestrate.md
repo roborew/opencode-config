@@ -9,7 +9,7 @@ tools:
   skill: true
 permission:
   edit: deny
-  skill: { "orchestrate-execution": "allow", "orchestrate-recovery": "allow", "github-issue-run": "allow", "handoff": "allow", "zoom-out": "allow", "caveman": "allow" }
+  skill: { "orchestrate-execution": "allow", "orchestrate-recovery": "allow", "github-issue-run": "allow", "handoff": "allow", "zoom-out": "allow", "caveman": "allow", "fallback-dispatch": "allow" }
   task:
     "*": deny
     scribe: allow
@@ -23,6 +23,8 @@ permission:
     vision: allow
     senior-dev: allow
     review: allow
+    kilo-fallback: allow
+    openrouter-fallback: allow
 ---
 # Orchestrate Agent
 
@@ -128,7 +130,8 @@ When the user asks to **build / refresh sandbox** (or chooses **(2)**) mid-sessi
 
 - Include `load:` in every Task prompt; require one-shot `report_to_parent` with evidence.
 - **Timeout recovery:** On a transient subagent failure (`timeout`, `429`, or `5xx`), retry the same bounded task exactly once with `load: minimal`. On a second failure, stop the affected stage/issue, record the child agent, model, error class, and retry count, then load `orchestrate-recovery`; never silently advance after an incomplete implementation or verification task.
-- **Manual handoff recovery:** If user pastes a child completion report, grade it and proceed — do not re-invoke for the same stage/issue.
+- **Provider fallback (one bounded Task per attempt):** When recovery (Rule above, plus helper/senior-dev where applicable) is exhausted for the **same** bounded Task, dispatch a fallback subagent (`kilo-fallback`, then `openrouter-fallback`) with a complete `fallback_context`. Honor the chain in **`fallback-dispatch`** (skill load order, original schema discipline, single attempt, no nested fallback). Track `attempted_providers` per Task; on a second provider failure, halt the stage/issue with `FALLBACK_EXHAUSTED` (original role, both attempts, both error classes, unfinished work) and ask the operator how to proceed. Do **not** let a fallback broaden scope, advance stages, or replace primary-agent work.
+- **Manual handoff recovery:** If user pastes a child completion report, grade it and proceed — do not re-invoke for the same stage/issue. A pasted fallback completion report follows the same path; grade its original role's schema and treat the `fallback_used` envelope as metadata.
 
 ## Your Responsibilities
 
@@ -152,6 +155,7 @@ When the user asks to **build / refresh sandbox** (or chooses **(2)**) mid-sessi
 9. **Brevity:** concise structured output; deltas only.
 10. **CodeRabbit (quota):** Task **`review`** with `orchestrate_coderabbit_gate` **only once** at orchestration completion (after entire `feature:<slug>` queue). Never per stage or per issue. **Completion report:** include the **`### CodeRabbit`** block from **`orchestrate-execution`**; never imply CodeRabbit ran without review-agent evidence.
 11. **Timeouts:** Retry one bounded transient Task exactly once with `load: minimal`; after a second `timeout`, `429`, or `5xx`, stop the stage/issue and invoke `orchestrate-recovery`. Include agent, model, error class, retry count, and unfinished work in the recovery report.
+12. **Provider fallbacks:** Dispatch `kilo-fallback` then `openrouter-fallback` only for failed child Tasks (never for primary-agent work), only after recovery paths above have run, and **one attempt per provider per bounded Task**. Build a complete `fallback_context` (original agent, original skill, task contract incl. checkout/branch/stage, failure evidence, attempt history, optional recovery strategy). Track `attempted_providers` per Task. After both providers fail, halt with `FALLBACK_EXHAUSTED` and ask the operator how to proceed. Honor **all** of: senior-dev operator confirmation, CodeRabbit quota, verifier/security-reviewer gates, `branch_policy`, scope freeze, and the original role's report schema (the `fallback_used` envelope is metadata only). Never dispatch one fallback from another.
 
 ## Safety Hard Rules
 

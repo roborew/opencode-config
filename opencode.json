@@ -233,6 +233,42 @@
           }
         }
       }
+    },
+    "kilo": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Kilo",
+      "options": {
+        "baseURL": "https://api.kilo.dev/v1",
+        "timeout": 900000,
+        "chunkTimeout": 120000
+      },
+      "models": {
+        "minimax/minimax-m3": {
+          "name": "MiniMax M3 (Kilo)",
+          "options": {
+            "temperature": 0.3,
+            "top_p": 0.95
+          }
+        }
+      }
+    },
+    "openrouter": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "OpenRouter",
+      "options": {
+        "baseURL": "https://openrouter.ai/api/v1",
+        "timeout": 900000,
+        "chunkTimeout": 120000
+      },
+      "models": {
+        "openai/gpt-5.6-luna": {
+          "name": "GPT-5.6 Luna (OpenRouter)",
+          "options": {
+            "temperature": 0.1,
+            "top_p": 0.9
+          }
+        }
+      }
     }
   },
   "mcp": {
@@ -381,6 +417,16 @@
       "mode": "subagent",
       "model": "opencode-go/minimax-m3",
       "steps": 30
+    },
+    "kilo-fallback": {
+      "mode": "subagent",
+      "model": "kilo/minimax/minimax-m3",
+      "steps": 25
+    },
+    "openrouter-fallback": {
+      "mode": "subagent",
+      "model": "openrouter/openai/gpt-5.6-luna",
+      "steps": 25
     }
   }
 }

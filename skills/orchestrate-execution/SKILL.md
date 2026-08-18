@@ -129,6 +129,63 @@ security_review: auto  # default; verifier computes required|not_applicable from
 
 Subagents must `cd` to `impl_repo_path`, verify branch matches, and report `CHECKOUT_CONTRACT_FAILED` on mismatch. They must **never** create branches or run `git switch`/`git checkout <branch>`/`git branch` on their own.
 
+## Provider fallback dispatch contract (additional recovery path)
+
+When a bounded child Task fails and `orchestrate-recovery` paths (same-agent transient retry, helper amendment, optional operator-confirmed senior-dev escalation) are exhausted for the **same** Task, dispatch a provider-fallback subagent. This is the **last** retry path, not a replacement for helper / senior-dev.
+
+### Chain
+
+Default chain: `kilo-fallback` (Kilo / MiniMax-M3) → `openrouter-fallback` (OpenRouter / GPT-5.6 Luna). Operator can name either explicitly (`use Kilo fallback`, `use OpenRouter fallback`); otherwise the chain runs in order.
+
+### Eligibility
+
+- `original_agent` MUST resolve to a child role eligible from the orchestrate Task allowlist (`developer`, `frontend-dev`, `ux-dev`, `verifier`, `scribe`, `worktree-env`, `preflight`, `vision`, `helper`, `senior-dev`, `review`). Never a primary agent (orchestrate / architect), never another fallback.
+- The original `task_contract` and `original_skill` apply unchanged to the fallback. Fallback cannot broaden scope, switch branches, advance stages, or skip gates.
+
+### Task prompt template (fallback dispatch)
+
+When dispatching `kilo-fallback` or `openrouter-fallback`, include in the Task prompt (alongside the execution dispatch contract above when the original was an implement/verify task):
+
+```text
+fallback_context:
+  original_agent: <child role that failed>
+  original_skill: <skill name; do NOT infer from transcript>
+  task_contract: <verbatim original Task prompt>
+  failure_evidence: <error class, retry count, unfinished work>
+  attempt_history: <providers and load levels already tried for this Task>
+  recovery_strategy: <short helper/scribe amendment summary, or omit for transient provider failures>
+  requested_provider: kilo | openrouter   # when operator named one explicitly
+# plus, when the original was an implement/verify Task:
+impl_repo_path: <absolute verified git root>
+expected_branch: <current verified branch>
+is_linked_worktree: true|false
+main_checkout_root: <absolute root when detectable>
+branch_policy: do not create, switch, checkout, or rename branches unless user explicitly requests in this turn
+diff_base: <parent commit SHA or base ref>
+files_changed: <list from implementer report>
+acceptance_to_test: <mapping from implementer report>
+red_phase: <RED test evidence from implementer report>
+green_phase: <GREEN test evidence from implementer report>
+assertion_delta: <from implementer report>
+security_review: auto
+sandbox: <pass-through from original Task; or omit>
+publish_review_url: <pass-through; or omit>
+```
+
+The fallback loads **`fallback-dispatch`** then **`original_skill`** (in that order) before any substantive work. If `original_skill` fails to load, the fallback returns `SKILL_UNAVAILABLE: <original_skill>`; treat that as a fallback stop, not as `FALLBACK_EXHAUSTED`.
+
+### Attempts and grading
+
+- One attempt per provider per bounded Task. Track `attempted_providers` per Task — do not retry the same provider twice or loop between providers.
+- The fallback completion report carries the **original role's completion payload verbatim** plus a `fallback_used: { original_agent, original_skill, fallback_agent, provider, model, attempt_number, recovered_from }` envelope. On this attempt's own provider failure the fallback emits only `fallback_used.provider_failure` plus `blocker_code: PROVIDER_FAILURE` (no partial original schema).
+- Grade fallback reports using the **same rubric** as the original role's report (`report_grade: PASS | NEEDS_RETRY | BLOCKED`). The `fallback_used` envelope is metadata only — never lowers the bar or excuses missing evidence.
+- On successful fallback, resume the normal workflow at the **next normal gate** (verifier, review gate, etc.).
+- A pasted fallback completion report follows the **manual handoff recovery** flow in `orchestrate-recovery`.
+
+### Exhaustion
+
+After both `kilo-fallback` and `openrouter-fallback` fail for the same Task, halt with `FALLBACK_EXHAUSTED` listing the original role, both attempts, both providers, both error classes, unfinished work (files / commands / tests remaining), and any partial evidence. Ask the operator how to proceed (retry with a fresh context, accept partial work, abandon, or relax a constraint). Do not invent a third provider.
+
 ## Docker sandbox routing
 
 **Orchestrate does not load skill `docker-sandbox`.** Instruct implementer/verifier Tasks to load it when compose/Docker or review publish applies. Do not conflate with Cloudflare Workers Sandbox (`skills/cloudflare/references/sandbox/` — different product).

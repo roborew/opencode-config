@@ -90,6 +90,41 @@ When scribe returns `path`, `operation`, `summary`, and **tool evidence** of a s
 When developer repeats the same intent (e.g. "Let me create X") without new evidence, treat as stuck: halt, report to user, and do not re-invoke developer for the same stage without corrective feedback.
 When developer emits repeated completion text without new evidence (for example repeating "tests pass" lines), classify as `BLOCKED` with reason `LOOP_DETECTED` and trigger helper path.
 
+## Provider Fallback Dispatch (additional recovery path)
+
+Provider fallback is layered **on top of** the recovery paths above. It is **not** a replacement for helper / senior-dev escalation and **does not** reduce operator-confirmation requirements.
+
+### When a fallback is appropriate
+
+Dispatch `kilo-fallback` (then `openrouter-fallback`) only after the recovery paths above have run for the **same** bounded child Task and the failure pattern is not recoverable inside the original role. Typical cases:
+
+- Transient provider failure (`timeout`, `429`, `5xx`) on the original role's provider, with the one same-agent retry already exhausted.
+- Logic-class failure (`STAGE_STUCK`, loop, unresolved blocker, verifier strategy failure) where the helper amendment was applied and the same role still cannot finish the Task on the original provider.
+
+A fallback is **not** appropriate for primary-agent work, for fresh planning that has not been delegated yet, or when the helper path was skipped. Senior-dev remains operator-confirmed (see **Senior-Dev Escalation** above); the fallback does not bypass that confirmation.
+
+### Building `fallback_context`
+
+When dispatching a fallback, build a complete `fallback_context` (the child report's contract, not vibes):
+
+- `original_agent` — the child whose Task failed (never a primary).
+- `original_skill` — the exact skill name to load; do **not** infer from transcript.
+- `task_contract` — the verbatim original Task prompt (or faithful restatement) with all required fields (checkout, branch policy, stage fields for implement/verify tasks, sandbox fields when applicable, etc.).
+- `failure_evidence` — concise failure summary (error class, retry count, unfinished work).
+- `attempt_history` — providers and load levels already tried for this Task.
+- `recovery_strategy` (when present) — short summary of the helper / scribe amendment applied.
+- `requested_provider` — operator's selection when explicit (`use Kilo fallback` / `use OpenRouter fallback`); else default to the chain.
+
+Only one attempt per provider per bounded Task. Track `attempted_providers` per Task; do not retry Kilo twice or loop between providers.
+
+### Grading fallback reports
+
+A fallback completion report is graded with the **same `report_grade: PASS | NEEDS_RETRY | BLOCKED` rubric** as the original role's report. The `fallback_used` envelope (original role, skill, fallback agent, provider, model, attempt number, recovered_from) is metadata only — never lowers the bar or excuses missing evidence. Provider-level failure envelopes (`fallback_used.provider_failure`) are `BLOCKED`, not `PASS`.
+
+### Exhaustion (`FALLBACK_EXHAUSTED`)
+
+After both `kilo-fallback` and `openrouter-fallback` fail for the same Task, halt the stage/issue with `FALLBACK_EXHAUSTED` and ask the operator how to proceed (retry with fresh context, accept partial work, abandon, or relax a constraint). Do not invent a third provider.
+
 ## Manual Handoff Recovery (when Task does not return)
 
 If the user reports that a subagent (developer, frontend-dev, ux-dev, scribe, verifier, helper, senior-dev) completed and produced a report but the Task did not return control:

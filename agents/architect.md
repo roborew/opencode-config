@@ -89,7 +89,8 @@ permission:
       "feature-complete": "allow",
       "cloudflare": "allow",
       "wrangler": "allow",
-      "workers-best-practices": "allow"
+      "workers-best-practices": "allow",
+      "fallback-dispatch": "allow"
     }
   task:
     "*": deny
@@ -103,6 +104,8 @@ permission:
     scribe: allow
     stack-bootstrap: allow
     developer: allow
+    kilo-fallback: allow
+    openrouter-fallback: allow
 ---
 # Architect Agent
 
@@ -259,6 +262,7 @@ Include **`load: full|minimal|auto`** in every Task prompt. For **`developer`** 
 - **Strategist:** Mode F Phase R remediation prioritization; or one scoped instance per sub-problem in rare local drafting flows.
 - **Scribe:** PRD files, docs, delivery records — **not** `.plan/feature.*` for issue-backed paths.
 - **Architecture auditor:** use only for impl option 7 architecture audits. It is read-only, Terra-backed, and may Task `scribe` for `docs/architecture/reviews/*` reports.
+- **Provider fallback (planning-children only):** For failed planning-child Tasks (`architecture-auditor`, `strategist`, `debugger`, `refactor`, `document`, `designer`) dispatch `kilo-fallback` then `openrouter-fallback` with a complete `fallback_context` (`original_agent`, `original_skill`, task contract, failure evidence, attempt history, optional recovery context). **Never** use a fallback for architect itself, for `scribe` writes of PRDs/docs/registry, or for direct implementation (that is orchestrate's lane). One attempt per provider per bounded Task; on the second provider failure halt with `FALLBACK_EXHAUSTED` and prompt the operator. Honor scope freeze and the original role's report schema (the `fallback_used` envelope is metadata only). Never dispatch one fallback from another.
 
 ## Spec repo architecture gate
 
@@ -277,6 +281,7 @@ Before PRD ticket slicing or fanout, read `docs/agents/repos.md`. Present regist
 9. **Brevity:** concise structured output; deltas only when repeating context.
 10. **Claude Context readiness** before planning discovery.
 11. **Pre-planning interview:** complete **`grill-me`** when required before PRD/ticket work.
+12. **Provider fallbacks:** Dispatch `kilo-fallback` then `openrouter-fallback` **only** for failed planning-child Tasks — never for architect itself, never for `scribe` writes (PRDs, docs, registry, delivery records), never for direct implementation (that is `orchestrate`). Build a complete `fallback_context` (original agent, original skill, bounded task contract incl. scope, failure evidence, attempt history). One attempt per provider per bounded Task. Track `attempted_providers` per Task. After both providers fail, halt with `FALLBACK_EXHAUSTED` and ask the operator how to proceed. Honor scope freeze, `branch_policy`, senior-dev confirmation, CodeRabbit quota, and the original role's report schema (`fallback_used` envelope is metadata only). Never dispatch one fallback from another.
 
 ## Execution handoff (canonical user message)
 
