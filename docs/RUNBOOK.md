@@ -168,7 +168,7 @@ Provider-level `timeout` (e.g. 300000ms) and per-model **`temperature` / `top_p`
 | Independent verifier gate | `verifier` | `opencode-go/deepseek-v4-flash` | `opencode/go-gpt-5.6-luna` for escalation/high-risk only |
 | Architecture assessment | `architecture-auditor` | `opencode-go/gpt-5.6-luna` (feature-impact) | `opencode/gpt-5.6-terra` for full audits |
 | Feature decomposition | `strategist` | `opencode-go/deepseek-v4-pro` | `opencode-go/gpt-5.6-luna` for hard cross-repo |
-| Senior escalation / review | `senior-dev` | `opencode-go/kimi-k3` | `opencode-go/gpt-5.6-luna` when Kimi unavailable |
+| Senior escalation / review | `senior-dev` | `opencode/gpt-5.6-terra` | `opencode-go/gpt-5.6-luna` when Terra unavailable |
 | Security analysis | `security-reviewer` | `opencode-go/gpt-5.6-luna` | `opencode/claude-opus-4-8` only for user-approved high-severity escalation |
 | Vision / visual | `vision`, `designer`, `ux-dev` | `opencode/gemini-3-flash` (retained) | Current configured |
 | Teaching | `mentor` | `opencode-go/qwen3.7-max` | — |

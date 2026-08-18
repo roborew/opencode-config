@@ -165,7 +165,7 @@
         "kimi-k3": {
           "name": "Kimi K3",
           "options": {
-            "temperature": 0.2,
+            "temperature": 1,
             "top_p": 0.9
           }
         },
@@ -221,7 +221,7 @@
         "kimi-k3": {
           "name": "Kimi K3 (Go)",
           "options": {
-            "temperature": 0.2,
+            "temperature": 1,
             "top_p": 0.9
           }
         },

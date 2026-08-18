@@ -1,7 +1,7 @@
 ---
 description: Escalation when developer is stuck. Invoked by orchestrate via Task. Two modes: escalation_fix (unblocker, returns HANDOFF_TO_DEVELOPER) and scheduled_review (read-only hard-difficulty gate, returns APPROVED/NEEDS_CHANGES/BLOCKED).
 mode: subagent
-model: opencode-go/kimi-k3
+model: opencode/gpt-5.6-terra
 steps: 40
 tools:
   write: true
