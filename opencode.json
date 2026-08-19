@@ -238,7 +238,7 @@
       "npm": "@ai-sdk/openai-compatible",
       "name": "Kilo",
       "options": {
-        "baseURL": "https://api.kilo.dev/v1",
+        "baseURL": "https://api.kilo.ai/api/gateway/v1",
         "timeout": 900000,
         "chunkTimeout": 120000
       },
