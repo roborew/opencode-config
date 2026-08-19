@@ -326,7 +326,7 @@
     "senior-dev": {
       "mode": "subagent",
       "model": "opencode-go/kimi-k3",
-      "steps": 30
+      "steps": 40
     },
     "vision": {
       "mode": "subagent",
@@ -376,12 +376,12 @@
     "verifier": {
       "mode": "subagent",
       "model": "opencode-go/minimax-m3",
-      "steps": 8
+      "steps": 20
     },
     "review": {
       "mode": "subagent",
       "model": "opencode/deepseek-v4-flash",
-      "steps": 15
+      "steps": 25
     },
     "security-reviewer": {
       "mode": "subagent",
