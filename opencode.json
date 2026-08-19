@@ -293,7 +293,7 @@
   },
   "agent": {
     "architect": {
-      "model": "opencode-go/qwen3.7-plus",
+      "model": "opencode-go/qwen3.7-max",
       "steps": 30
     },
     "architecture-auditor": {
@@ -302,7 +302,7 @@
       "steps": 25
     },
     "orchestrate": {
-      "model": "opencode-go/qwen3.7-plus",
+      "model": "kilo/minimax/minimax-m3",
       "steps": 50
     },
     "plan": {

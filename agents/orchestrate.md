@@ -1,7 +1,7 @@
 ---
 description: Execution orchestrator for GitHub issue queues
 mode: primary
-model: opencode-go/qwen3.7-plus
+model: kilo/minimax/minimax-m3
 tools:
   write: false
   edit: false
