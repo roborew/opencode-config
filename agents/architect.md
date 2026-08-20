@@ -1,7 +1,7 @@
 ---
 description: Planning coordinator — delegates all mutations via Task subagents; read-only bash for discovery and bin/* wrappers only.
 mode: primary
-model: opencode-go/qwen3.7-max
+model: opencode/claude-sonnet-5
 tools:
   write: false
   edit: false

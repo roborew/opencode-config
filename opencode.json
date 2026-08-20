@@ -171,6 +171,13 @@
         },
         "claude-opus-4-8": {
           "name": "Claude Opus 4.8"
+        },
+        "claude-sonnet-5": {
+          "name": "Claude Sonnet 5",
+          "options": {
+            "temperature": 0.2,
+            "top_p": 0.9
+          }
         }
       }
     },
@@ -293,7 +300,7 @@
   },
   "agent": {
     "architect": {
-      "model": "opencode-go/qwen3.7-max",
+      "model": "opencode/claude-sonnet-5",
       "steps": 30
     },
     "architecture-auditor": {
