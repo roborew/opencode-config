@@ -39,11 +39,23 @@ If the current active agent is `orchestrate`, treat yourself as Orchestrate even
 
 ## Session progress todos (mandatory when multi-step)
 
-When a work source is known (GitHub `feature:<slug>` or user handoff), use the **host session todo** tool if the host exposes one.
+When a work source is known (GitHub `feature:<slug>` or user handoff), use the **host session todo** tool if the host exposes one. Todos are **required** in GitHub backlog mode — not optional.
 
-- **GitHub backlog mode:** Create todos for **next-runnable-issue → implement → verify → transition → repeat**; add **one** CodeRabbit gate todo after the queue is exhausted (when not `easy`) — **not** per issue.
-- **Update after each gate:** After verifier **APPROVED**, mark the corresponding todo **completed** before advancing.
-- **Forbidden:** Starting stage 1 or the next issue while that step's todo is still unchecked if you are using todos this session.
+- **Per-issue todos (every issue):**
+  `discover → implement → verify → transition`. When
+  `opencode_meta.stages[]` exists, expand `implement` and `verify`
+  into one pair per stage in order, so the list reads
+  `discover → implement(stage 1) → verify(stage 1) → implement(stage 2) → verify(stage 2) → … → transition`.
+- **CodeRabbit gate:** add **one** CodeRabbit gate todo after the
+  queue is exhausted (when not `easy`) — **not** per issue.
+- **Mandatory verifier gate:** Do **not** dispatch the next
+  implementer Task, the next stage, or the
+  `state:ready-for-review` transition until the prior stage's
+  `verifier` Task has been invoked **and** its completion report
+  graded `PASS` with `APPROVED`. Skipping verifier is treated as
+  `BLOCKED`, not as progress.
+- **Update after each gate:** After verifier `APPROVED`, mark the
+  corresponding todo `completed` before advancing.
 
 ## Skill routing (sub-skills)
 
@@ -156,6 +168,7 @@ When the user asks to **build / refresh sandbox** (or chooses **(2)**) mid-sessi
 10. **CodeRabbit (quota):** Task **`review`** with `orchestrate_coderabbit_gate` **only once** at orchestration completion (after entire `feature:<slug>` queue). Never per stage or per issue. **Completion report:** include the **`### CodeRabbit`** block from **`orchestrate-execution`**; never imply CodeRabbit ran without review-agent evidence.
 11. **Timeouts:** Retry one bounded transient Task exactly once with `load: minimal`; after a second `timeout`, `429`, or `5xx`, stop the stage/issue and invoke `orchestrate-recovery`. Include agent, model, error class, retry count, and unfinished work in the recovery report.
 12. **Provider fallbacks:** Dispatch `kilo-fallback` then `openrouter-fallback` only for failed child Tasks (never for primary-agent work), only after recovery paths above have run, and **one attempt per provider per bounded Task**. Build a complete `fallback_context` (original agent, original skill, task contract incl. checkout/branch/stage, failure evidence, attempt history, optional recovery strategy). Track `attempted_providers` per Task. After both providers fail, halt with `FALLBACK_EXHAUSTED` and ask the operator how to proceed. Honor **all** of: senior-dev operator confirmation, CodeRabbit quota, verifier/security-reviewer gates, `branch_policy`, scope freeze, and the original role's report schema (the `fallback_used` envelope is metadata only). Never dispatch one fallback from another.
+13. **Verifier is a hard gate.** Every implementer Task (`developer`, `frontend-dev`, `ux-dev`) — whether in `.plan` mode or GitHub stage mode — must be followed by a `verifier` Task against the same `diff_base`, `files_changed`, and acceptance criteria. Never advance the stage index, transition the issue, or close the todo until the verifier's completion report returns `APPROVED`. On `NEEDS_RETRY` / `FAILED` / `BLOCKED`, loop back to the implementer via the existing recovery path; do not skip ahead. This rule is enforced by the Delegation Gate in `orchestrate-execution`.
 
 ## Safety Hard Rules
 

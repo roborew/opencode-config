@@ -362,7 +362,7 @@ When `stages[]` is present, for **each** stage in order:
    - `issue_ref: #<n>` for commits
    - `impl_repo_path`, `expected_branch`, `is_linked_worktree`, `main_checkout_root`, `branch_policy` from `checkout_contract`
    - When **Docker sandbox routing** applies: `sandbox: preferred|required`, `publish_review_url`, and load/`sandbox exec` instructions from that section
-2. Task `verifier` with same stage contract + completion report (include sandbox fields when routing applies).
+2. Task `verifier` with the same stage contract + completion report (include sandbox fields when routing applies). The stage is `BLOCKED` until this Task returns `APPROVED`; do not advance to stage N+1, do not transition the issue, and do not close the implementer's todo until the verifier's completion report is graded `PASS` with `APPROVED`. A missing `verifier` Task is a `BLOCKED` stage, not an in-progress one.
 3. Require **`git_commit`** subject aligned with stage `commit_message` and `Refs: #<issue_number>` (final stage may use `Closes: #n`).
 4. On stage FAIL: retry or `helper`; do not advance stage index.
 5. After last stage PASS: proceed to step 8 (ready-for-review only — **no** CodeRabbit per issue).
@@ -440,7 +440,7 @@ After a stage is **COMPLETE** and **verifier** has **APPROVED**, keep a **runnin
 Before any stage status update, confirm these Task calls occurred:
 
 - Execution: `developer`, `frontend-dev`, or `ux-dev` — **must match the stage's Owner**. **Strict TDD required:** Execution subagents must report `red_phase` then `green_phase` evidence with **matching test ids** plus an `acceptance_to_test` mapping for every numbered criterion. Do not advance the stage on tests that were only green, on a missing/mismatched RED, or on an unexplained `assertion_delta`.
-- Verification: `verifier`
+- **Verification (mandatory, not advisory):** a `verifier` Task must have run for this stage, with a completion report graded `report_grade: PASS`. A missing `verifier` Task is a `BLOCKED` stage, not an in-progress one.
 - Recovery: `helper` on trigger conditions
 - Image review: `vision` when child reports `IMAGE_REVIEW_NEEDED` (see Image Review Gate)
 - Each child Task instruction explicitly required a one-shot final `report_to_parent` payload (completion or blocker) followed by immediate return

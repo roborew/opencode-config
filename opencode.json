@@ -318,7 +318,7 @@
     },
     "strategist": {
       "mode": "subagent",
-      "model": "opencode/deepseek-v4-pro",
+      "model": "opencode-go/deepseek-v4-pro",
       "steps": 12
     },
     "build": {
@@ -357,7 +357,7 @@
     },
     "debugger": {
       "mode": "subagent",
-      "model": "opencode/deepseek-v4-pro",
+      "model": "opencode-go/deepseek-v4-pro",
       "steps": 15
     },
     "scribe": {
