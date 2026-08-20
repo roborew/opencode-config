@@ -174,6 +174,13 @@
         },
         "claude-sonnet-5": {
           "name": "Claude Sonnet 5"
+        },
+        "glm-5.2": {
+          "name": "GLM 5.2",
+          "options": {
+            "temperature": 0.2,
+            "top_p": 0.9
+          }
         }
       }
     },
@@ -296,12 +303,12 @@
   },
   "agent": {
     "architect": {
-      "model": "opencode/claude-sonnet-5",
+      "model": "opencode/glm-5.2",
       "steps": 30
     },
     "architecture-auditor": {
       "mode": "subagent",
-      "model": "opencode-go/gpt-5.6-luna",
+      "model": "opencode/glm-5.2",
       "steps": 25
     },
     "orchestrate": {

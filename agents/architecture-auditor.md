@@ -1,7 +1,7 @@
 ---
 description: Read-only architecture audit subagent. Finds shallow modules, seam leaks, and deepening opportunities; writes audit reports via scribe only. Defaults to targeted feature-impact assessment; full periodic audits available on request.
 mode: subagent
-model: opencode-go/gpt-5.6-luna
+model: opencode/glm-5.2
 steps: 35
 tools:
   write: false
