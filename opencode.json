@@ -173,11 +173,7 @@
           "name": "Claude Opus 4.8"
         },
         "claude-sonnet-5": {
-          "name": "Claude Sonnet 5",
-          "options": {
-            "temperature": 0.2,
-            "top_p": 0.9
-          }
+          "name": "Claude Sonnet 5"
         }
       }
     },
