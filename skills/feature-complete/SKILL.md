@@ -52,6 +52,8 @@ Rollup table columns: **Repo** | **Issue** | **Labels** | **PR link** | **PR sta
 
 If any repo has open `feature:<slug>` issues **without** `state:done`, **stop** — tell user to finish **impl architect Mode F** in that repo first.
 
+If any `feature:<slug>` issue lacks the `verified` label, **stop** — every issue must carry `verified` (set only on verifier APPROVED) before merge. This is a cheap backstop; architect Mode F accept already refuses unverified issues.
+
 If any repo PR is missing or not merge-ready, stop and report gaps.
 
 ## Merge gate (required human choice)

@@ -1,7 +1,7 @@
 ---
 description: Evidence-driven acceptance verifier
 mode: subagent
-model: opencode-go/minimax-m3
+model: kilo/minimax/minimax-m3
 tools:
   write: false
   edit: false

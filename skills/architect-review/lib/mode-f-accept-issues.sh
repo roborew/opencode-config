@@ -77,6 +77,11 @@ while IFS= read -r num; do
     skipped=$((skipped + 1))
     continue
   fi
+  if [[ "$labels" != *"verified"* ]]; then
+    echo "SKIP: ${REPO}#${num} (not verified — missing 'verified' label; run the verifier first)" >&2
+    skipped=$((skipped + 1))
+    continue
+  fi
   bash "$TRANSITION" "$REPO" "$num" "state:done"
   gh issue comment "$num" --repo "$REPO" --body "$COMMENT"
   echo "ACCEPTED: ${REPO}#${num} (state:done, still open)"

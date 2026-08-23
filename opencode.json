@@ -385,8 +385,8 @@
     },
     "verifier": {
       "mode": "subagent",
-      "model": "opencode-go/minimax-m3",
-      "steps": 20
+      "model": "kilo/minimax/minimax-m3",
+      "steps": 35
     },
     "review": {
       "mode": "subagent",
@@ -425,7 +425,7 @@
     },
     "frontend-dev": {
       "mode": "subagent",
-      "model": "opencode-go/minimax-m3",
+      "model": "kilo/minimax/minimax-m3",
       "steps": 30
     },
     "kilo-fallback": {

@@ -1,7 +1,7 @@
 ---
 description: UI specialist
 mode: subagent
-model: opencode-go/minimax-m3
+model: kilo/minimax/minimax-m3
 steps: 45
 tools:
   write: true

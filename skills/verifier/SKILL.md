@@ -175,3 +175,5 @@ missing: <n>
 
 ## Completion
 Call `report_to_parent` with verdict, confidence, tests run (or why not), top findings, and any spec ambiguity.
+
+Note: an `APPROVED` verdict is the trigger for the `verified` label — orchestrate posts it atomically with the `verifier_gate:` gate comment. Your verdict is the label's source of truth; a non-APPROVED verdict must never result in `verified`.

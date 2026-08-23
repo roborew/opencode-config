@@ -371,7 +371,7 @@ When `stages[]` is present, for **each** stage in order:
    - `impl_repo_path`, `expected_branch`, `is_linked_worktree`, `main_checkout_root`, `branch_policy` from `checkout_contract`
    - When **Docker sandbox routing** applies: `sandbox: preferred|required`, `publish_review_url`, and load/`sandbox exec` instructions from that section
 2. Task `verifier` with the same stage contract + completion report (include sandbox fields when routing applies). Instruct the verifier to **fetch the issue directly** (`gh issue view <n> --repo <repo> --json body`) and derive the acceptance criteria, scope, and `test_commands` from it — the developer's handoff is evidence to check, not the authoritative checklist. The stage is `BLOCKED` until this Task returns `APPROVED`; do not advance to stage N+1, do not transition the issue, and do not close the implementer's todo until the verifier's completion report is graded `PASS` with `APPROVED`. A missing `verifier` Task is a `BLOCKED` stage, not an in-progress one.
-3. **Post the per-stage verifier gate comment** via Task `developer` `load: minimal` (`gh issue comment`) **before** advancing to stage N+1:
+3. **Post the per-stage verifier gate comment** via Task `developer` `load: minimal` (`gh issue comment`) **before** advancing to stage N+1. The same Task must also set the `verified` label atomically with the comment (`gh issue edit <n> --repo <repo> --add-label verified --remove-label unverified`):
    ```text
    verifier_gate:
      issue: #<n>
@@ -382,7 +382,7 @@ When `stages[]` is present, for **each** stage in order:
      coverage: direct=<n> indirect=<n> manual=<n> missing=<n>
    ```
 4. Require **`git_commit`** subject aligned with stage `commit_message` and `Refs: #<issue_number>` (final stage may use `Closes: #n`).
-5. After the **last** stage PASS, post the **final** gate comment that `issue-state-transition.sh` checks before `state:ready-for-review`:
+5. After the **last** stage PASS, post the **final** gate comment that `issue-state-transition.sh` checks before `state:ready-for-review`. The same Task must also set the `verified` label atomically with the comment (`gh issue edit <n> --repo <repo> --add-label verified --remove-label unverified`):
    ```text
    verifier_gate:
      issue: #<n>
