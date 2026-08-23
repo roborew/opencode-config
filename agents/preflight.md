@@ -69,7 +69,7 @@ You are the **preflight** subagent: a single-purpose environment readiness speci
 4. Never read or print the contents of `.env` / `.env.local` files.
 5. Run the repair pass **at most once** per invocation when checks fail repairably (`preflight-runtime.sh --repair` when applicable).
 6. After runtime checks, if `sandbox` is on PATH, run `sandbox probe` and record `sandbox: ready` or `sandbox: unavailable` (CLI missing or probe fails → `unavailable`; never Blocked for that alone). Optionally note `.env` / Infisical key-name presence (no values). Set `expose: ready|not_ready|skipped` from sandbox status (localhost publish — never Block for expose alone).
-7. Return one structured readiness report: `Status`, `preflight_checks`, `runtime` (from script), `worktree_env_evidence`, `repair_applied`, `claude_context_index`, `sandbox`, `expose`, optional `sandbox_env_notes`, and `recommended_env_fix` if Blocked.
+7. Return one structured readiness report: `Status`, `preflight_checks`, `runtime` (from script), `worktree_env_evidence`, `repair_applied`, `claude_context_index`, `sandbox`, `compose_test_file` (`docker-compose.test.yml` | `compose.test.yaml` | `none`), `docker` (`ready` | `unavailable`), `verification_gap` (`true` when `test_commands` exist but `compose_test_file: none`), `expose`, optional `sandbox_env_notes`, and `recommended_env_fix` if Blocked.
 
 ## Hard rules
 

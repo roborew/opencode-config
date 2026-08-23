@@ -118,14 +118,21 @@ When **Docker sandbox routing** applies (below), also include `sandbox: preferre
 
 **Additional verifier-only fields (required every verify Task):**
 ```text
+issue_number: <n>   # GitHub mode — verifier fetches the issue directly for the checklist
+repo: <owner/name>  # GitHub mode
 diff_base: <parent commit SHA or base ref>
-files_changed: <list from implementer report>
-acceptance_to_test: <mapping from implementer report>
+files_changed: <list from implementer report>   # evidence to inspect, NOT authoritative scope
+acceptance_to_test: <mapping from implementer report>  # claim to check against the issue, NOT the checklist
 red_phase: <RED test evidence from implementer report>
 green_phase: <GREEN test evidence from implementer report>
 assertion_delta: <from implementer report>
 security_review: auto  # default; verifier computes required|not_applicable from triggers
+compose_test_file: <docker-compose.test.yml | compose.test.yaml | none>  # required when test_commands present
 ```
+
+**Independent verifier (GitHub mode):** instruct the verifier to fetch the issue directly (`gh issue view <n> --repo <repo> --json body`) and derive the acceptance criteria, scope, and `test_commands` from it. The developer's `acceptance_to_test` / `files_changed` are **evidence to be independently checked against the issue**, never the authoritative checklist. The verifier must verify against the **full** issue criteria and flag any developer-narrowed scope. In `.plan` mode, the artifact is the source of truth.
+
+**Docker-default verification (every verify Task with `test_commands`):** always include `sandbox: preferred` + `load skill: docker-sandbox` + `compose_test_file`, and instruct the verifier to run `test_commands` via the Docker path (Sysbox `sandbox exec` on opencode-server, or direct `docker compose -f <compose_test_file>` on local dev when the `sandbox` CLI is absent). This is the default, not conditional on compose mentions. Host execution is only APPROVED-eligible when the user explicitly approves it for a confirmed-host-runnable project.
 
 Subagents must `cd` to `impl_repo_path`, verify branch matches, and report `CHECKOUT_CONTRACT_FAILED` on mismatch. They must **never** create branches or run `git switch`/`git checkout <branch>`/`git branch` on their own.
 
@@ -218,7 +225,8 @@ When routing applies, include on implement and verify Tasks (in addition to the 
 sandbox: preferred   # or required when stage/issue explicitly requires Compose
 load skill: docker-sandbox
 # probe first; if ready: create → sandbox exec for compose test_commands → destroy (always)
-# if unavailable: soft-skip Docker path unless sandbox: required → then Blocked
+# if sandbox CLI absent but docker present (local dev): direct `docker compose -f <compose_test_file>` (same compose file)
+# if neither available: Blocked (do not silently fall back to host for test_commands)
 publish_review_url: true|false
 # when true and sandbox ready: after stack is up, sandbox expose + cloudflare-api via MCPJungle tunnel hostname + optional DNS per docker-sandbox; never tunnel create
 ```
@@ -346,7 +354,7 @@ Load **`github-issue-run`** together with this skill when the user chooses GitHu
    - `opencode_meta` verbatim
    - `impl_repo_path`, `expected_branch`, `is_linked_worktree`, `main_checkout_root`, `branch_policy` from `checkout_contract`
    - When **Docker sandbox routing** applies: `sandbox: preferred|required`, `publish_review_url`, and load/`sandbox exec` instructions from that section
-6. **Verify (flat or per-stage):** Task `verifier` with `load: full` and the same contract plus completion report (include sandbox fields when routing applies).
+6. **Verify (flat or per-stage):** Task `verifier` with `load: full` and the same contract plus completion report (include sandbox fields when routing applies). Instruct the verifier to **fetch the issue directly** (`gh issue view <n> --repo <repo> --json body`) and derive the checklist from it — the developer's handoff is evidence to check, not the authoritative scope.
 7. **Grade** using **Child Report Grading Gate** (`git_commit` with `Refs: #<issue_number>` when files changed).
 8. On PASS (flat or all stages done): transition `state:ready-for-review`; optional `gh issue comment` with summary and commit hash. **Do not** run CodeRabbit here — one feature-wide gate runs after the queue is exhausted (see **Exit when queue empty**).
 9. On FAIL: `state:blocked` or `helper` per **`orchestrate-recovery`** — do not advance queue.
@@ -362,10 +370,28 @@ When `stages[]` is present, for **each** stage in order:
    - `issue_ref: #<n>` for commits
    - `impl_repo_path`, `expected_branch`, `is_linked_worktree`, `main_checkout_root`, `branch_policy` from `checkout_contract`
    - When **Docker sandbox routing** applies: `sandbox: preferred|required`, `publish_review_url`, and load/`sandbox exec` instructions from that section
-2. Task `verifier` with the same stage contract + completion report (include sandbox fields when routing applies). The stage is `BLOCKED` until this Task returns `APPROVED`; do not advance to stage N+1, do not transition the issue, and do not close the implementer's todo until the verifier's completion report is graded `PASS` with `APPROVED`. A missing `verifier` Task is a `BLOCKED` stage, not an in-progress one.
-3. Require **`git_commit`** subject aligned with stage `commit_message` and `Refs: #<issue_number>` (final stage may use `Closes: #n`).
-4. On stage FAIL: retry or `helper`; do not advance stage index.
-5. After last stage PASS: proceed to step 8 (ready-for-review only — **no** CodeRabbit per issue).
+2. Task `verifier` with the same stage contract + completion report (include sandbox fields when routing applies). Instruct the verifier to **fetch the issue directly** (`gh issue view <n> --repo <repo> --json body`) and derive the acceptance criteria, scope, and `test_commands` from it — the developer's handoff is evidence to check, not the authoritative checklist. The stage is `BLOCKED` until this Task returns `APPROVED`; do not advance to stage N+1, do not transition the issue, and do not close the implementer's todo until the verifier's completion report is graded `PASS` with `APPROVED`. A missing `verifier` Task is a `BLOCKED` stage, not an in-progress one.
+3. **Post the per-stage verifier gate comment** via Task `developer` `load: minimal` (`gh issue comment`) **before** advancing to stage N+1:
+   ```text
+   verifier_gate:
+     issue: #<n>
+     stage: <stage_id>
+     verdict: APPROVED
+     report_grade: PASS
+     test_ids: [...]
+     coverage: direct=<n> indirect=<n> manual=<n> missing=<n>
+   ```
+4. Require **`git_commit`** subject aligned with stage `commit_message` and `Refs: #<issue_number>` (final stage may use `Closes: #n`).
+5. After the **last** stage PASS, post the **final** gate comment that `issue-state-transition.sh` checks before `state:ready-for-review`:
+   ```text
+   verifier_gate:
+     issue: #<n>
+     all_stages: true
+     stages_verified: <N>
+     verdict: APPROVED
+   ```
+6. On stage FAIL: retry or `helper`; do not advance stage index.
+7. After last stage PASS (final gate comment posted): proceed to step 8 (ready-for-review only — **no** CodeRabbit per issue).
 
 ### Exit when queue empty
 
@@ -587,6 +613,12 @@ When verifier passes for all stages, any required **CodeRabbit gate** has **`COD
 | Verifier | PASS | `<summary>` | None |
 | Difficulty gates | PASS / skipped | `<review/senior/helper evidence or reason>` | `<none or action>` |
 | PR finish | PASS / skipped | `<pr_url/action/message>` | `<none or action>` |
+
+### Verifier gate (required — do not omit)
+Per-stage verifier evidence. Architect Phase R spot-checks this against the issue's `verifier_gate:` comments.
+| Stage / issue | Verdict | report_grade | Test ids | Coverage (direct/indirect/manual/missing) | Gate comment |
+|---------------|---------|--------------|----------|--------------------------------------------|--------------|
+| `<stage_id>` | APPROVED | PASS | `<test ids>` | `<d>/<i>/<m>/<x>` | `<issue comment URL>` |
 
 ### CodeRabbit (required — do not omit)
 | Field | Value |

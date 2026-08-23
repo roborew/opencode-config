@@ -20,6 +20,7 @@ Invoke `helper` immediately when any occur:
 - verifier reports failed criteria requiring strategy change
 - developer reports `blocker_code: ENV_BLOCKED`
 - developer/frontend-dev/ux-dev reports `blocker_code: STAGE_STUCK`
+- **verifier Task returned empty / no `report_to_parent` payload / step-limited** — treat as `BLOCKED`, not a skip; re-dispatch the verifier once with `load: full`, then escalate to the user. Never substitute developer test output.
 - child report repetition indicates loop/stall
 
 Do not advance stages until helper updates are applied via `scribe`.
@@ -62,6 +63,11 @@ If a subagent reports `ENV_BLOCKED`:
 2. **Bootstrap (no artifact yet):** If **worktree-env** or **`preflight`** reports Blocked **after** the repair-first flow in **`orchestrate-execution`** has completed (including one auto-retry where applicable), do **not** invoke `helper`/`scribe` for artifact amendments. Report **one** `recommended_env_fix` — no multi-option menus. Do **not** re-Task **`worktree-env`** if it already returned `worktree_env: ok` with canonical evidence unless canonical verification contradicts that report. Re-run the full env gate only when the user confirms remediation or asks to rerun preflight (clear `worktree_env_checked` / `preflight_repair_attempted`).
 3. **Mid-stage execution:** Invoke `helper` to produce a minimal recovery/update strategy; use `scribe` to amend artifact `IterationNotes` and next-step tasks.
 4. Ask user for explicit environment remediation confirmation before retry.
+
+**Verifier-specific `ENV_BLOCKED` / toolchain gap (never developer-substitute):**
+- If the **verifier** reports `ENV_BLOCKED` or cannot run the project toolchain (e.g. Ruby/mise/bundle missing on its host), re-dispatch the **verifier** with the Docker path: `sandbox: preferred` + `load skill: docker-sandbox` + `compose_test_file`, instructing it to run `test_commands` via Docker (Sysbox `sandbox exec` on opencode-server, or direct `docker compose -f <compose_test_file>` on local dev when the `sandbox` CLI is absent).
+- **Never** route verification through a `developer` / `frontend-dev` / `ux-dev` worker ("only verify, don't edit"). A developer report is not the independent gate.
+- If Docker itself is unavailable, escalate to the user with **one** option (bring up Docker / add `docker-compose.test.yml`) — do not silently fall back to host verification.
 
 Do not let subagents loop on runtime/toolchain commands when environment is mismatched.
 

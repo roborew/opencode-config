@@ -37,7 +37,7 @@ Names: sibling `opencode-sandbox-<slug>`, publish helper `opencode-sandbox-route
 
 ## Hard Rules
 
-1. **Always `sandbox probe` first.** Unavailable → `sandbox: unavailable`; continue non-Docker unless stage requires compose/Docker (then Blocked).
+1. **Always `sandbox probe` first.** Unavailable → probe `docker` for the **Direct Docker fallback** below; if neither is available → `sandbox: unavailable`; continue non-Docker unless stage requires compose/Docker (then Blocked).
 2. **Env gate before create** (never print secret values):
    - Require `.env` on worktree (or main before **worktree-env**).
    - If Infisical used: non-empty key *names* `INFISICAL_PROJECT_ID`, `INFISICAL_DOMAIN`|`INFISICAL_API_URL`, and `INFISICAL_TOKEN` **or** `CLIENT_ID`+`CLIENT_SECRET` (+ `INFISICAL_ENV` if used).
@@ -72,6 +72,22 @@ sandbox exec --id <slug> -- docker compose -f docker-compose.test.yml run --rm t
 # … or compose up -d for a live app before expose
 sandbox destroy --id <slug>
 ```
+
+## Direct Docker fallback (non-Sysbox — Mac / local dev)
+
+When `sandbox probe` is unavailable but `docker` is present (e.g. Docker Desktop on a dev machine), run the **same** `docker-compose.test.yml` directly — no Sysbox sibling, no `sandbox create/exec/destroy`. Docker is presumed always available on both opencode-server and local dev; this is the standard verification backend, not a degraded path.
+
+```bash
+docker compose -f docker-compose.test.yml build
+docker compose -f docker-compose.test.yml run --rm test
+# cleanup in a finally path:
+docker compose -f docker-compose.test.yml down
+```
+
+- Same compose file and `test` service as the Sysbox path — the two backends are interchangeable for verification.
+- **Volume-mount contract:** the compose file must volume-mount the project source so uncommitted edits are tested without a rebuild.
+- Never ad-hoc `docker run --runtime=sysbox-runc`; never mount host `docker.sock` into nested app compose.
+- If neither `sandbox` nor `docker` is available, report `sandbox: unavailable` (or `docker: unavailable`) and treat as `BLOCKED` when the stage requires compose/Docker.
 
 ## Deterministic local preview
 

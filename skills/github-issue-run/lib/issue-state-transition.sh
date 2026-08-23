@@ -17,6 +17,19 @@ if [[ "$NEW" == "state:in-progress" && -n "${OPENCODE_EXPECT_REPO_ROOT:-}" && -n
   fi
 fi
 
+# Verifier gate backstop: state:ready-for-review requires a verifier_gate comment
+# with all_stages: true and verdict: APPROVED. Without it, the issue cannot be
+# marked ready-for-review (the orchestrator must run the verifier first).
+if [[ "$NEW" == "state:ready-for-review" ]]; then
+  COMMENTS=$(gh issue view "$NUM" --repo "$REPO" --comments --json comments -q '.comments[].body' 2>/dev/null || true)
+  if ! grep -q 'verifier_gate:' <<<"$COMMENTS" \
+     || ! grep -q 'all_stages: true' <<<"$COMMENTS" \
+     || ! grep -q 'verdict: APPROVED' <<<"$COMMENTS"; then
+    echo "BLOCKED: $REPO#$NUM -> state:ready-for-review requires a verifier_gate comment with all_stages: true and verdict: APPROVED. Run the verifier and post the gate comment first." >&2
+    exit 1
+  fi
+fi
+
 STATE_LABELS=(
   state:needs-triage
   state:needs-info

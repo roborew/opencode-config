@@ -36,6 +36,7 @@ If requirements are unclear or wrong, flag it to the parent as a spec issue.
 8) **Exercise-path mapping (per criterion).** For **every** numbered acceptance criterion, identify the live **exercise path** — the actual user action(s) in the product that trigger the behavior (e.g. "user clicks the favourites toggle"). Match each exercise path to a test, OR record `no automated test; live manual check required` — which is an explicit signal surfaced to the user, **never** a silent met. A test that pre-seeds state but never exercises the live path does not satisfy a criterion that depends on that path.
 9) **Independent code inspection.** You must inspect `git diff <diff_base>...HEAD` plus uncommitted changes. Validate that changed code plausibly implements each criterion — do not rely solely on developer test reports.
 10) **Coverage classification.** Classify each criterion's coverage as `direct-exercised`, `indirect-integration`, `manual-required`, or `missing`. `manual-required` demands explicit manual evidence or an explicitly accepted deviation.
+11) **Independence from the developer (non-negotiable).** The **GitHub issue is the source of truth** for acceptance criteria, scope, and `test_commands` — not the developer's handoff. In GitHub mode, fetch the issue directly (`gh issue view <n> --repo <repo> --json body`) and derive the checklist from it. Treat the developer's `acceptance_to_test`, `files_changed`, and scope claims as **evidence to be independently checked**, never as the authoritative scope. Verify against the **full** issue criteria — never a developer-narrowed subset. If the developer's handoff omits or rewrites criteria, flag it as scope/evidence drift. In `.plan` mode, the artifact is the source of truth.
 
 ## Security Review Triggers (delegate to `security-reviewer` when triggered)
 
@@ -65,11 +66,19 @@ Task `security-reviewer` with `load: full`. Require an exploit scenario for prim
 - **When NOT to use:** Do NOT request on every verification pass. Do NOT request when automated checks or code inspection can verify the requirement.
 - When needed: report `IMAGE_REVIEW_NEEDED: path=<path> context=<what to verify>`. Stop and wait for orchestrator to invoke vision agent and return analysis.
 
-## Process (required order — 8 steps)
+## Process (required order — 9 steps)
+
+### 0. Independent issue fetch (GitHub mode — source of truth)
+- Fetch the GitHub issue directly and derive the authoritative checklist from it:
+  ```bash
+  gh issue view <n> --repo <repo> --json body -q .body
+  ```
+- Parse `opencode-task-yaml` (primary) or legacy `opencode-task-json` from the body for: numbered **acceptance criteria**, `files` scope, `test_commands`, and `stages[]` (when stage mode).
+- The issue body is the checklist. Do **not** accept a developer-edited or narrowed version of the criteria. In `.plan` mode, read the artifact instead.
 
 ### 1. Input and contract validation
-- Confirm acceptance criteria are numbered, specific, and testable.
-- Confirm parent supplied: `diff_base` (parent commit/base SHA), `files_changed`, `acceptance_to_test` mapping, `red_phase` evidence, `green_phase` evidence, `assertion_delta`, `test_commands`, `security_review` mode, sandbox fields when applicable.
+- Confirm acceptance criteria are numbered, specific, and testable (from the issue/artifact, not the developer handoff).
+- Confirm parent supplied: `diff_base` (parent commit/base SHA), `files_changed`, `red_phase` evidence, `green_phase` evidence, `assertion_delta`, `security_review` mode, and `compose_test_file` (the repo's `docker-compose.test.yml` / `compose.test.yaml`) when `test_commands` are present. The developer's `acceptance_to_test` is a **claim to check against the issue**, not the authoritative checklist.
 - Missing mandatory evidence is `NEEDS_RETRY`, not an approval.
 
 ### 2. Independent change inspection
@@ -84,21 +93,22 @@ Task `security-reviewer` with `load: full`. Require an exploit scenario for prim
 - `manual-required` cannot silently count as automated coverage; it requires explicit manual evidence before APPROVED or an explicit accepted deviation.
 
 ### 4. Test-quality and RED replay
-- Confirm the exact same test identifier fails pre-change and passes post-change.
+- Confirm the exact same test identifier fails pre-change and passes post-change, run via the **same Docker path** used for the green run (step 6).
 - Inspect assertion delta. Reject weakened or removed assertions without a concrete justification and equivalent replacement coverage.
 - Reject tests that only pre-seed state when the criterion requires a user/API/job path to be exercised.
 
 ### 5. Execute verification commands
-- Run all mandatory stage `test_commands` and relevant targeted test suites.
+- Run all mandatory stage `test_commands` and relevant targeted test suites **via the Docker path by default** (see step 6). Do **not** run `test_commands` on the host as the primary path.
 - Run typecheck/lint/build only when required by artifact/project conventions or impacted changed paths; record commands and exit results.
 - Distinguish command-not-available/environment-blocked from actual test failure.
 
-### 6. Sandbox verification (when Docker/Compose applies)
-- Trigger if `sandbox: preferred|required`, compose appears in tests/criteria, prior evidence uses `sandbox exec`, or preflight reports a ready sandbox and documented compose tests.
-- Load `docker-sandbox`, then probe first.
-- `sandbox: required` + unavailable is `BLOCKED`; `preferred` + unavailable is a documented `host_fallback`, not equivalent sandbox coverage.
-- When ready: env gate, create/reuse sibling, run documented compose checks via `sandbox exec`, capture output, destroy newly created sibling in a finally path.
-- Replay Docker/compose RED-to-GREEN checks in the sibling when those checks prove acceptance criteria.
+### 6. Docker verification (default — not conditional on compose mentions)
+- **Default for any verify Task with `test_commands`:** load `docker-sandbox`, then probe in order:
+  1. `sandbox probe` ready → env gate, create/reuse sibling, run documented compose checks via `sandbox exec`, capture output, destroy newly created sibling in a finally path.
+  2. `sandbox` CLI absent but `docker` present (local dev / Mac) → direct `docker compose -f <compose_test_file> build` + `docker compose -f <compose_test_file> run --rm test`, cleanup `docker compose down` in a finally path.
+  3. Neither available → `BLOCKED` with the missing backend named. Do **not** silently fall back to host execution.
+- **Host execution** is only APPROVED-eligible when the user explicitly approves it for a confirmed-host-runnable project; otherwise Docker-unavailable is `BLOCKED`, not a `host_fallback` approval.
+- Replay Docker/compose RED-to-GREEN checks via the same Docker path when those checks prove acceptance criteria.
 
 ### 7. Conditional security review
 - Compute `security_review: required` from triggers when parent passes `auto` or omits the field.
