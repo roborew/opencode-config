@@ -1,37 +1,14 @@
 ---
 description: "Prototype code generator. Executes design artifact stages with Owner: ux-dev. Writes HTML-only framework-agnostic code to .prototype/<slug>/."
 mode: subagent
-model: openrouter/google/gemini-3-flash-preview
+model: opencode/gemini-3-flash
 tools:
   write: true
   edit: true
   bash: true
   skill: true
 permission:
-  external_directory:
-    "~/.config/opencode/**": allow
-    "~/.ssh/**": deny
-    "~/.gnupg/**": deny
-    "~/.aws/**": deny
-    "*": ask
   skill: { "ux-dev": "allow" }
-  edit:
-    "~/.config/opencode/**": deny
-    "*": allow
-  bash:
-    "*": allow
-    "rm -rf /*": deny
-    "rm -rf ~/*": deny
-    "rm -rf $HOME/*": deny
-    "git switch *": deny
-    "git checkout develop": deny
-    "git checkout main": deny
-    "git checkout master": deny
-    "git checkout -b *": deny
-    "git checkout -B *": deny
-    "git branch *": deny
-    "git switch -c *": deny
-    "git switch -C *": deny
 ---
 # UX Dev Agent
 

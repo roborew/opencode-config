@@ -363,11 +363,11 @@ Optional same-session path after a short HANDOFF block: `/compact` then switch a
 
 ## Built-in agents
 
-`plan` (DeepSeek V4 Flash) and `build` (MiniMax M3) — see `opencode.json`.
+`plan` (DeepSeek V4 Flash) and `build` (DeepSeek V4 Flash) — see `opencode.json`.
 
 ## Custom pipeline (summary)
 
-- **`architect`** — planning; invokes `scribe` for `.plan/` artifacts; never executes code.
+- **`architect`** — planning; invokes `scribe` for docs artifacts; never executes code.
 - **`orchestrate`** — execution coordinator; dispatches `developer`, `frontend-dev`, `ux-dev`, `verifier`, etc.; never writes files directly.
 - **`scribe`** — only writer for plans, `docs/changelog|guides|architecture|adr|agents`, `CONTEXT.md`, `CONTEXT-MAP.md`, root `README`, optional `AGENTS.md`, `.env.example` (per allow list in [agents/scribe.md](agents/scribe.md)).
 - **`review`** — may Task `security-reviewer`, `performance-reviewer`, `doc-reviewer` for focused passes (see agent + skill).
@@ -380,9 +380,11 @@ Global **`instructions`** pull in [rules/](rules/). Global **`permission`** in `
 
 **`grill-me`** (architect Mode A) embeds the [grill-with-docs](https://github.com/mattpocock/skills/tree/main/skills/engineering/grill-with-docs) flow: domain glossary + ADRs persisted via `scribe`.
 
-**`improve-codebase-architecture`** (architect impl option 8) adapts Matt Pocock's [improve-codebase-architecture](https://github.com/mattpocock/skills/tree/main/skills/engineering/improve-codebase-architecture) as a Terra-backed periodic codebase audit: HTML architecture report, optional security pass, and optional `feature:<audit-slug>` remediation tickets via `to-issues` for `orchestrate`.
+**`improve-codebase-architecture`** (architect impl option 7) adapts Matt Pocock's [improve-codebase-architecture](https://github.com/mattpocock/skills/tree/main/skills/engineering/improve-codebase-architecture) as a periodic codebase audit: HTML architecture report, optional security pass, and optional `feature:<audit-slug>` remediation tickets via `to-issues` for `orchestrate`.
 
 **CodeRabbit** (`skills/code-review`, from [coderabbitai/skills](https://github.com/coderabbitai/skills)): orchestrate runs **one** **CodeRabbit gate** via `review` after **all** stages/issues pass final verifier (`medium`/`hard`) — before difficulty gates and architect handoff (GitHub: after the full `feature:<slug>` queue, not per issue). Requires CodeRabbit CLI + auth.
+
+**Cloudflare** (narrow set from [cloudflare/skills](https://github.com/cloudflare/skills)): `cloudflare` (DNS/domains + web-app platform guidance), `wrangler` (local run/deploy), `workers-best-practices`. Cloudflare API, Docs, and the internal docs MCP are managed through the `mcpjungle` gateway in `opencode.json`. Allowed on `architect`, `developer`, `senior-dev`, `frontend-dev`, and `debugger` via each agent’s `permission.skill`.
 
 **Git guardrails:** `opencode.json` denies branch mutation commands (`git switch`, `git checkout -b`, protected-branch checkouts) for execution agents. `scripts/block-dangerous-git.sh` blocks the same patterns for hook-style validation. Orchestrate runs **`checkout-contract.sh`** every session to capture the current branch; subagents must not create or switch branches. Use `scripts/preflight-git.sh '<command>'` before risky git invocations, or wrap tool calls with `scripts/block-dangerous-git.sh` where your runtime supports stdin JSON hooks.
 

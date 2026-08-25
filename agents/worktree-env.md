@@ -1,27 +1,47 @@
 ---
 description: Copy .env and .env.local from main checkout into a linked git worktree (before execution)
 mode: subagent
-model: openrouter/openai/gpt-5-nano
+model: opencode/gpt-5-nano
 steps: 10
 tools:
   write: false
   edit: false
+  read: false
   bash: true
   skill: true
 permission:
   external_directory:
-    "~/.config/opencode/**": allow
-    "~/.ssh/**": deny
-    "~/.gnupg/**": deny
-    "~/.aws/**": deny
-    "*": allow
-  edit: deny
-  skill: { "worktree-env": "allow" }
+    "*": "allow"
+  edit:
+    "*": "deny"
+    ".env": "allow"
+    ".env.*": "allow"
+    "*/.env": "allow"
+    "*/.env.*": "allow"
+    "**/.env": "allow"
+    "**/.env.*": "allow"
   bash:
-    "*": allow
-    "rm -rf /*": deny
-    "rm -rf ~/*": deny
-    "rm -rf $HOME/*": deny
+    "*": "allow"
+    "rm -rf /*": "deny"
+    "rm -rf ~/*": "deny"
+    "rm -rf ~": "deny"
+    "rm -rf $HOME/*": "deny"
+    "rm -rf $HOME": "deny"
+    "rm -rf /": "deny"
+    "rm -rf ~/.config/*": "deny"
+    "rm -rf $HOME/.config/*": "deny"
+    "sudo *": "deny"
+    "doas *": "deny"
+    "diskutil *": "deny"
+    "chmod 777*": "deny"
+    "chmod -R 777*": "deny"
+    "curl * | sh": "deny"
+    "curl * | bash": "deny"
+    "wget * | sh": "deny"
+    "wget * | bash": "deny"
+    "* | sudo *": "deny"
+    "* |sudo *": "deny"
+  skill: { "worktree-env": "allow" }
 ---
 
 # Worktree-env agent

@@ -89,6 +89,15 @@ Run when:
 - user picks **Mode F sub-menu R**, or
 - user pastes **remediation-return** script after orchestrate re-push.
 
+**Sealed vs unsealed bundles:** Orchestrate now provides a `stabilization_status` field in its handoff.
+
+| Stabilization status | Phase R behavior |
+|---------------------|------------------|
+| `ready_for_architect` | Validate the sealed bundle, PRD tickets, issue states, CI, and only feedback newer than the `feedback_cutoff_at` timestamp. Return Merge-ready when all evidence is complete. May create remediation only for newly discovered material issues, new hosted feedback after cutoff, missing ticket/acceptance evidence, or explicit user-reported product defects. Must **not** re-ticket already resolved/deferred comments or repeat broad feedback collection. |
+| Blocked or unsealed | Perform full triage as before (R1–R6). Label output `unsealed`. |
+
+A second architect → orchestrator loop is permitted only for findings newer than the stabilization cutoff or genuinely substantive/missing work, with the reason explicitly recorded.
+
 **Re-check (return loop):** Same steps as first pass; emphasize delta since last Phase R (new PR comments, CI re-run, remediation issues now `state:ready-for-review`, user feedback). Do not skip to Phase 1 until verdict is **Merge-ready**.
 
 #### R1. Data collection (read-only)

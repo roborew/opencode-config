@@ -25,11 +25,11 @@ Markdown writes (artifact updates only) are done by delegating to `scribe`. You 
 ## Supplementary Hard Rules (agent overrides on conflict)
 
 1. Never write or edit files directly.
-2. Always use `scribe` for `.plan/*.md` and docs markdown writes.
+2. Always use `scribe` for docs markdown writes — not for GitHub issue bodies.
 3. Execute one stage at a time and require completion report before next stage.
-4. Run `verifier` at stage gates and before final completion. Run **CodeRabbit gate** via `review` **once** at orchestration completion (after the last verifier PASS for the artifact or the entire GitHub feature queue) — **never** per stage, per GitHub issue, or mid-queue.
+4. Run `verifier` at stage gates and before final completion. Run **CodeRabbit gate** via `review` **once** at orchestration completion (after the entire GitHub feature queue) — **never** per stage, per GitHub issue, or mid-queue.
 5. Trigger `helper` when any enforced condition is met (see **`orchestrate-recovery`** for trigger detail and recovery steps).
-6. Do not create new retry artifacts; amend existing artifact via `scribe`.
+6. Do not create new retry artifacts; amend existing issue via `scribe`.
 7. Do not wait for manual `@scribe` prompting; invoke required subagents automatically.
 8. You MUST delegate work through Task calls (`scribe`, `worktree-env`, `preflight`, `developer`, `frontend-dev`, `ux-dev`, `verifier`, `helper`, `vision`, `senior-dev`, `review`) and never perform those tasks yourself.
 9. If you have not issued a required Task call for the current stage, you are not allowed to declare stage progress.
@@ -41,8 +41,6 @@ Markdown writes (artifact updates only) are done by delegating to `scribe`. You 
 
 ## Required Inputs
 
-- Artifact path: `.plan/<type>.<slug>.md`
-- Artifact identity: `artifact_type` + `slug` (derive from path when only path is provided)
 - Stage order and acceptance checks from artifact
 
 ## Environment readiness gate (on user opt-in)
@@ -72,7 +70,7 @@ Track during bootstrap:
    - If `Status: Blocked` with a **repairable** cause (missing `node_modules`, wrong PATH node vs `.mise.toml`, not indexed): when `preflight_repair_attempted` is false, instruct **`preflight`** to run the repair pass once, set `preflight_repair_attempted: true`, then re-Task **`preflight`** **once**. If still Blocked, stop with **one** `recommended_env_fix` — no `(a)/(b)/(c)` menus.
    - If `Status: Blocked` with an **unsafe** cause (missing env copy, runtime missing entirely, install failed after repair): stop with one remediation line.
 
-3. **On success:** set `env_gate_passed: true`. Return a brief structured report (deltas only).
+3. **On success:** set `env_gate_passed: true`. If the preflight report includes `sandbox` / `expose`, store `sandbox_status` (`ready` | `unavailable`) for **Docker sandbox routing**. Return a brief structured report (deltas only).
 
 **Loop guard:** If **`worktree-env`** or preflight returns the same success/blocker report twice with identical canonical evidence, treat as `LOOP_DETECTED` — do not re-invoke that subagent; report the contradiction or blocker once.
 
@@ -116,7 +114,126 @@ main_checkout_root: <absolute root when detectable>
 branch_policy: do not create, switch, checkout, or rename branches unless user explicitly requests in this turn
 ```
 
+When **Docker sandbox routing** applies (below), also include `sandbox: preferred|required`, optional `publish_review_url: true|false`, and the load/`sandbox exec` instructions from that section.
+
+**Additional verifier-only fields (required every verify Task):**
+```text
+issue_number: <n>   # GitHub mode — verifier fetches the issue directly for the checklist
+repo: <owner/name>  # GitHub mode
+diff_base: <parent commit SHA or base ref>
+files_changed: <list from implementer report>   # evidence to inspect, NOT authoritative scope
+acceptance_to_test: <mapping from implementer report>  # claim to check against the issue, NOT the checklist
+red_phase: <RED test evidence from implementer report>
+green_phase: <GREEN test evidence from implementer report>
+assertion_delta: <from implementer report>
+security_review: auto  # default; verifier computes required|not_applicable from triggers
+compose_test_file: <docker-compose.test.yml | compose.test.yaml | none>  # required when test_commands present
+```
+
+**Independent verifier (GitHub mode):** instruct the verifier to fetch the issue directly (`gh issue view <n> --repo <repo> --json body`) and derive the acceptance criteria, scope, and `test_commands` from it. The developer's `acceptance_to_test` / `files_changed` are **evidence to be independently checked against the issue**, never the authoritative checklist. The verifier must verify against the **full** issue criteria and flag any developer-narrowed scope. In `.plan` mode, the artifact is the source of truth.
+
+**Docker-default verification (every verify Task with `test_commands`):** always include `sandbox: preferred` + `load skill: docker-sandbox` + `compose_test_file`, and instruct the verifier to run `test_commands` via the Docker path (Sysbox `sandbox exec` on opencode-server, or direct `docker compose -f <compose_test_file>` on local dev when the `sandbox` CLI is absent). This is the default, not conditional on compose mentions. Host execution is only APPROVED-eligible when the user explicitly approves it for a confirmed-host-runnable project.
+
 Subagents must `cd` to `impl_repo_path`, verify branch matches, and report `CHECKOUT_CONTRACT_FAILED` on mismatch. They must **never** create branches or run `git switch`/`git checkout <branch>`/`git branch` on their own.
+
+## Provider fallback dispatch contract (additional recovery path)
+
+When a bounded child Task fails and `orchestrate-recovery` paths (same-agent transient retry, helper amendment, optional operator-confirmed senior-dev escalation) are exhausted for the **same** Task, dispatch a provider-fallback subagent. This is the **last** retry path, not a replacement for helper / senior-dev.
+
+### Chain
+
+Default chain: `kilo-fallback` (Kilo / MiniMax-M3) → `openrouter-fallback` (OpenRouter / GPT-5.6 Luna). Operator can name either explicitly (`use Kilo fallback`, `use OpenRouter fallback`); otherwise the chain runs in order.
+
+### Eligibility
+
+- `original_agent` MUST resolve to a child role eligible from the orchestrate Task allowlist (`developer`, `frontend-dev`, `ux-dev`, `verifier`, `scribe`, `worktree-env`, `preflight`, `vision`, `helper`, `senior-dev`, `review`). Never a primary agent (orchestrate / architect), never another fallback.
+- The original `task_contract` and `original_skill` apply unchanged to the fallback. Fallback cannot broaden scope, switch branches, advance stages, or skip gates.
+
+### Task prompt template (fallback dispatch)
+
+When dispatching `kilo-fallback` or `openrouter-fallback`, include in the Task prompt (alongside the execution dispatch contract above when the original was an implement/verify task):
+
+```text
+fallback_context:
+  original_agent: <child role that failed>
+  original_skill: <skill name; do NOT infer from transcript>
+  task_contract: <verbatim original Task prompt>
+  failure_evidence: <error class, retry count, unfinished work>
+  attempt_history: <providers and load levels already tried for this Task>
+  recovery_strategy: <short helper/scribe amendment summary, or omit for transient provider failures>
+  requested_provider: kilo | openrouter   # when operator named one explicitly
+# plus, when the original was an implement/verify Task:
+impl_repo_path: <absolute verified git root>
+expected_branch: <current verified branch>
+is_linked_worktree: true|false
+main_checkout_root: <absolute root when detectable>
+branch_policy: do not create, switch, checkout, or rename branches unless user explicitly requests in this turn
+diff_base: <parent commit SHA or base ref>
+files_changed: <list from implementer report>
+acceptance_to_test: <mapping from implementer report>
+red_phase: <RED test evidence from implementer report>
+green_phase: <GREEN test evidence from implementer report>
+assertion_delta: <from implementer report>
+security_review: auto
+sandbox: <pass-through from original Task; or omit>
+publish_review_url: <pass-through; or omit>
+```
+
+The fallback loads **`fallback-dispatch`** then **`original_skill`** (in that order) before any substantive work. If `original_skill` fails to load, the fallback returns `SKILL_UNAVAILABLE: <original_skill>`; treat that as a fallback stop, not as `FALLBACK_EXHAUSTED`.
+
+### Attempts and grading
+
+- One attempt per provider per bounded Task. Track `attempted_providers` per Task — do not retry the same provider twice or loop between providers.
+- The fallback completion report carries the **original role's completion payload verbatim** plus a `fallback_used: { original_agent, original_skill, fallback_agent, provider, model, attempt_number, recovered_from }` envelope. On this attempt's own provider failure the fallback emits only `fallback_used.provider_failure` plus `blocker_code: PROVIDER_FAILURE` (no partial original schema).
+- Grade fallback reports using the **same rubric** as the original role's report (`report_grade: PASS | NEEDS_RETRY | BLOCKED`). The `fallback_used` envelope is metadata only — never lowers the bar or excuses missing evidence.
+- On successful fallback, resume the normal workflow at the **next normal gate** (verifier, review gate, etc.).
+- A pasted fallback completion report follows the **manual handoff recovery** flow in `orchestrate-recovery`.
+
+### Exhaustion
+
+After both `kilo-fallback` and `openrouter-fallback` fail for the same Task, halt with `FALLBACK_EXHAUSTED` listing the original role, both attempts, both providers, both error classes, unfinished work (files / commands / tests remaining), and any partial evidence. Ask the operator how to proceed (retry with a fresh context, accept partial work, abandon, or relax a constraint). Do not invent a third provider.
+
+## Docker sandbox routing
+
+**Orchestrate does not load skill `docker-sandbox`.** Instruct implementer/verifier Tasks to load it when compose/Docker or review publish applies. Do not conflate with Cloudflare Workers Sandbox (`skills/cloudflare/references/sandbox/` — different product).
+
+### Session state
+
+Track when known:
+- `sandbox_status`: `ready` | `unavailable` | `unknown` (from preflight report when env gate ran; else `unknown` until a child probes)
+- `publish_review_url`: `true` | `false` | unset
+- `sandbox_compose_path`: documented compose file when detected (e.g. `docker-compose.test.yml`)
+
+### When routing applies
+
+Treat as compose/Docker work if **any** are true:
+
+- `test_commands`, acceptance, or stage objective mention `docker compose`, `docker-compose`, Compose, or Sysbox/`sandbox exec`
+- Issue/stage asks for a feature review URL / `{slug}.{apex}` / web expose
+- Parent/user asks for sandbox compose build/test or review publish
+- Preflight reported `sandbox: ready` **and** the impl repo has a documented compose test file (`docker-compose.test.yml`, `compose.test.yaml`, or README-documented equivalent)
+
+### Review URL ask (once per session)
+
+When routing applies and `publish_review_url` is unset: ask **“Publish review URL?” (yes/no)** once. Set `publish_review_url` from the answer. Do not ask again this session unless the user changes it. Skip the ask when the user already requested or declined review publish in this turn.
+
+### Task prompt instructions (developer / frontend-dev / verifier)
+
+When routing applies, include on implement and verify Tasks (in addition to the execution dispatch contract):
+
+```text
+sandbox: preferred   # or required when stage/issue explicitly requires Compose
+load skill: docker-sandbox
+# probe first; if ready: create → sandbox exec for compose test_commands → destroy (always)
+# if sandbox CLI absent but docker present (local dev): direct `docker compose -f <compose_test_file>` (same compose file)
+# if neither available: Blocked (do not silently fall back to host for test_commands)
+publish_review_url: true|false
+# when true and sandbox ready: after stack is up, sandbox expose + cloudflare-api via MCPJungle tunnel hostname + optional DNS per docker-sandbox; never tunnel create
+```
+
+- Prefer wrapping Docker/`docker compose` entries in `test_commands` as `sandbox exec --id <slug> -- <command>` when probe is ready; keep non-Docker lint/type/unit commands on the host/worktree as usual.
+- Soft-skip when unavailable unless `sandbox: required`.
+- Never instruct ad-hoc `docker run --runtime=sysbox-runc` or host `docker.sock` into app compose.
 
 ## Session Bootstrap (mandatory, first in fresh context)
 
@@ -128,8 +245,8 @@ When no artifact path or `feature:<slug>` is provided (new session, greeting, un
    - **Already `env_gate_passed` or `env_gate_declined`** → do not ask again; continue.
 2. **Checkout identity gate** (above) — mandatory even when preflight was declined.
 3. **Claude Context readiness gate** (below).
-4. **Fresh Context: Work selection** — present the **(1)/(2)/(3)/(4)** menu only after steps 1–3 are resolved.
-5. **Issue-expand readiness gate** (GitHub backlog only — after slug is captured from menu choice) — see below.
+4. **Fresh Context: Work selection** — present the **(1)/(2)/(3)/(4)/(5)** menu only after steps 1–3 are resolved.
+5. **Issue-expand readiness gate** (GitHub backlog **(1)** only — after slug is captured from menu choice) — see below.
 
 When the user provides a **`.plan` path** or **`feature:<slug>`** before bootstrap completed: if neither `env_gate_passed` nor `env_gate_declined`, ask the preflight **yes/no** first; run **checkout identity gate**; run **Claude Context readiness gate**; run **issue-expand readiness gate** for `feature:<slug>` only (after slug is captured); then enter the stage or GitHub loop.
 
@@ -157,24 +274,60 @@ After **checkout identity gate**, **Claude Context readiness gate**, and **after
 
 After session bootstrap (steps 1-3 above), when no artifact path or `feature:<slug>` is provided:
 
-1. **Present the work-selection menu** verbatim from the orchestrate agent **Fresh Context: Session Bootstrap + Work Selection** block (**(1)** GitHub backlog first; **(4)** legacy `.plan` last; numbers match display order).
+1. **Present the work-selection menu** verbatim from the orchestrate agent **Fresh Context: Session Bootstrap + Work Selection** block (**(1)** GitHub backlog first; **(2)** sandbox build/refresh; numbers match display order).
 2. **On (1):** obtain kebab slug if missing; run **issue-expand readiness gate** if not already done; then proceed to **GitHub feature backlog loop**.
-3. **On (2):** stop and prompt: switch to `architect` with the user's goal (e.g. Mode F sign-off, new planning).
-4. **On (3):** ask for a one-line description; route to `architect` for non-backlog work unless the user supplies a `feature:<slug>`, issue #, or explicit execution scope—then use **(1)** or targeted issue flow as appropriate.
-5. **On (4) — legacy only:** continue to **Legacy `.plan` selection** below. Do not glob or list `.plan/` before the user chooses **(4)**.
+3. **On (2):** proceed to **Sandbox feature build mode** (below). Do **not** run issue-expand.
+4. **On (3):** stop and prompt: switch to `architect` with the user's goal (e.g. Mode F sign-off, new planning).
+5. **On (4):** ask for a one-line description; route to `architect` for non-backlog work unless the user supplies a `feature:<slug>`, issue #, or explicit execution scope—then use **(1)** or targeted issue flow as appropriate. If they ask only for sandbox build/refresh, use **(2)**.
 
-## Legacy `.plan` selection (only after user chooses (4))
+## Sandbox feature build mode (menu (2) — parallel workflow)
 
-1. **Read `.plan/` from disk first (non-negotiable).** Before you write any plan filenames or counts to the user, you MUST use a filesystem tool in this turn: e.g. glob `.plan/*.md` (and `.plan/**/*.md` if you use nested plans), or list/read the `.plan/` directory. **Never** invent, guess, or recall-from-memory what is in `.plan/` — if you have not just received tool output for that listing, you are not allowed to present a plan list.
-2. **Derive active plans** from that tool output only: include `*.md` files whose basename does **not** end with `.completed.md`. Omit archived `.plan/<type>.<slug>.completed.md` after architect Mode B sign-off.
-3. **Present the list** to the user with short descriptions (Goal or title from each file if readable — use **read_file** on each candidate only as needed; do not substitute made-up titles).
-4. **Prompt the user** to either choose an existing plan by number/path or create a new plan in `architect`.
-5. If the user chooses "create new", stop and prompt: "Switch to `architect` to create a plan, then return here with the plan path."
-6. **Do not proceed** with orchestration until a plan path is selected.
+**Purpose:** Build / test / optionally publish the **current checkout** feature branch in a Sysbox sibling **without** running the GitHub issue queue. Typical use: start a sandbox build while doing other work (e.g. frontend) in another session; later say **refresh** after code changes.
 
-If there are no **active** plans (only archived `*.completed.md`, directory missing, or empty after filtering), inform the user: "No active plans in `.plan/` (archived `*.completed.md` files are omitted). Switch to `architect` to create a plan, provide a GitHub `feature:<slug>`, or choose GitHub backlog **(1)**."
+**Orchestrate does not load `docker-sandbox`.** Task **`developer`** (`load: full`) with that skill.
 
-## GitHub feature backlog loop (no `.plan` artifact)
+### Session state
+
+Track:
+- `sandbox_build_active`: true after a successful create (or reuse) for this session
+- `sandbox_slug`: DNS-label slug (from branch / feature / user)
+- `sandbox_compose_file`: e.g. `docker-compose.test.yml`
+- `publish_review_url`: true | false
+- `review_url`: last reported `https://{slug}.{apex}` when exposed
+
+### Procedure (first run or menu (2))
+
+1. Ensure **checkout identity gate** has run. If `protected_branch: true`, stop and ask user to switch to a feature/topic branch (same as other execution).
+2. Derive **`sandbox_slug`**: sanitize current `branch` to a DNS label, or ask once for kebab slug / `feature:<slug>`.
+3. Ask **build intent** once if unclear (default **a** when user said “build”):
+   - **(a) build + test** — `compose build` + `compose run --rm test` (or documented test service), then keep sibling for refresh **or** destroy if user prefers teardown
+   - **(b) live stack** — `compose up -d` (self-contained + Caddy) for review; keep sibling running
+   - **(c) refresh** — reuse existing sibling if `sandbox status` ready; re-build / re-up / re-test only
+4. Ask **“Publish review URL?”** when intent is **(b)** or user wants expose; set `publish_review_url`. For **(a)** default **no** unless asked.
+5. Task **`developer`** with:
+   ```text
+   execution_mode: sandbox_feature_build
+   load: full
+   load skill: docker-sandbox
+   sandbox: required
+   sandbox_action: create_build_test | up_live | refresh
+   publish_review_url: true|false
+   sandbox_slug: <slug>
+   impl_repo_path / expected_branch / branch_policy from checkout_contract
+   ```
+   Instruct: probe → env gate → create (or reuse) → exec documented compose → optional expose + CF tunnel/DNS per skill → report `sandbox_id`, commands run, `review_url` if any, keep-or-destroy. Soft-skip only if probe unavailable **and** user accepts — otherwise Blocked with one remediation (enable Sysbox / rebuild image).
+6. Grade child report: require probe result, compose commands + exit evidence, destroy-or-keep note. On PASS: set `sandbox_build_active`, store slug / URL; print a short status table.
+7. **Stay available for refresh:** after PASS, prompt once:
+   ```text
+   Sandbox ready. Say: refresh (rebuild after code changes) | expose (if not yet) | destroy | or pick another menu option (1)/(3)/(4)/(5).
+   ```
+   On **refresh** / **expose** / **destroy**: re-Task `developer` with the same `execution_mode` and `sandbox_action: refresh|expose|destroy` — do not re-run issue-expand or the backlog loop.
+
+### Soft-skip / unavailable
+
+If `sandbox probe` is unavailable (Mac / `OPENCODE_SANDBOX_MODE=off`): report once; do not invent docker.sock. Offer to return to the work menu.
+
+## GitHub feature backlog loop
 
 Use this path after spec `fanout` and **issue-expand** in the spec repo (`feature:<slug>`, `state:ready-for-agent`, `opencode-task-json` with non-empty `stages[]`). **You have no `bash` tool** — for this loop only, delegate every `gh` invocation and helper script to **`developer`** via Task (`load: minimal` for pure shell, `load: full` for implementation). (Bootstrap env shell uses **`worktree-env`** / **`preflight`**, not **`developer`**.)
 
@@ -200,7 +353,8 @@ Load **`github-issue-run`** together with this skill when the user chooses GitHu
    - `issue_number`, `repo`, `title`
    - `opencode_meta` verbatim
    - `impl_repo_path`, `expected_branch`, `is_linked_worktree`, `main_checkout_root`, `branch_policy` from `checkout_contract`
-6. **Verify (flat or per-stage):** Task `verifier` with `load: full` and the same contract plus completion report.
+   - When **Docker sandbox routing** applies: `sandbox: preferred|required`, `publish_review_url`, and load/`sandbox exec` instructions from that section
+6. **Verify (flat or per-stage):** Task `verifier` with `load: full` and the same contract plus completion report (include sandbox fields when routing applies). Instruct the verifier to **fetch the issue directly** (`gh issue view <n> --repo <repo> --json body`) and derive the checklist from it — the developer's handoff is evidence to check, not the authoritative scope.
 7. **Grade** using **Child Report Grading Gate** (`git_commit` with `Refs: #<issue_number>` when files changed).
 8. On PASS (flat or all stages done): transition `state:ready-for-review`; optional `gh issue comment` with summary and commit hash. **Do not** run CodeRabbit here — one feature-wide gate runs after the queue is exhausted (see **Exit when queue empty**).
 9. On FAIL: `state:blocked` or `helper` per **`orchestrate-recovery`** — do not advance queue.
@@ -215,10 +369,29 @@ When `stages[]` is present, for **each** stage in order:
    - `issue_number`, `repo`, `stage_id`, `stage` object (objective, files, acceptance, test_commands, commit_message)
    - `issue_ref: #<n>` for commits
    - `impl_repo_path`, `expected_branch`, `is_linked_worktree`, `main_checkout_root`, `branch_policy` from `checkout_contract`
-2. Task `verifier` with same stage contract + completion report.
-3. Require **`git_commit`** subject aligned with stage `commit_message` and `Refs: #<issue_number>` (final stage may use `Closes: #n`).
-4. On stage FAIL: retry or `helper`; do not advance stage index.
-5. After last stage PASS: proceed to step 8 (ready-for-review only — **no** CodeRabbit per issue).
+   - When **Docker sandbox routing** applies: `sandbox: preferred|required`, `publish_review_url`, and load/`sandbox exec` instructions from that section
+2. Task `verifier` with the same stage contract + completion report (include sandbox fields when routing applies). Instruct the verifier to **fetch the issue directly** (`gh issue view <n> --repo <repo> --json body`) and derive the acceptance criteria, scope, and `test_commands` from it — the developer's handoff is evidence to check, not the authoritative checklist. The stage is `BLOCKED` until this Task returns `APPROVED`; do not advance to stage N+1, do not transition the issue, and do not close the implementer's todo until the verifier's completion report is graded `PASS` with `APPROVED`. A missing `verifier` Task is a `BLOCKED` stage, not an in-progress one.
+3. **Post the per-stage verifier gate comment** via Task `developer` `load: minimal` (`gh issue comment`) **before** advancing to stage N+1. The same Task must also set the `verified` label atomically with the comment (`gh issue edit <n> --repo <repo> --add-label verified --remove-label unverified`):
+   ```text
+   verifier_gate:
+     issue: #<n>
+     stage: <stage_id>
+     verdict: APPROVED
+     report_grade: PASS
+     test_ids: [...]
+     coverage: direct=<n> indirect=<n> manual=<n> missing=<n>
+   ```
+4. Require **`git_commit`** subject aligned with stage `commit_message` and `Refs: #<issue_number>` (final stage may use `Closes: #n`).
+5. After the **last** stage PASS, post the **final** gate comment that `issue-state-transition.sh` checks before `state:ready-for-review`. The same Task must also set the `verified` label atomically with the comment (`gh issue edit <n> --repo <repo> --add-label verified --remove-label unverified`):
+   ```text
+   verifier_gate:
+     issue: #<n>
+     all_stages: true
+     stages_verified: <N>
+     verdict: APPROVED
+   ```
+6. On stage FAIL: retry or `helper`; do not advance stage index.
+7. After last stage PASS (final gate comment posted): proceed to step 8 (ready-for-review only — **no** CodeRabbit per issue).
 
 ### Exit when queue empty
 
@@ -227,43 +400,73 @@ When discovery fails (queue exhausted):
 1. **CodeRabbit gate (once per feature):** When difficulty is not `easy`, run the **CodeRabbit gate** section below **before** opening/finishing the PR. Review **all** implementation changes on the feature branch (aggregated `files_changed` / commits since base). **Do not** re-run CodeRabbit for individual issues you already marked ready-for-review, and do **not** re-run it after remediation. On **`CODERABBIT_GATE: BLOCKED`**, remediate every numbered finding that is not explicitly deferred → verifier checks the local fixes → continue without a second CodeRabbit call. On **`CODERABBIT_GATE: PASS`** (or `easy`), continue.
 2. Task **`developer`** `load: minimal` with `OPENCODE_EXPECT_*` from `checkout_contract`: `bash "$OC/skills/github-issue-run/lib/feature-finish-pr.sh" "<slug>"` — parse JSON (`branch`, `base`, `pr_url`, `action`, `message`).
 3. Run **Difficulty-based completion gates** when applicable (GitHub-only: assume **`medium`** unless user/issue meta says otherwise).
-4. Report `pr_url` or skip reason (`skipped-opt-out`, `skipped-protected-branch`) inside the mandatory **Completion report template** below.
-5. Prompt with the table-driven sign-off handoff from **Completion (mandatory)**. Do **not** use a standalone generic sentence such as “Switch to architect” without the feature slug/name, PR, and next-step table.
+4. **Enter Post-PR stabilization** (see section below) — do not immediately hand off to architect.
+5. After stabilization is finalized, report the sealed bundle including `pr_url` or skip reason inside the mandatory **Completion report template** below.
+6. Prompt with the table-driven sign-off handoff from **Completion (mandatory)**. Do **not** use a standalone generic sentence such as "Switch to architect" without the feature slug/name, PR, and next-step table.
 
 **Opt-out:** `ORCHESTRATE_AUTO_PR=0` or user instruction not to open a PR. **Protected branch:** if session is on `develop`/`main`/`master`, script skips push/PR — do not attempt to move commits retroactively.
 
-**Remediation session** (user first message includes `Remediation:` or architect remediation handoff): when queue empties, **skip CodeRabbit gate** (already ran on initial orchestration). Push to existing PR via `feature-finish-pr.sh` (`pr-exists` expected). Emit **remediation-return script** (not first-complete script) pointing to **impl architect option 4 → R**.
+**Remediation session** (user first message includes `Remediation:` or architect remediation handoff): when queue empties, **skip CodeRabbit gate** (already ran on initial orchestration). Push to existing PR via `feature-finish-pr.sh` (`pr-exists` expected). After stabilization, emit the **remediation-return script** (not first-complete script) pointing to **impl architect option 4 → R**.
+
+### Post-PR stabilization (bounded — after PR, before architect handoff)
+
+After `feature-finish-pr.sh` creates or updates the PR, do **not** immediately issue the architect Phase R handoff. Enter `execution_mode: pr_stabilization` inside the same orchestrator session.
+
+**Stabilization checklist (user-controlled):**
+
+1. **Collect current state:**
+   - Current PR checks, mergeability, review threads/comments, CodeRabbit/Kilo/bot comments, and the one-shot CodeRabbit CLI inventory already captured by orchestrate.
+   - Never poll indefinitely for external review bots; report the current feedback timestamp and hand control to the user when external feedback is still pending.
+
+2. **Ask for product acceptance feedback:**
+   - Use a concise structured prompt: tested flows, failures, visual/runtime concerns, and intentional deferrals.
+
+3. **Classify each finding:**
+   - `fix-now`: must be traceable to a named issue/remediation item and executed through the normal developer → verifier lane.
+   - `defer`: with rationale.
+   - `not-applicable`: with reason.
+   - `awaiting-external-review`: still pending.
+
+4. **Execute fix-now findings:**
+   - Execute through developer → verifier lane.
+   - After remediation, re-check only affected tests, PR checks, and affected feedback threads; push the changes.
+   - Never re-run CodeRabbit CLI.
+
+5. **Stabilization checkpoint:**
+   - Present a checkpoint instead of architect handoff while feedback is pending or the user wants another review round.
+   - Each round collects the latest hosted comments/checks and user feedback together, groups fix-now findings into one remediation queue.
+   - The checkpoint must offer only two exits: `review another round` or `finalize stabilization`.
+   - On `review another round`, collect only deltas since the previous checkpoint and repeat.
+   - On `finalize stabilization`, collect a final PR delta, record a cutoff timestamp, and create the sealed evidence bundle.
+   - External feedback that arrives after the cutoff is architect-relevant only if new and material.
+
+**Stabilization remediation scope:**
+- Automatically execute only concrete CodeRabbit/Kilo/human/CI findings with clear acceptance conditions and no product-scope ambiguity.
+- Publish a remediation issue before implementation when the finding is a material change, crosses stage boundaries, or lacks a clear acceptance condition.
+- Defer speculative style suggestions and non-blocking observations with rationale.
+- Do not use architect for deciding ordinary local fixes.
+
+**Sealed PR stabilization report:**
+- PR URL, branch/base, CI/check state, mergeability.
+- All review comments with status and resolution evidence.
+- One-shot CodeRabbit inventory and resolution status.
+- Verifier results, coverage/security/sandbox evidence.
+- User acceptance feedback and whether each item was fixed/deferred.
+- Open remediation issues (must be none unless explicitly deferred).
+- `stabilization_status: ready_for_architect|blocked` and a `feedback_cutoff_at` timestamp.
 
 **Prerequisite (enforced):** **Issue-expand readiness gate** — substantive **Implementation plan** and non-empty `stages[]` in **`opencode-task-json`**. Orchestrate does not run issue-expand.
 
-## Stage Loop
-
-1. Ensure artifact identity is explicit:
-   - parse `artifact_type` + `slug` from artifact path when needed
-   - pass identity fields to `scribe` on every artifact write/update call
-2. Ensure artifact exists; if missing, dispatch `scribe` to write it from approved content. After scribe returns **success** with **write/edit tool evidence** and no `SCRIBE_FAILED`, **trust the write** (no redundant re-read). If missing, no evidence, or `SCRIBE_FAILED`, re-invoke scribe once.
-3. **Dispatch by Owner:** Read the current stage's `Owner` from the artifact `StagePlan`. Dispatch to that subagent only:
-   - `Owner: frontend-dev` → invoke `frontend-dev` (UI/design specialist)
-   - `Owner: developer` → invoke `developer` (logic/backend specialist)
-   - `Owner: ux-dev` → invoke `ux-dev` (prototype generation from design artifacts; outputs to `.prototype/<slug>/`)
-     Do not dispatch to the wrong subagent for a stage.
-   - Include `impl_repo_path`, `expected_branch`, `branch_policy` from `checkout_contract` on every execution Task.
-4. Collect completion report.
-5. Run `verifier`.
-6. If verifier passes, continue to next stage.
-7. If verifier fails or stage is blocked, invoke `helper` — then follow **`orchestrate-recovery`** if the situation persists or matches loop/env/escalation patterns.
-
 ## Completed-stage context compression
 
-After a stage is **COMPLETE** and **verifier** has **APPROVED**, keep a **running handoff state** in a few lines (`last_completed_stage`, one-sentence outcome, `artifact_path`, `next_stage_id`). **Do not** re-quote full prior transcripts, verifier checklists, or stale child reports for later stages unless the user asks or a regression explicitly requires it. Prefer **current stage + next action** when updating the user.
+After a stage is **COMPLETE** and **verifier** has **APPROVED**, keep a **running handoff state** in a few lines (`last_completed_stage`, one-sentence outcome, `next_stage_id`). **Do not** re-quote full prior transcripts, verifier checklists, or stale child reports for later stages unless the user asks or a regression explicitly requires it. Prefer **current stage + next action** when updating the user.
 
 ## Delegation Gate (mandatory)
 
 Before any stage status update, confirm these Task calls occurred:
 
-- Artifact write/update: `scribe` (when needed). After scribe returns success with tool evidence and no `SCRIBE_FAILED`, trust the write; otherwise re-invoke scribe once.
 - Execution: `developer`, `frontend-dev`, or `ux-dev` — **must match the stage's Owner**. **Strict TDD required:** Execution subagents must report `red_phase` then `green_phase` evidence with **matching test ids** plus an `acceptance_to_test` mapping for every numbered criterion. Do not advance the stage on tests that were only green, on a missing/mismatched RED, or on an unexplained `assertion_delta`.
-- Verification: `verifier`
+- **Verification (mandatory, not advisory):** a `verifier` Task must have run for this stage, with a completion report graded `report_grade: PASS`. A missing `verifier` Task is a `BLOCKED` stage, not an in-progress one.
 - Recovery: `helper` on trigger conditions
 - Image review: `vision` when child reports `IMAGE_REVIEW_NEEDED` (see Image Review Gate)
 - Each child Task instruction explicitly required a one-shot final `report_to_parent` payload (completion or blocker) followed by immediate return
@@ -311,6 +514,18 @@ Decision policy:
 - `NEEDS_RETRY` -> send corrective feedback and rerun same child task
 - `BLOCKED` -> invoke `helper`, amend artifact via `scribe`, then request user confirmation if environment-related — see **`orchestrate-recovery`** for deeper loop and env policy.
 
+### Verifier report grading (additional requirements)
+
+For `verifier` completion reports, **PASS** also requires:
+
+- All criteria have coverage classification (`direct-exercised`, `indirect-integration`, `manual-required`, or `missing`).
+- `manual-required` criteria have recorded explicit manual evidence or an explicitly accepted deviation from the user.
+- `host_fallback` sandbox status is acceptable only when sandbox was `preferred`, not `required`, and the specific acceptance criteria do not require Docker/runtime topology proof.
+- No `missing` coverage on an acceptance criterion.
+- `security_review` status is not `blocked` or `findings` with unresolved primary findings.
+
+Verifier `NEEDS_RETRY`, `FAILED`, or `BLOCKED` invokes existing recovery behavior (`helper` + `scribe` amendment).
+
 ## CodeRabbit gate (once per orchestration — after final verifier, before difficulty gates / PR / architect)
 
 **Invocation budget:** Exactly **one** CodeRabbit CLI invocation per orchestration session (per `.plan` artifact or per `feature:<slug>` GitHub run). CodeRabbit is a one-shot recommendation source, not a validation loop. **Never** Task `review` with `orchestrate_coderabbit_gate` between stages, between GitHub issues, after a single issue while more issues remain in the queue, or after CodeRabbit remediation.
@@ -334,6 +549,14 @@ When **every** stage is complete and the **final** `verifier` has **APPROVED** (
 
 Orchestrate must **track** across the session: `coderabbit_runs` (must be `1` when this gate runs), `coderabbit_findings` (full numbered inventory from the one-shot run), `coderabbit_resolutions` (per-finding `fixed` / `deferred` / `not_applicable` evidence from developer/frontend-dev), `coderabbit_remediation_fixes` (items fixed after the one-shot run), and finding counts from the CodeRabbit run. Pass these into the **Completion (mandatory)** block below — never omit the CodeRabbit section.
 
+### Verifier escape analysis (CodeRabbit gate)
+
+When the CodeRabbit gate completes and any blocker findings were present, include a `### Verifier escape analysis` section in the completion report:
+- For each CodeRabbit blocker (Critical/Major/Minor), classify by category: `correctness`, `test/coverage`, `security`, `performance`, `contract/API`, `configuration`, or `other`.
+- For each, note whether the verifier should have caught it, which stage or issue it originated from, and a recommended missing verifier trigger or checklist rule.
+- Do not automatically modify configuration from findings. The analysis is an operator-visible calibration backlog, preventing speculative rule growth.
+- Skip this section when CodeRabbit had zero blockers or was skipped/not applicable.
+
 ## Difficulty-based completion gates (after CodeRabbit gate when applicable)
 
 When **every** stage is complete, the **final** `verifier` passes, and any required **CodeRabbit gate** has **`CODERABBIT_GATE: PASS`** or local CodeRabbit remediation has been verified complete after the one-shot run (or was skipped because **`easy`**):
@@ -342,9 +565,9 @@ When **every** stage is complete, the **final** `verifier` passes, and any requi
 2. **`easy`:** Skip extra gates. Go to **Completion (mandatory)** and prompt the user to switch to architect.
 3. **`medium`:** Invoke `review` via Task with: artifact path; aggregated completion summary (each `stage_id`, `files_changed`, `tests_run` outcomes, verifier verdict); **include CodeRabbit gate findings** when that gate ran. Require a concise post-execution assessment (sign-off vs remediation). If review indicates remediation, use `scribe` to update or create `.plan/review.<slug>.md` per existing review flow, then stop and prompt user to address remediation before final sign-off with architect.
 4. **`hard`:**  
-   - **(a)** Invoke `senior-dev` via Task for **scheduled post-implementation review** (not STAGE_STUCK escalation): pass artifact path, aggregated implementation summary, Goal + AcceptanceChecks excerpts, and **CodeRabbit gate findings** when that gate ran. Instruct: read-only assessment unless explicit fix is in scope; return `APPROVED` or a numbered remediation list. **No user confirmation required** for this scheduled gate (unlike escalation).  
-   - **(b)** Invoke `helper` via Task for **strategy conformance**: pass artifact path, Goal, AcceptanceChecks, and short summary of what was implemented. Instruct helper to compare implementation intent vs plan and list any logical/architectural mismatches (reasoning only; no code).  
-   - If senior-dev or helper flags blockers, invoke `helper` + `scribe` to amend the artifact as usual before prompting the user.
+    - **(a)** Invoke `senior-dev` via Task with `execution_mode: scheduled_review`: pass artifact path, aggregated implementation summary, Goal + AcceptanceChecks excerpts, verifier reports, coverage assessment, sandbox/security evidence, and **CodeRabbit gate findings** when that gate ran. Instruct: **read-only** in this mode; return `APPROVED`, `NEEDS_CHANGES`, or `BLOCKED` with numbered, evidence-backed findings. **No user confirmation required** for this scheduled gate (unlike escalation). Do not accept `HANDOFF_TO_DEVELOPER` in this mode.  
+    - **(b)** Invoke `helper` via Task for **strategy conformance**: pass artifact path, Goal, AcceptanceChecks, and short summary of what was implemented. Instruct helper to compare implementation intent vs plan and list any logical/architectural mismatches (reasoning only; no code).  
+    - If senior-dev or helper flags blockers, invoke `helper` + `scribe` to amend the artifact as usual before prompting the user.
 
 ## Environment gate rerun (after remediation)
 
@@ -390,6 +613,12 @@ When verifier passes for all stages, any required **CodeRabbit gate** has **`COD
 | Verifier | PASS | `<summary>` | None |
 | Difficulty gates | PASS / skipped | `<review/senior/helper evidence or reason>` | `<none or action>` |
 | PR finish | PASS / skipped | `<pr_url/action/message>` | `<none or action>` |
+
+### Verifier gate (required — do not omit)
+Per-stage verifier evidence. Architect Phase R spot-checks this against the issue's `verifier_gate:` comments.
+| Stage / issue | Verdict | report_grade | Test ids | Coverage (direct/indirect/manual/missing) | Gate comment |
+|---------------|---------|--------------|----------|--------------------------------------------|--------------|
+| `<stage_id>` | APPROVED | PASS | `<test ids>` | `<d>/<i>/<m>/<x>` | `<issue comment URL>` |
 
 ### CodeRabbit (required — do not omit)
 | Field | Value |

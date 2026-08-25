@@ -1,26 +1,15 @@
 ---
 description: Documentation accuracy review. Cross-checks docs against source.
 mode: subagent
-model: openrouter/openai/gpt-5-nano
+model: opencode/gpt-5-nano
 tools:
   write: false
   edit: false
   bash: true
   skill: true
 permission:
-  external_directory:
-    "~/.config/opencode/**": allow
-    "~/.ssh/**": deny
-    "~/.gnupg/**": deny
-    "~/.aws/**": deny
-    "*": ask
   edit: deny
   skill: { "doc-reviewer": "allow" }
-  bash:
-    "*": allow
-    "rm -rf /*": deny
-    "rm -rf ~/*": deny
-    "rm -rf $HOME/*": deny
   task: { "*": deny }
 ---
 # Doc Reviewer

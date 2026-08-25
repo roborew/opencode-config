@@ -1,7 +1,7 @@
 ---
 description: UI specialist
 mode: subagent
-model: openrouter/minimax/minimax-m3
+model: kilo/minimax/minimax-m3
 steps: 45
 tools:
   write: true
@@ -9,30 +9,14 @@ tools:
   bash: true
   skill: true
 permission:
-  external_directory:
-    "~/.config/opencode/**": allow
-    "~/.ssh/**": deny
-    "~/.gnupg/**": deny
-    "~/.aws/**": deny
-    "*": ask
-  skill: { "frontend-dev": "allow" }
-  edit:
-    "~/.config/opencode/**": deny
-    "*": allow
-  bash:
-    "*": allow
-    "rm -rf /*": deny
-    "rm -rf ~/*": deny
-    "rm -rf $HOME/*": deny
-    "git switch *": deny
-    "git checkout develop": deny
-    "git checkout main": deny
-    "git checkout master": deny
-    "git checkout -b *": deny
-    "git checkout -B *": deny
-    "git branch *": deny
-    "git switch -c *": deny
-    "git switch -C *": deny
+  skill:
+    {
+      "frontend-dev": "allow",
+      "cloudflare": "allow",
+      "wrangler": "allow",
+      "workers-best-practices": "allow",
+      "docker-sandbox": "allow"
+    }
 ---
 # Frontend Dev Agent
 
@@ -47,7 +31,8 @@ You are the Frontend Dev agent: a UI/design implementation specialist. You execu
   - Stage `Difficulty: hard`, or more than three UI-related files in `FilesToChange`.
   - First Task in this session for this artifact.
   - Visual regression or layout risk where tests alone may not suffice.
-- Skill load never blocks completion. If load fails, report `SKILL_UNAVAILABLE: frontend-dev` and stop unless the parent tells you to proceed without the skill.
+- **`docker-sandbox` (default when `test_commands` present):** load skill **`docker-sandbox`** whenever the stage/issue carries `test_commands` or a `compose_test_file`, regardless of whether compose is mentioned. Run RED/GREEN test commands via the Docker path by default (Sysbox `sandbox exec` on opencode-server, or direct `docker compose -f <compose_test_file>` on local dev when the `sandbox` CLI is absent) so evidence matches the verifier. Edits still happen on the host/worktree; the compose file volume-mounts source. Expose + tunnel/DNS only when `publish_review_url: true` or the user asks. Do **not** use Cloudflare Workers Sandbox docs under `skills/cloudflare/references/sandbox/`.
+- Skill load never blocks completion. If load fails, report `SKILL_UNAVAILABLE: frontend-dev` or `SKILL_UNAVAILABLE: docker-sandbox` and stop unless the parent tells you to proceed without the skill.
 
 ## Image review (`IMAGE_REVIEW_NEEDED`)
 

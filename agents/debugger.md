@@ -1,7 +1,7 @@
 ---
 description: Planning specialist for debugger-style plans
 mode: subagent
-model: openrouter/deepseek/deepseek-v4-flash
+model: opencode/deepseek-v4-pro
 tools:
   write: false
   edit: false
@@ -9,7 +9,13 @@ tools:
   skill: true
 permission:
   edit: deny
-  skill: { "debugger": "allow" }
+  skill:
+    {
+      "debugger": "allow",
+      "cloudflare": "allow",
+      "wrangler": "allow",
+      "workers-best-practices": "allow"
+    }
   task: { "*": deny }
 ---
 # Debugger Agent

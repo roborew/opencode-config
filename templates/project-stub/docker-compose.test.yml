@@ -1,0 +1,23 @@
+# docker-compose.test.yml — universal verification backend
+#
+# Required for every project with test_commands. The verifier (and developer
+# test runs) execute test_commands via this file — Sysbox `sandbox exec` on
+# opencode-server, or direct `docker compose -f docker-compose.test.yml` on
+# local dev (Docker Desktop). Host execution is NOT the default.
+#
+# Contract:
+#   - A `test` service that runs the project's test_commands self-contained,
+#     OR provides sufficient tooling to mock external dependencies.
+#   - Volume-mount the project source so uncommitted edits are tested without
+#     a rebuild (bind mount the repo root to the working dir).
+#   - Cleanup via `docker compose -f docker-compose.test.yml down`.
+#
+# Adapt the image, working_dir, and command to your stack. Example (Node):
+services:
+  test:
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: sh -c "npm ci && npm test"

@@ -56,6 +56,18 @@ _Avoid_: Close on accept, progressive close in impl
 Optional semantic code index via `mcp.claude-context` in `opencode.json`. Speeds discovery; OpenCode works without it (`MCP_FALLBACK`). **Host vs Docker:** `enabled: true` only for local-only Desktop/CLI; keep `enabled: false` on the host when attached to the Docker OpenCode server (container + Milvus indexes instead). Never enable both.
 _Avoid_: Running host and server `claude-context` together
 
+**Sandbox (Sysbox sibling)**:
+Optional opencode-server feature: ephemeral Sysbox sibling containers via the `sandbox` CLI for self-contained compose build/test (app + Caddy) and optional review publish. Gated by `OPENCODE_SANDBOX_ENABLED`; typically off on Mac. Agents use only the CLI — never invent host `docker.sock` or ad-hoc `sysbox-runc`. Preflight only probes; create/exec/expose/destroy live in skill `docker-sandbox`. **Orchestrate does not load that skill** — it instructs `developer` / `frontend-dev` / `verifier` Tasks to load it when compose/Docker/review URL applies, and menu **(2)** runs **Sandbox feature build mode** (build/refresh current branch without the issue queue). Unrelated to Cloudflare Workers Sandbox under `skills/cloudflare/references/sandbox/`.
+_Avoid_: Mounting host Docker socket into app compose; GPU/CUDA in sandbox; forcing Sysbox on Desktop; cloudflared in app compose; expecting orchestrate to run `sandbox` CLI itself
+
+**Review hostname**:
+Public feature review URL pattern `{feature-slug}.{apex}` (e.g. `blockshed.blockshared.com`), where apex comes from repo `review_domain` / `apex_domain` (or README). Nested Caddy is published to `127.0.0.1:<hostPort>` via `sandbox expose`; host cloudflared serves a public hostname on the **existing** tunnel; agents may create/update **tunnel public hostname + DNS**. Tunnel public hostname must use **service type HTTPS**, URL `https://127.0.0.1:<hostPort>`, and **No TLS Verify ON** — never HTTP service type (browsers need HTTPS). Orchestrate asks **“Publish review URL?”** once before instructing expose.
+_Avoid_: Global `reviews.*` suffix; `cloudflared tunnel create`; HTTP tunnel service type for review hostnames
+
+**App vs server Infisical**:
+OpenCode **server** Infisical injects secrets into the OpenCode process only. **App** Infisical for sandbox Compose comes from the mounted repo `.env` (setup create + paste). Sibling must reach Infisical over the network.
+_Avoid_: Assuming server Infisical populates app Compose; copying `.env.example` into `.env`
+
 ## Relationships
 
 - A **Spec feature** lives in the **Spec repo** as a PRD and produces **Fanout** child issues in one or more **Implementation repos**

@@ -81,7 +81,7 @@ Use MCP when it materially reduces uncertainty:
 - `claude-context` for discovering files to refactor and populating `FilesToChange` with evidence. Do not use bash, glob, or `rg` first when `claude-context` is healthy.
 - `context7` for external library docs when refactor touches framework APIs.
 - `docs-mcp-server` for internal references and implementation notes.
-- `dash-api` for API contract lookup when behavior is unclear.
+- `mcpjungle` for managed API and documentation upstreams, including Cloudflare.
 
 If `claude-context` is unavailable, errors, or indexing still fails after retry, you may fall back to shell discovery and should note `MCP_FALLBACK: claude-context unavailable or indexing failed — <error>` in the returned markdown.
 

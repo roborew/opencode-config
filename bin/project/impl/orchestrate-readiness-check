@@ -22,6 +22,11 @@ echo "Open issues: ${COUNT}"
 [[ "$COUNT" -gt 0 ]] || { echo "FAIL: no open issues"; exit 1; }
 
 VALIDATE="${OC}/bin/project/spec/lib/validate_issue_body.py"
+COMPOSE_TEST_FILE=""
+for f in docker-compose.test.yml compose.test.yaml; do
+  [[ -f "$f" ]] && { COMPOSE_TEST_FILE="$f"; break; }
+done
+TEST_CMDS_FOUND=0
 for n in $ISSUES; do
   BODY_FILE=$(mktemp)
   gh issue view "$n" --repo "$REPO" --json body -q .body >"$BODY_FILE"
@@ -32,6 +37,9 @@ for n in $ISSUES; do
   if python3 "$VALIDATE" "${ARGS[@]}" 2>/dev/null; then
     stages=$(sed -n '/```opencode-task-json/,/```/p' "$BODY_FILE" | sed '1d;$d' | jq '.stages | length' 2>/dev/null || echo "?")
     echo "OK task_id=${TID} stages=${stages}"
+    if sed -n '/```opencode-task-json/,/```/p' "$BODY_FILE" | sed '1d;$d' | jq -e '[.stages[]?.test_commands[]?] | length > 0' >/dev/null 2>&1; then
+      TEST_CMDS_FOUND=1
+    fi
   else
     python3 "$VALIDATE" "${ARGS[@]}" 2>&1 | sed 's/^/  /'
     echo "FAIL"
@@ -39,6 +47,14 @@ for n in $ISSUES; do
   fi
   rm -f "$BODY_FILE"
 done
+
+echo ""
+echo "Compose test file: ${COMPOSE_TEST_FILE:-none}"
+echo "Test commands present: $([[ "$TEST_CMDS_FOUND" -eq 1 ]] && echo yes || echo no)"
+if [[ "$TEST_CMDS_FOUND" -eq 1 && -z "$COMPOSE_TEST_FILE" ]]; then
+  echo "FAIL: issues define test_commands but the repo has no docker-compose.test.yml / compose.test.yaml. Add a self-contained compose test file before ready-for-agent."
+  FAIL=1
+fi
 
 echo ""
 if [[ -x "${OC}/skills/github-issue-run/lib/next-runnable-issue.sh" ]] || [[ -f "${OC}/skills/github-issue-run/lib/next-runnable-issue.sh" ]]; then

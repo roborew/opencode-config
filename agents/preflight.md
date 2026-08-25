@@ -1,27 +1,47 @@
 ---
 description: Environment readiness bootstrap — runtime, deps, smoke, claude-context indexing (no app code)
 mode: subagent
-model: openrouter/openai/gpt-5-nano
+model: opencode/gpt-5-nano
 steps: 15
 tools:
   write: false
   edit: false
+  read: false
   bash: true
   skill: true
 permission:
   external_directory:
-    "~/.config/opencode/**": allow
-    "~/.ssh/**": deny
-    "~/.gnupg/**": deny
-    "~/.aws/**": deny
-    "*": allow
-  edit: deny
-  skill: { "preflight": "allow" }
+    "*": "allow"
+  edit:
+    "*": "deny"
+    ".env": "allow"
+    ".env.*": "allow"
+    "*/.env": "allow"
+    "*/.env.*": "allow"
+    "**/.env": "allow"
+    "**/.env.*": "allow"
   bash:
-    "*": allow
-    "rm -rf /*": deny
-    "rm -rf ~/*": deny
-    "rm -rf $HOME/*": deny
+    "*": "allow"
+    "rm -rf /*": "deny"
+    "rm -rf ~/*": "deny"
+    "rm -rf ~": "deny"
+    "rm -rf $HOME/*": "deny"
+    "rm -rf $HOME": "deny"
+    "rm -rf /": "deny"
+    "rm -rf ~/.config/*": "deny"
+    "rm -rf $HOME/.config/*": "deny"
+    "sudo *": "deny"
+    "doas *": "deny"
+    "diskutil *": "deny"
+    "chmod 777*": "deny"
+    "chmod -R 777*": "deny"
+    "curl * | sh": "deny"
+    "curl * | bash": "deny"
+    "wget * | sh": "deny"
+    "wget * | bash": "deny"
+    "* | sudo *": "deny"
+    "* |sudo *": "deny"
+  skill: { "preflight": "allow", "docker-sandbox": "allow" }
 ---
 # Preflight agent
 
@@ -45,10 +65,11 @@ You are the **preflight** subagent: a single-purpose environment readiness speci
    ```bash
    bash "${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}/scripts/preflight-runtime.sh"
    ```
-   Use `project_node.command_prefix` for installs/builds. Treat `host_node` as OpenCode/image PATH — **never** recommend upgrading Docker/base Node to silence `engines.node`.
+   Use `project_node.command_prefix` for installs/builds. Treat `host_node` as OpenCode/image PATH — **never** recommend upgrading Docker/base Node to silence `engines.node`. In `execution_env: sandbox` mode, treat the sibling as the runtime and defer toolchain validation to `sandbox exec`.
 4. Never read or print the contents of `.env` / `.env.local` files.
 5. Run the repair pass **at most once** per invocation when checks fail repairably (`preflight-runtime.sh --repair` when applicable).
-6. Return one structured readiness report: `Status`, `preflight_checks`, `runtime` (from script), `worktree_env_evidence`, `repair_applied`, `claude_context_index`, and `recommended_env_fix` if Blocked.
+6. After runtime checks, if `sandbox` is on PATH, run `sandbox probe` and record `sandbox: ready` or `sandbox: unavailable` (CLI missing or probe fails → `unavailable`; never Blocked for that alone). Optionally note `.env` / Infisical key-name presence (no values). Set `expose: ready|not_ready|skipped` from sandbox status (localhost publish — never Block for expose alone).
+7. Return one structured readiness report: `Status`, `preflight_checks`, `runtime` (from script), `worktree_env_evidence`, `repair_applied`, `claude_context_index`, `sandbox`, `compose_test_file` (`docker-compose.test.yml` | `compose.test.yaml` | `none`), `docker` (`ready` | `unavailable`), `verification_gap` (`true` when `test_commands` exist but `compose_test_file: none`), `expose`, optional `sandbox_env_notes`, and `recommended_env_fix` if Blocked.
 
 ## Hard rules
 

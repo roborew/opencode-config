@@ -1,24 +1,14 @@
 ---
 description: Markdown and docs writer (write-only). PRD, docs, registry — not .plan artifacts in GitHub-first flow.
 mode: subagent
-model: openrouter/openai/gpt-5-nano
+model: opencode-go/deepseek-v4-flash
 tools:
   write: true
   edit: false
   bash: true
   skill: true
 permission:
-  external_directory:
-    "~/.config/opencode/**": allow
-    "~/.ssh/**": deny
-    "~/.gnupg/**": deny
-    "~/.aws/**": deny
-    "*": ask
   skill: { "scribe": "allow" }
-  bash:
-    "*": allow
-    "rm -rf /*": deny
-    "rm -rf ~/*": deny
 ---
 # Scribe Agent
 

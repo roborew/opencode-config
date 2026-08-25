@@ -30,7 +30,7 @@ python3 "$VALIDATE_PRD" "$PRD_PATH"
 PARENT_URL=$(python3 "$PRD_IO" get "$PRD_PATH" parent_issue)
 [[ -n "$PARENT_URL" ]] || { echo "parent_issue empty in frontmatter" >&2; exit 3; }
 
-for label in "prd-task" "feature:${SLUG}"; do
+for label in "prd-task" "feature:${SLUG}" "unverified" "verified"; do
   gh label create "$label" --repo "$(gh repo view --json nameWithOwner -q .nameWithOwner)" 2>/dev/null || true
 done
 
@@ -89,6 +89,8 @@ fanout_legacy_slices() {
     [[ -z "$KEY" ]] && continue
     gh label create "prd-task" --repo "$KEY" 2>/dev/null || true
     gh label create "feature:${SLUG}" --repo "$KEY" 2>/dev/null || true
+    gh label create "unverified" --repo "$KEY" 2>/dev/null || true
+    gh label create "verified" --repo "$KEY" 2>/dev/null || true
     if ! python3 -c "
 import sys
 from pathlib import Path
@@ -131,7 +133,7 @@ sys.exit(0 if '${KEY}' in repos else 1)
       --repo "$KEY" \
       --title "$TITLE" \
       --body "$ISSUE_BODY" \
-      --label "feature:${SLUG},state:ready-for-agent,mode:afk,category:feature,prd-task" \
+      --label "feature:${SLUG},state:ready-for-agent,mode:afk,category:feature,prd-task,unverified" \
       | tail -1)
     NUM=$(echo "$URL" | sed -E 's#.*/issues/##')
     task_map_set "legacy-$(echo "$KEY" | tr '/' '-')" "$NUM"
@@ -167,6 +169,8 @@ fanout_tickets() {
     REPO=$(jq -r --arg id "$TID" '.[] | select(.id==$id) | .repo' "$TMP")
     gh label create "prd-task" --repo "$REPO" 2>/dev/null || true
     gh label create "feature:${SLUG}" --repo "$REPO" 2>/dev/null || true
+    gh label create "unverified" --repo "$REPO" 2>/dev/null || true
+    gh label create "verified" --repo "$REPO" 2>/dev/null || true
     TITLE=$(jq -r --arg id "$TID" '.[] | select(.id==$id) | .title' "$TMP")
     CAPABILITY=$(jq -r --arg id "$TID" '.[] | select(.id==$id) | (.capability // .role // "")' "$TMP")
     OWNER=$(jq -r --arg id "$TID" '.[] | select(.id==$id) | .owner' "$TMP")
@@ -239,7 +243,7 @@ fanout_tickets() {
       --repo "$REPO" \
       --title "$TITLE" \
       --body "$ISSUE_BODY" \
-      --label "feature:${SLUG},state:ready-for-agent,${MODE_LABEL},category:feature,prd-task" \
+      --label "feature:${SLUG},state:ready-for-agent,${MODE_LABEL},category:feature,prd-task,unverified" \
       | tail -1)
     NUM=$(echo "$URL" | sed -E 's#.*/issues/##')
     task_map_set "$TID" "$NUM"
