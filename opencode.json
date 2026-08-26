@@ -165,8 +165,7 @@
         "kimi-k3": {
           "name": "Kimi K3",
           "options": {
-            "temperature": 1,
-            "top_p": 0.9
+            "temperature": 1
           }
         },
         "claude-opus-4-8": {
@@ -334,7 +333,7 @@
     },
     "senior-dev": {
       "mode": "subagent",
-      "model": "opencode-go/kimi-k3",
+      "model": "opencode/kimi-k3",
       "steps": 40
     },
     "vision": {
