@@ -49,7 +49,7 @@ permission:
     "* 2>> *": deny
     "*| tee *": deny
     "*|tee *": deny
-  skill: { "improve-codebase-architecture": "allow" }
+  skill: { "improve-codebase-architecture": "allow", "codebase-design": "allow" }
   task:
     "*": deny
     scribe: allow

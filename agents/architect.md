@@ -74,6 +74,7 @@ permission:
       "architect-review": "allow",
       "fanout-issues": "allow",
       "github-issue-run": "allow",
+      "codebase-design": "allow",
       "grill-me": "allow",
       "handoff": "allow",
       "to-tickets": "allow",
