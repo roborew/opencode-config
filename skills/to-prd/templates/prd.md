@@ -55,6 +55,7 @@ Each ticket object:
 | `owner` | yes | `developer`, `frontend-dev`, or `ux-dev` (should match registry `agent_owner` for the repo unless this is a shared prototype stage). |
 | `mode` | no | `afk` or `hitl` → label `mode:afk` / `mode:hitl` (default `afk`). |
 | `depends_on` | no | List of ticket `id` values that must be merged/closed before this ticket is runnable; fanout resolves them to **Blocked by: #n** lines. |
+| `feature_group` | no | Feature worktree slug, rendered as `feature/<slug>`; tickets in a group share one feature base branch. |
 | `acceptance` | yes | List of product-outcome acceptance criteria strings. |
 | `body` | no | Extra markdown appended under **Description** in the issue body. |
 

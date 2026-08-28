@@ -10,7 +10,7 @@ tools:
 permission:
   edit: deny
   skill:
-    { "orchestrate-execution": "allow", "orchestrate-bootstrap": "allow", "github-issue-run": "allow", "orchestrate-sandbox": "allow", "orchestrate-verification": "allow", "orchestrate-recovery": "allow", "orchestrate-completion": "allow", "handoff": "allow", "zoom-out": "allow", "caveman": "allow", "fallback-dispatch": "allow" }
+    { "orchestrate-execution": "allow", "orchestrate-bootstrap": "allow", "github-issue-run": "allow", "orchestrate-sandbox": "allow", "orchestrate-verification": "allow", "orchestrate-recovery": "allow", "orchestrate-completion": "allow", "feature-worktree": "allow", "handoff": "allow", "zoom-out": "allow", "caveman": "allow", "fallback-dispatch": "allow" }
   task:
     "*": deny
     scribe: allow

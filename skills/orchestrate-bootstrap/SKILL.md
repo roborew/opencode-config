@@ -21,7 +21,7 @@ roleReminder: "Load before work selection; reload only when checkout identity ch
 (4) Something else (debug, refactor, doc review, etc.) — describe the task; usually switch to `architect` unless they give a `feature:<slug>`, issue #, or narrow execution scope
 ```
 
-5. For `(1)`, capture the kebab-case slug and Task `developer` with `load: minimal` to run `opencode-run impl orchestrate-readiness-check <slug>` with the verified repo-root expectation. PASS requires non-empty `stages[]` and implementation planning on every open feature ticket. FAIL stops and returns to spec architect option 1; never enter flat mode or local-plan compatibility.
+5. For `(1)`, capture the kebab-case slug and detect whether the run is a feature-worktree fan-out. Load `feature-worktree` to create the feature branch and schedule dependency-safe manual batches, then run `opencode-run impl orchestrate-readiness-check <slug>` with the verified repo-root expectation. PASS requires non-empty `stages[]` and implementation planning on every open feature ticket. FAIL stops and returns to spec architect option 1.
 6. For `(2)`, load `orchestrate-sandbox`; do not enter the GitHub queue. For `(3)`, stop with the implementation architect Phase R handoff. For `(4)`, route to architect unless the message supplies an explicit queue or sandbox request.
 
 ## Environment State
