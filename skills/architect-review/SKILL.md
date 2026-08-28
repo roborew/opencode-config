@@ -81,6 +81,10 @@ Accept helper: $OC/skills/architect-review/lib/mode-f-accept-issues.sh (--repo O
 Parent issue: parse parent_issue URL from docs/prd/<slug>.md frontmatter (for remediation sub-issues)
 ```
 
+### Feature regression gate
+
+After all feature sub-PRs merge into `feature/<slug>`, Task `code-review` in feature mode for full regression, integration, and e2e checks using the documented Docker/Sysbox path. Run final manual QA only for user-facing or high-risk behavior. Any defect becomes a new remediation ticket via `to-tickets --parent-issue`, and each remediation ticket gets a new child worktree off `feature/<slug>`; merged tickets are never reopened.
+
 ### Phase R — PR feedback triage (first after orchestrate PR, or re-check after remediation)
 
 Run when:
