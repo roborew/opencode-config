@@ -331,6 +331,11 @@
       "model": "opencode/deepseek-v4-flash",
       "steps": 30
     },
+    "designer": {
+      "mode": "subagent",
+      "model": "opencode/gemini-3-flash",
+      "steps": 15
+    },
     "senior-dev": {
       "mode": "subagent",
       "model": "opencode/kimi-k3",
@@ -340,16 +345,6 @@
       "mode": "subagent",
       "model": "opencode/gemini-3-flash",
       "steps": 5
-    },
-    "designer": {
-      "mode": "subagent",
-      "model": "opencode/gemini-3-flash",
-      "steps": 10
-    },
-    "ux-dev": {
-      "mode": "subagent",
-      "model": "opencode/gemini-3-flash",
-      "steps": 30
     },
     "helper": {
       "mode": "subagent",
@@ -424,6 +419,11 @@
     "frontend-dev": {
       "mode": "subagent",
       "model": "kilo/minimax/minimax-m3",
+      "steps": 30
+    },
+    "ux-dev": {
+      "mode": "subagent",
+      "model": "opencode/gemini-3-flash",
       "steps": 30
     },
     "kilo-fallback": {

@@ -82,7 +82,8 @@ For each issue in this repo (respect **Blocked by** / `depends_on`):
 ### Refactor / risks
 ```
 
-4. Build **`opencode-task-json`** `stages[]` from the stage plan (validator reads JSON fence).
+4. If design uncertainty required `designer`, embed its brief in the Implementation plan and set `design_delivery` to `brief-only` or `prototype-required`. For `prototype-required`, build ordered stages with `ux-prototype` owned by `ux-dev` and `react-implementation` owned by `frontend-dev`, with the latter depending on the former. For `brief-only`, route directly to `frontend-dev`.
+5. Build **`opencode-task-json`** `stages[]` from the stage plan (validator reads JSON fence).
 5. Show the human a concise summary → on approval → Task **developer** `load: minimal` with `repo: owner/name` → `gh issue edit <n> --repo owner/name --body-file …`.
 
 ### 4. Gates — you run
