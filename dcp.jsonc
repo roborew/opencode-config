@@ -3,6 +3,6 @@
   "retention": {
     "maxToolCallTurns": 50,
     "dropRedundantFileReads": true,
-    "preserveSubstrings": ["scribe", ".plan/", "SCRIBE_", "verifier", "VERIFIER_"]
+    "preserveSubstrings": ["scribe", "SCRIBE_"]
   }
 }

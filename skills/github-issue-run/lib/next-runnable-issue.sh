@@ -58,7 +58,7 @@ extract_meta() {
     [[ -n "$out" ]] || out=null
     echo "$out"
   else
-    printf '%s' "$body" | sed -n '/```opencode-task-yaml/,/```/p;/```opencode-task-json/,/```/p' | sed '1d;$d' | jq -c . 2>/dev/null || echo null
+    printf '%s' "$body" | sed -n '/```opencode-task-yaml/,/```/p' | sed '1d;$d' | jq -c . 2>/dev/null || echo null
   fi
 }
 
