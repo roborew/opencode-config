@@ -1,6 +1,6 @@
 # HTML Prototype Generation Template
 
-Use this template for `.plan/design.<slug>.md` artifacts and `ux-dev` execution prompts.
+Use this template for Architect Prototype Design briefs embedded in GitHub issue implementation plans and `ux-dev` execution prompts.
 
 Act as an expert frontend developer and UX/UI designer. Your task is to generate a complete, responsive, and accessible website prototype based on the requirements below.
 

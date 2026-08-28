@@ -15,6 +15,11 @@ import re
 import sys
 from typing import Any
 
+try:
+    import yaml  # type: ignore
+except ImportError:
+    yaml = None
+
 
 PLACEHOLDER_MARKERS = (
     "_Map PRD user stories",
@@ -31,12 +36,15 @@ def extract_section(body: str, name: str) -> str | None:
 
 
 def extract_meta(body: str) -> dict[str, Any] | None:
-    m = re.search(r"```opencode-task-json\s*\n(.*?)\n```", body, re.DOTALL)
+    m = re.search(r"```opencode-task-(?:yaml|json)\s*\n(.*?)\n```", body, re.DOTALL)
     if not m:
         return None
     try:
+        if m.group(0).startswith("```opencode-task-yaml"):
+            parsed = yaml.safe_load(m.group(1)) if yaml else None
+            return parsed if isinstance(parsed, dict) else None
         return json.loads(m.group(1))
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, TypeError, ValueError):
         return None
 
 
@@ -66,6 +74,10 @@ def validate(body: str, level: str, expected_task_id: str | None) -> list[str]:
         for field in ("owner", "commit_message", "acceptance", "test_commands"):
             if field not in meta:
                 errors.append(f"opencode-task-json missing {field}")
+        if meta.get("owner") not in {"developer", "frontend-dev", "ux-dev"}:
+            errors.append("opencode-task owner must be developer, frontend-dev, or ux-dev")
+        if meta.get("design_delivery") not in (None, "brief-only", "prototype-required"):
+            errors.append("design_delivery must be brief-only or prototype-required")
 
     us = extract_section(body, "User stories covered")
     ip = extract_section(body, "Implementation plan")
@@ -93,6 +105,8 @@ def validate(body: str, level: str, expected_task_id: str | None) -> list[str]:
             for sf in ("stage_id", "owner", "objective", "acceptance", "test_commands", "commit_message"):
                 if sf not in stage:
                     errors.append(f"stages[{i}] missing {sf}")
+            if stage.get("owner") not in {"developer", "frontend-dev", "ux-dev"}:
+                errors.append(f"stages[{i}] owner must be developer, frontend-dev, or ux-dev")
 
     return errors
 

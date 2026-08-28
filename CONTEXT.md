@@ -29,7 +29,7 @@ Implementation-repo planning that enriches fanout (or targeted) issues with Impl
 _Avoid_: Local issue plan, `.plan/issue.*`
 
 **Stage**:
-One TDD slice within an issue's `stages[]` array; orchestrate dispatches `developer`/`frontend-dev` per stage with `execution_mode: github_issue_stage`.
+One TDD slice within an issue's `stages[]` array; orchestrate dispatches `developer`/`frontend-dev`/`ux-dev` per stage with `execution_mode: github_issue_stage`.
 _Avoid_: Step, phase file
 
 **GitHub-as-source-of-truth**:

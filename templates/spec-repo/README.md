@@ -19,7 +19,7 @@ Shell bootstrap (from project parent, once): `setup-project` with `GH_ORG` set.
 2. Publish parent issues (see `.github/ISSUE_TEMPLATE/prd-parent.yml`).
 3. In **spec** repo: **architect option 1** — grill-me → to-prd → fanout → issue-expand (all impl siblings) → gates → execution handoff(s).
 4. In each **implementation** repo (new orchestrate session): **orchestrate** with `feature:<slug>` from the handoff.
-5. Back in **spec** repo: **architect option 4** Mode F sign-off per impl PR, then **feature-complete** when all repos are done.
+5. Back in **spec** repo: **architect option 3** feature-complete after implementation-repo sign-off per impl PR.
 
 ## Labels
 

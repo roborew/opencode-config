@@ -66,7 +66,7 @@ If a subagent reports `ENV_BLOCKED`:
 
 **Verifier-specific `ENV_BLOCKED` / toolchain gap (never developer-substitute):**
 - If the **verifier** reports `ENV_BLOCKED` or cannot run the project toolchain (e.g. Ruby/mise/bundle missing on its host), re-dispatch the **verifier** with the Docker path: `sandbox: preferred` + `load skill: docker-sandbox` + `compose_test_file`, instructing it to run `test_commands` via Docker (Sysbox `sandbox exec` on opencode-server, or direct `docker compose -f <compose_test_file>` on local dev when the `sandbox` CLI is absent).
-- **Never** route verification through a `developer` / `frontend-dev` / `ux-dev` worker ("only verify, don't edit"). A developer report is not the independent gate.
+- **Never** route verification through a `developer` / `frontend-dev` worker ("only verify, don't edit"). A developer report is not the independent gate.
 - If Docker itself is unavailable, escalate to the user with **one** option (bring up Docker / add `docker-compose.test.yml`) — do not silently fall back to host verification.
 
 Do not let subagents loop on runtime/toolchain commands when environment is mismatched.
@@ -83,7 +83,7 @@ When you receive a review artifact (`.plan/review.<slug>.md`) from architect wit
 
 ## Loop Detection and Halt (mandatory)
 
-If you receive the same or near-identical report from a child (scribe, developer, frontend-dev, ux-dev, verifier) **2 or more times**:
+If you receive the same or near-identical report from a child (scribe, developer, frontend-dev, verifier) **2 or more times**:
 
 1. Treat the child as `BLOCKED` (loop/stall), not `PASS`.
 2. Invoke `helper` immediately with loop evidence and request minimal recovery strategy.
@@ -133,7 +133,7 @@ After both `kilo-fallback` and `openrouter-fallback` fail for the same Task, hal
 
 ## Manual Handoff Recovery (when Task does not return)
 
-If the user reports that a subagent (developer, frontend-dev, ux-dev, scribe, verifier, helper, senior-dev) completed and produced a report but the Task did not return control:
+If the user reports that a subagent (developer, frontend-dev, verifier, scribe, helper, senior-dev) completed and produced a report but the Task did not return control:
 
 1. Ask the user to paste the completion report here.
 2. Grade the report using the Child Report Grading Gate from **`orchestrate-execution`** (PASS/NEEDS_RETRY/BLOCKED).

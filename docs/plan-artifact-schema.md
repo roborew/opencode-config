@@ -17,7 +17,7 @@ Legacy `opencode-task-json` fences are still parsed during migration.
 | Field | Required | Purpose |
 |-------|----------|---------|
 | `task_id` | yes | Stable id from PRD ticket |
-| `owner` | yes | `developer` or `frontend-dev` |
+| `owner` | yes | `developer`, `frontend-dev`, or `ux-dev` |
 | `depends_on` | no | Ticket ids (fanout → **Blocked by**) |
 | `capability` | no | Registry capability |
 | `stages` | no | Must be empty at fanout; added by **issue-expand** |
@@ -38,7 +38,7 @@ When non-empty, **orchestrate** runs one stage per loop (`execution_mode: github
 | Field | Required | Purpose |
 |-------|----------|---------|
 | `stage_id` | yes | e.g. `1-red`, `2-green` |
-| `owner` | yes | `developer` or `frontend-dev` |
+| `owner` | yes | `developer`, `frontend-dev`, or `ux-dev` |
 | `objective` | yes | One stage goal |
 | `files` | no | Paths to touch (from codebase discovery) |
 | `acceptance` | yes | Stage acceptance strings |
@@ -102,7 +102,7 @@ If environment is blocked:
 - `debug.<slug>.md` — Bug fix (from `debugger`)
 - `refactor.<slug>.md` — Refactor migration (from `refactor`)
 - `review.<slug>.md` — Review changes (from `review`)
-- `design.<slug>.md` — Prototype design brief (from `designer`); orchestrate dispatches `ux-dev` to generate code in `.prototype/<slug>/`
+- Prototype design briefs from `designer` are embedded in GitHub issue implementation plans; `design_delivery: prototype-required` adds ordered `ux-dev` then `frontend-dev` stages.
 
 ### Test-driven development (TDD) — mandatory
 

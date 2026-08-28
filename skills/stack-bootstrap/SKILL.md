@@ -21,9 +21,9 @@ Copy when missing or when parent says `force: true` for that file:
 
 | Source | Destination (under `local_path`) |
 |--------|----------------------------------|
-| `skills/setup-skills/templates/issue-tracker.md` | `docs/agents/issue-tracker.md` (set `SPEC_REPO:` line) |
-| `skills/setup-skills/templates/triage-labels.md` | `docs/agents/triage-labels.md` |
-| `skills/setup-skills/templates/domain.md` | `docs/agents/domain.md` |
+| Inline GitHub ticket seed below | `docs/agents/issue-tracker.md` (set `SPEC_REPO:` line) |
+| Inline triage-label seed below | `docs/agents/triage-labels.md` |
+| Inline domain-doc seed below | `docs/agents/domain.md` |
 | `templates/.github/ISSUE_TEMPLATE/child-feature.yml` | `.github/ISSUE_TEMPLATE/child-feature.yml` |
 | `docs/templates/opencode.md.template` | `opencode.md` (only if missing) |
 
@@ -63,3 +63,51 @@ Archived during setup-project when work moved to GitHub issue-backed execution.
 ```
 
 Return exit code and last 30 lines of output.
+
+## Canonical inline seeds
+
+The three `docs/agents/` seeds are defined here because they are shared by stack bootstrap and single-repository setup. Do not look for a second `skills/setup-skills/templates/` hierarchy.
+
+### `docs/agents/issue-tracker.md`
+
+```markdown
+# Issue tracker
+
+Issues for this repository are tracked on **GitHub**.
+
+- **CLI:** `gh issue create`, `gh issue view`, `gh issue list`
+- **Remote:** (fill from `git remote get-url origin`)
+- **Spec repo:** (fill `SPEC_REPO:` when this is an implementation repo)
+```
+
+### `docs/agents/triage-labels.md`
+
+```markdown
+# Triage labels
+
+| Role | Label on this repo |
+|------|---------------------|
+| Needs triage | needs-triage |
+| Needs info | needs-info |
+| Ready for agent | ready-for-agent |
+| Ready for human | ready-for-human |
+| Won't fix | wontfix |
+```
+
+### `docs/agents/domain.md`
+
+```markdown
+# Domain docs for agents
+
+## Layout
+
+- **Mode:** single-context | multi-context
+- **Glossary:** `CONTEXT.md` at repo root (or see `CONTEXT-MAP.md` for paths)
+- **ADRs:** `docs/adr/` (system-wide); bounded contexts may use `<context>/docs/adr/`
+
+## Consumer rules
+
+1. Before naming entities in tickets, read the active `CONTEXT.md`.
+2. Before changing architecture, scan `docs/adr/` for decisions in that area.
+3. `CONTEXT.md` is glossary-only, not implementation specs.
+```

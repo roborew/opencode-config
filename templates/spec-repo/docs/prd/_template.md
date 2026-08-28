@@ -52,7 +52,7 @@ Each ticket object:
 | `repo` | yes | Full GitHub repo `owner/name` (must match `docs/agents/repos.md`). |
 | `capability` | yes | One responsibility from that repo's `capabilities` list in `docs/agents/repos.md`. |
 | `title` | yes | Issue title. Must be unique within the target repo for this PRD. |
-| `owner` | yes | `developer` or `frontend-dev` (should match registry `agent_owner` for the repo). |
+| `owner` | yes | `developer`, `frontend-dev`, or `ux-dev` (should match registry `agent_owner` for the repo unless this is a shared prototype stage). |
 | `mode` | no | `afk` or `hitl` → label `mode:afk` / `mode:hitl` (default `afk`). |
 | `depends_on` | no | List of ticket `id` values that must be merged/closed before this ticket is runnable; fanout resolves them to **Blocked by: #n** lines. |
 | `acceptance` | yes | List of product acceptance criteria strings (shown under **Requirements** on the issue). |

@@ -15,7 +15,7 @@
 				"defaultModel": "opencode-go/deepseek-v4-flash"
 			},
 			"improve-codebase-architecture": {
-				"description": "Periodic codebase audit (HTML + optional security); remediation via to-issues → orchestrate",
+        		"description": "Periodic codebase audit (HTML + optional security); remediation via to-tickets → orchestrate",
 				"defaultModel": "opencode-go/qwen3.7-max"
 			},
 			"fanout-issues": {
