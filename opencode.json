@@ -381,6 +381,11 @@
       "model": "kilo/minimax/minimax-m3",
       "steps": 35
     },
+    "test-writer": {
+      "mode": "subagent",
+      "model": "opencode/deepseek-v4-flash",
+      "steps": 25
+    },
     "review": {
       "mode": "subagent",
       "model": "opencode/deepseek-v4-flash",

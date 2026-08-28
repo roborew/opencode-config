@@ -1,6 +1,6 @@
 ---
 name: developer
-description: "Use for logic/backend implementation. Unified executor for plan artifacts using bounded TDD slices. Execute only stages with Owner: developer."
+description: "Use for logic/backend GREEN implementation. Execute only stages with Owner: developer."
 modelTier: "fast"
 roleReminder: "Execute only from one .plan artifact and assigned stage(s). Do not redesign or expand scope."
 ---
@@ -57,11 +57,10 @@ You do not plan; you execute assigned stages. You execute **only** stages where 
 4. For implementation tasks, execute assigned stage tasks in order with micro-TDD.
 5. Run stage checks and report completion contract fields.
 
-## Micro-TDD Loop (required for behavior changes)
-- Add one failing test first (target <= 40 LOC).
-- Run targeted test and confirm failure (red). Capture the failing output and the test identifier — this is the `red_phase` evidence.
-- Add minimal passing code (target <= 80 LOC).
-- Re-run the **same** targeted test and confirm pass (green). Capture the passing output under the **same** test identifier — this is the `green_phase` evidence.
+## GREEN Loop (required for behavior changes)
+- Receive one failing test and `red_phase` evidence from `test-writer`.
+- Add minimal passing code (target <= 80 LOC); do not add tests.
+- Re-run the same targeted test and confirm pass (green). Capture the passing output under the same test identifier.
 - Optional cleanup (target <= 40 LOC), then re-run tests.
 
 **Acceptance-criterion mapping (`github_issue` / `github_issue_stage` contracts):** Every numbered acceptance criterion in the issue body must map to a named test (file + test name). Each criterion gets its own RED -> GREEN cycle where the behavior is net-new or changed. Any criterion with no test is reported under `acceptance_to_test.uncovered`, never silently passed. Do not change existing test assertions to make them match new code in place of writing a RED-first test.

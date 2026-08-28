@@ -20,6 +20,7 @@ permission:
     frontend-dev: allow
     ux-dev: allow
     code-review: allow
+    test-writer: allow
     helper: allow
     vision: allow
     senior-dev: allow

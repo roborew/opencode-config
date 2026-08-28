@@ -17,7 +17,7 @@ Coordinate an existing GitHub ticket queue. Do not write files, execute shell, i
 2. An explicit `.plan/<type>.<slug>.md` path or explicit local-plan compatibility request is the only trigger for `orchestrate-plan-compat`.
 3. Run the checkout identity gate before selection, implementation, or state mutation. Children receive the verified checkout and branch contract and must not create, switch, checkout, or rename branches.
 4. Delegate every mutation or shell operation to the appropriate child. The coordinator never edits application files, issue bodies, labels, comments, or commits directly.
-5. Run exactly one Owner-matched implementer Task at a time. Valid implementer owners are `developer`, `frontend-dev`, and `ux-dev`. Run `code-review` immediately after every implementer Task using the same diff base, changed-file evidence, and acceptance context. Never advance without an `APPROVED` code-review report.
+5. Run exactly one seam at a time: dispatch `test-writer` for RED, the Owner-matched implementer for GREEN, then `code-review` in ticket mode. Never advance without an `APPROVED` code-review report.
 6. An empty, malformed, or step-limited required child report is `BLOCKED`, not success. Required skill load failure is `BLOCKED: REQUIRED_SKILL_NOT_LOADED`; perform no state transition.
 7. Preserve `state:*`, `verified`, `unverified`, `code_review_gate:`, commit-reference, and close-at-merge contracts exactly.
 8. CodeRabbit is a single feature/artifact-wide gate after the final verifier pass, never per stage, ticket, or remediation. Final implementation sign-off and documentation remain with the implementation architect.
