@@ -101,6 +101,26 @@ if [[ ! -f skills/github-issue-run/lib/checkout-contract.sh ]]; then
   ERR=1
 fi
 
+echo "Checking feature workflow contracts..."
+for f in agents/code-review.md skills/code-review/SKILL.md agents/test-writer.md skills/test-writer/SKILL.md skills/feature-worktree/SKILL.md; do
+  if [[ ! -f "$f" ]]; then
+    echo "  MISSING: $f"
+    ERR=1
+  fi
+done
+if [[ -f agents/verifier.md || -f skills/verifier/SKILL.md ]]; then
+  echo "  ERROR: verifier role must be removed"
+  ERR=1
+fi
+if grep -R -n '```opencode-task-json' bin/project/spec templates/spec-repo/bin templates/bin >/dev/null 2>&1; then
+  echo "  ERROR: JSON task fences remain in builders or validators"
+  ERR=1
+fi
+if ! grep -q 'feature-worktree' agents/orchestrate.md; then
+  echo "  MISSING: feature-worktree orchestrate routing"
+  ERR=1
+fi
+
 echo "Checking worktree-env / preflight bootstrap scripts..."
 for f in scripts/worktree-env.sh scripts/preflight-worktree-verify.sh scripts/preflight-runtime.sh; do
   if [[ ! -f "$f" ]]; then
