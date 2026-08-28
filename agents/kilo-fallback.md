@@ -25,7 +25,7 @@ permission:
     {
       "fallback-dispatch": "allow",
       "developer": "allow",
-      "verifier": "allow",
+      "code-review": "allow",
       "senior-dev": "allow",
       "helper": "allow",
       "scribe": "allow",

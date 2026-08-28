@@ -376,7 +376,7 @@
       "model": "opencode/gpt-5-nano",
       "steps": 15
     },
-    "verifier": {
+    "code-review": {
       "mode": "subagent",
       "model": "kilo/minimax/minimax-m3",
       "steps": 35

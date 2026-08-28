@@ -9,7 +9,7 @@ roleReminder: "Load once when orchestrate begins coordination; load lifecycle sk
 
 ## Scope
 
-Coordinate an existing GitHub ticket queue or an explicitly selected local-plan compatibility run. Do not write files, execute shell, invent queue logic, or load lifecycle skills speculatively.
+Coordinate an existing GitHub ticket queue. Do not write files, execute shell, invent queue logic, or load lifecycle skills speculatively.
 
 ## Immutable Invariants
 
@@ -17,9 +17,9 @@ Coordinate an existing GitHub ticket queue or an explicitly selected local-plan 
 2. An explicit `.plan/<type>.<slug>.md` path or explicit local-plan compatibility request is the only trigger for `orchestrate-plan-compat`.
 3. Run the checkout identity gate before selection, implementation, or state mutation. Children receive the verified checkout and branch contract and must not create, switch, checkout, or rename branches.
 4. Delegate every mutation or shell operation to the appropriate child. The coordinator never edits application files, issue bodies, labels, comments, or commits directly.
-5. Run exactly one Owner-matched implementer Task at a time. Valid implementer owners are `developer`, `frontend-dev`, and `ux-dev`. Run `verifier` immediately after every implementer Task using the same diff base, changed-file evidence, and acceptance context. Never advance without an `APPROVED` verifier report graded `PASS`.
+5. Run exactly one Owner-matched implementer Task at a time. Valid implementer owners are `developer`, `frontend-dev`, and `ux-dev`. Run `code-review` immediately after every implementer Task using the same diff base, changed-file evidence, and acceptance context. Never advance without an `APPROVED` code-review report.
 6. An empty, malformed, or step-limited required child report is `BLOCKED`, not success. Required skill load failure is `BLOCKED: REQUIRED_SKILL_NOT_LOADED`; perform no state transition.
-7. Preserve `state:*`, `verified`, `unverified`, `verifier_gate:`, commit-reference, and close-at-merge contracts exactly. Do not change labels or comments as part of this context refactor.
+7. Preserve `state:*`, `verified`, `unverified`, `code_review_gate:`, commit-reference, and close-at-merge contracts exactly.
 8. CodeRabbit is a single feature/artifact-wide gate after the final verifier pass, never per stage, ticket, or remediation. Final implementation sign-off and documentation remain with the implementation architect.
 
 ## Lifecycle States
@@ -34,7 +34,6 @@ Use one state at a time and retain only concise gate evidence:
 | `verify` | Implementer Task returns | `orchestrate-verification` |
 | `recover` | Child failure, loop, blocker, or missing report | `orchestrate-recovery` |
 | `complete` | Queue exhausted and all acceptance gates pass | `orchestrate-completion` |
-| `plan_compat` | Explicit local-plan path/request only | `orchestrate-plan-compat` |
 
 Record each loaded skill with its observed trigger and state in the lifecycle log from `agents/orchestrate.md`. Record skipped checklist items with a reason; do not create a log file.
 
@@ -42,10 +41,9 @@ Record each loaded skill with its observed trigger and state in the lifecycle lo
 
 1. Fresh context: load `orchestrate-bootstrap`; resolve preflight choice, checkout identity, Claude Context readiness, and work selection before implementation.
 2. GitHub backlog: after slug capture and readiness PASS, load `github-issue-run`; discover one runnable ticket, claim it, and dispatch its Owner.
-3. Implementer return: load `orchestrate-verification`; grade the report, dispatch `verifier`, and post required verifier evidence before advancement.
+3. Implementer return: load `orchestrate-verification`; grade the report, dispatch `code-review`, and post required review evidence before advancement.
 4. Any failure or missing evidence: load `orchestrate-recovery`; do not advance until its recovery gate is satisfied.
 5. Queue exhaustion: load `orchestrate-completion`; run the one-shot CodeRabbit and difficulty gates, PR stabilization, and completion handoff.
-6. Explicit local plan: load `orchestrate-plan-compat`; keep that path isolated from GitHub queue behavior.
 
 ## Required Task Contract
 
@@ -59,11 +57,11 @@ main_checkout_root: <root when known>
 branch_policy: do not create, switch, checkout, or rename branches
 ```
 
-Verification Tasks additionally include `diff_base`, `files_changed`, `acceptance_to_test`, `red_phase`, `green_phase`, `assertion_delta`, `security_review`, and GitHub `issue_number`/`repo` when applicable. When `test_commands` exist, include the Docker-default contract from `orchestrate-verification`.
+Code-review Tasks additionally include `diff_base`, `files_changed`, `acceptance_to_test`, `red_phase`, `green_phase`, `assertion_delta`, `security_review`, and GitHub `issue_number`/`repo` when applicable. When `test_commands` exist, include the Docker-default contract from `orchestrate-verification`.
 
 ## Child Report Grade
 
-`PASS` requires the expected identifier, changed files, RED and matching GREEN evidence, explicit `assertion_delta`, acceptance mapping for every numbered criterion, tests/checks, and no blockers. `NEEDS_RETRY` covers missing or weak evidence. `BLOCKED` covers an explicit blocker, unsafe scope, unavailable required skill, or environment failure. Acceptance-verifier `PASS` additionally requires non-missing criterion coverage and resolved security status.
+`PASS` requires the expected identifier, changed files, RED and matching GREEN evidence, explicit `assertion_delta`, acceptance mapping for every numbered criterion, tests/checks, and no blockers. `NEEDS_RETRY` covers missing or weak evidence. `BLOCKED` covers an explicit blocker, unsafe scope, unavailable required skill, or environment failure. Code-review `APPROVED` additionally requires non-missing criterion coverage and resolved security status.
 
 ## Completion Definition
 
