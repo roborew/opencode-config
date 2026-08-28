@@ -97,7 +97,7 @@ cd ~/code/APP && setup-project
 
 ## Canonical issue body
 
-Parent PRD · User stories · Requirements · **Implementation plan** · **opencode-task-json** · Description · Blocked by
+Parent PRD · User stories · Requirements · **Implementation plan** · **opencode-task-yaml** · Description · Blocked by
 
 Details: [plan-artifact-schema.md](plan-artifact-schema.md).
 

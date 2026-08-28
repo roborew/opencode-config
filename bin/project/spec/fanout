@@ -257,7 +257,7 @@ if [[ "${TICKET_COUNT}" -gt 0 ]]; then
   fanout_tickets
   echo "==> Auditing ticket ↔ issue mapping..."
   "${BIN_DIR}/fanout-audit" "$SLUG"
-  echo "==> Normalizing child issue bodies (Parent PRD, opencode-task-json, sections)..."
+  echo "==> Normalizing child issue bodies (Parent PRD, opencode-task-yaml, sections)..."
   "${BIN_DIR}/sync-fanout-bodies" "$SLUG"
   echo "==> Validating fanout contract..."
   "${BIN_DIR}/feature-check" "$SLUG" --level fanout

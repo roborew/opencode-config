@@ -14,7 +14,6 @@ Coordinate an existing GitHub ticket queue. Do not write files, execute shell, i
 ## Immutable Invariants
 
 1. GitHub tickets are the source of truth for normal execution. A missing, malformed, or unready GitHub queue is a blocking readiness failure, never an implicit local-plan fallback.
-2. An explicit `.plan/<type>.<slug>.md` path or explicit local-plan compatibility request is the only trigger for `orchestrate-plan-compat`.
 3. Run the checkout identity gate before selection, implementation, or state mutation. Children receive the verified checkout and branch contract and must not create, switch, checkout, or rename branches.
 4. Delegate every mutation or shell operation to the appropriate child. The coordinator never edits application files, issue bodies, labels, comments, or commits directly.
 5. Run exactly one seam at a time: dispatch `test-writer` for RED, the Owner-matched implementer for GREEN, then `code-review` in ticket mode. Never advance without an `APPROVED` code-review report.

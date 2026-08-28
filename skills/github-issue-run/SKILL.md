@@ -13,7 +13,7 @@ Companion to **`orchestrate-execution`** when working from a **GitHub `feature:<
 
 - Session bootstrap completed: user chose preflight **yes** (`env_gate_passed`) or **no** (`env_gate_declined`) before work selection.
 - **Checkout identity gate** completed: `checkout_contract` captured (`impl_repo_path`, `branch`, `branch_policy`) — mandatory even when preflight was declined.
-- Implementation repo with child issues from spec fanout and technical planning targeted at that implementation repo (normally coordinated from the spec session with `--cwd`; current runtime accepts `opencode-task-yaml` content and legacy `opencode-task-json` fences, with non-empty `stages[]` for orchestrate level).
+- Implementation repo with child issues from spec fanout and technical planning targeted at that implementation repo (normally coordinated from the spec session with `--cwd`; runtime accepts `opencode-task-yaml` content with non-empty `stages[]` for orchestrate level).
 - **Issue-expand readiness gate** passed (`opencode-run impl orchestrate-readiness-check <slug>`) before the loop starts.
 - `gh` authenticated (via delegated **developer** Tasks).
 - Issues labelled `feature:<slug>` and `state:ready-for-agent` (or transitioned to `state:in-progress` during execution).
@@ -54,7 +54,7 @@ Stdout is JSON: `{ queue_remaining, number, title, body, opencode_meta, repo }` 
 
 **One issue per call** — `queue_remaining` is how many issues still have `state:ready-for-agent` for this feature (GitHub label filter). The orchestrator loops: discover → implement → verify → transition → discover again until exit 1. "Found 1" on a single call does **not** mean the queue has only one ticket.
 
-Parse **`opencode_meta`** from the current runtime contract: JSON content in an `opencode-task-yaml` fence (preferred) or legacy `opencode-task-json` fence. Do not migrate stored issue bodies in this skill.
+Parse **`opencode_meta`** from JSON-compatible content in the current `opencode-task-yaml` fence. Do not migrate stored issue bodies in this skill.
 
 ## State transitions
 

@@ -52,7 +52,7 @@ Do not assume zero issues were created. Partial fanout is common.
 - Labels include `feature:<slug>`, `state:ready-for-agent`, `mode:afk` or `mode:hitl`, `category:feature`, and **`prd-task`** (for org project board auto-add).
 - Child issues are created as **sub-issues** of the PRD parent (`parent_issue` in PRD frontmatter) via `gh issue create --parent`.
 - When `GH_PROJECT` is set in `~/.opencode-agent-env`, fanout also adds each child issue to the org project board.
-- The issue body embeds fenced `opencode-task-json` metadata plus human-readable sections.
+- The issue body embeds fenced `opencode-task-yaml` metadata plus human-readable sections.
 
 ### Legacy `slices:`
 

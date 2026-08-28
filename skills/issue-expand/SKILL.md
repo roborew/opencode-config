@@ -83,7 +83,7 @@ For each issue in this repo (respect **Blocked by** / `depends_on`):
 ```
 
 4. If design uncertainty required `designer`, embed its brief in the Implementation plan and set `design_delivery` to `brief-only` or `prototype-required`. For `prototype-required`, build ordered stages with `ux-prototype` owned by `ux-dev` and `react-implementation` owned by `frontend-dev`, with the latter depending on the former. For `brief-only`, route directly to `frontend-dev`.
-5. Build **`opencode-task-json`** `stages[]` from the stage plan (validator reads JSON fence).
+5. Build **`opencode-task-yaml`** `stages[]` from the stage plan.
 5. Show the human a concise summary → on approval → Task **developer** `load: minimal` with `repo: owner/name` → `gh issue edit <n> --repo owner/name --body-file …`.
 
 ### 4. Gates — you run
@@ -116,7 +116,7 @@ Do not list shell commands. Do not say only “switch to orchestrate.”
 | User stories covered | spec | PRD mapping |
 | Requirements | spec | Product outcomes |
 | Implementation plan | **you** | Context, Current state, Stage plan, Tests |
-| opencode-task-json | **you** | `task_id`, `owner`, `depends_on`, `stages[]`, `acceptance`, `test_commands`, `commit_message` |
+| opencode-task-yaml | **you** | `task_id`, `owner`, `depends_on`, `stages[]`, `acceptance`, `test_commands`, `commit_message` |
 
 ## PRD changed after fanout
 
