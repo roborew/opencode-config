@@ -1,7 +1,7 @@
 ---
 description: Documentation accuracy review. Cross-checks docs against source.
 mode: subagent
-model: opencode/gpt-5-nano
+model: opencode/muse-spark-1.2-contributor-free
 tools:
   write: false
   edit: false

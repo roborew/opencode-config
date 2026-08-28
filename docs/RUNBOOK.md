@@ -164,7 +164,7 @@ Provider-level `timeout` (e.g. 300000ms) and per-model **`temperature` / `top_p`
 | Layer | Agents | Primary model | Fallback |
 | --- | --- | --- | --- |
 | High-volume execution | `developer`, `frontend-dev`, `orchestrate`, `helper`, `debugger`, `refactor`, `scribe`, `review` | `opencode-go/deepseek-v4-flash` | `opencode/deepseek-v4-flash` when Go quota exhausted |
-| Fast utility / setup | `preflight`, `worktree-env`, `document`, `doc-reviewer` | `opencode/gpt-5-nano` | `opencode-go/deepseek-v4-flash` if Nano fails |
+| Fast utility / setup | `preflight`, `worktree-env`, `document`, `doc-reviewer`, `stack-bootstrap` | `opencode/muse-spark-1.2-contributor-free` | `opencode-go/deepseek-v4-flash` if Muse Spark fails |
 | Independent verifier gate | `verifier` | `opencode-go/deepseek-v4-flash` | `opencode/go-gpt-5.6-luna` for escalation/high-risk only |
 | Architecture assessment | `architecture-auditor` | `opencode-go/gpt-5.6-luna` (feature-impact) | `opencode/gpt-5.6-terra` for full audits |
 | Feature decomposition | `strategist` | `opencode-go/deepseek-v4-pro` | `opencode-go/gpt-5.6-luna` for hard cross-repo |

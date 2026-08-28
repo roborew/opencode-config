@@ -360,17 +360,17 @@
     },
     "stack-bootstrap": {
       "mode": "subagent",
-      "model": "opencode/gpt-5-nano",
+      "model": "opencode/muse-spark-1.2-contributor-free",
       "steps": 15
     },
     "worktree-env": {
       "mode": "subagent",
-      "model": "opencode/gpt-5-nano",
+      "model": "opencode/muse-spark-1.2-contributor-free",
       "steps": 10
     },
     "preflight": {
       "mode": "subagent",
-      "model": "opencode/gpt-5-nano",
+      "model": "opencode/muse-spark-1.2-contributor-free",
       "steps": 15
     },
     "code-review": {
@@ -400,12 +400,12 @@
     },
     "doc-reviewer": {
       "mode": "subagent",
-      "model": "opencode/gpt-5-nano",
+      "model": "opencode/muse-spark-1.2-contributor-free",
       "steps": 10
     },
     "document": {
       "mode": "subagent",
-      "model": "opencode/gpt-5-nano",
+      "model": "opencode/muse-spark-1.2-contributor-free",
       "steps": 10
     },
     "mentor": {

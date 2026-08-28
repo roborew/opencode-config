@@ -1,7 +1,7 @@
 ---
 description: Copy .env and .env.local from main checkout into a linked git worktree (before execution)
 mode: subagent
-model: opencode/gpt-5-nano
+model: opencode/muse-spark-1.2-contributor-free
 steps: 10
 tools:
   write: false

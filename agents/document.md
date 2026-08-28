@@ -1,7 +1,7 @@
 ---
 description: Generates documentation content from completed plan artifacts. Read-only; returns content for scribe to write.
 mode: subagent
-model: opencode/gpt-5-nano
+model: opencode/muse-spark-1.2-contributor-free
 tools:
   write: false
   edit: false

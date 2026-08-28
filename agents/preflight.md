@@ -1,7 +1,7 @@
 ---
 description: Environment readiness bootstrap — runtime, deps, smoke, claude-context indexing (no app code)
 mode: subagent
-model: opencode/gpt-5-nano
+model: opencode/muse-spark-1.2-contributor-free
 steps: 15
 tools:
   write: false
