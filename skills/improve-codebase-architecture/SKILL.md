@@ -1,141 +1,71 @@
 ---
 name: improve-codebase-architecture
-description: Periodic codebase architecture audit that finds shallow modules, weak seams, coupling leaks, and deepening opportunities. Use for structure/organization reviews, maintainability audits, testability audits, and optional remediation ticket preparation.
-modelTier: "smart"
-roleReminder: "Run as read-only audit. Prefer the Terra-backed architecture-auditor subagent. Produce an HTML report plus issue-ready candidate summaries; do not publish issues yourself."
+description: Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick.
+disable-model-invocation: true
 ---
 
 # Improve Codebase Architecture
 
-Surface architectural friction and propose **deepening opportunities**: changes that turn shallow modules into deep ones. This is a periodic audit, not a replacement for `grill-me`, PRD planning, or feature fanout.
+Surface architectural friction and propose **deepening opportunities**: refactors that turn shallow modules into deep ones. The aim is testability and AI-navigability.
 
-## Operating mode
+This command is _informed_ by the project's domain model and built on a shared design vocabulary:
 
-- Read-only for application source.
-- Use `CONTEXT.md`, `CONTEXT-MAP.md`, and `docs/adr/` as background vocabulary and constraints, not as an interview script.
-- Stop after producing the audit report and candidate summary. Parent `architect` decides whether to ask the user about remediation tickets.
-- Do not invoke `to-issues`, `to-prd`, `fanout-issues`, `issue-expand`, or implementation agents.
-- If the configured model is not the expected one, report `MODEL_UNAVAILABLE` to the parent before doing heavy synthesis.
-
-## Glossary
-
-Use these terms exactly in every suggestion. Consistent language is the point. Full definitions live in [LANGUAGE.md](LANGUAGE.md).
-
-- **Module** — anything with an interface and an implementation.
-- **Interface** — everything a caller must know to use the module correctly.
-- **Implementation** — the code inside a module.
-- **Depth** — leverage at the interface.
-- **Deep** — large behavior behind a small interface.
-- **Shallow** — interface nearly as complex as the implementation.
-- **Seam** — where a module's interface lives.
-- **Adapter** — a concrete thing satisfying an interface at a seam.
-- **Leverage** — what callers get from depth.
-- **Locality** — what maintainers get from depth.
-
-Never substitute "component", "service", "API", "signature", "boundary", "layer", or "wrapper" when the glossary term is what you mean.
+- Call the Skill tool with "codebase-design" for the architecture vocabulary (**module**, **interface**, **depth**, **seam**, **adapter**, **leverage**, **locality**) and its principles (the deletion test, "the interface is the test surface", "one adapter = hypothetical seam, two = real"). Use these terms exactly in every suggestion, and don't drift into "component," "service," "API," or "boundary."
+- The domain language in `CONTEXT.md` gives names to good seams; ADRs in `docs/adr/` record decisions this command should not re-litigate.
 
 ## Process
 
 ### 1. Explore
 
-Read domain and decision context first:
+**Scope before you scan: YAGNI.** Deepening a module pays off by making future changes to it easier, so put extra weight on the parts of the codebase that have recently changed. Decide *where* to look before you look:
 
-- Root `CONTEXT.md`, or `CONTEXT-MAP.md` plus referenced context files when present.
-- `docs/adr/` and nearby `docs/adr/` directories in the audited area.
-- Project manifests, test directories, and architecture docs if present.
+- If the user named a direction (a module, a subsystem, a pain point), take it, and skip the inference below.
+- Otherwise, walk back a good stretch of the commit history (`git log --oneline`) to find the codebase's hot spots, the files and areas that keep coming up, and let those paths pull your attention first. If the changes are scattered with no clear hot spot, widen the net.
 
-Use `claude-context` for codebase discovery when available. If unavailable, fall back to read-only shell/search and report `MCP_FALLBACK`.
+Read the project's domain glossary (`CONTEXT.md`) and any ADRs in the area you're touching first.
 
-Explore organically and note where you experience friction:
+Then spawn a sub-agent to walk the codebase. Don't follow rigid heuristics; explore organically and note where you experience friction:
 
-- Understanding one concept requires bouncing between many small modules.
-- Modules are **shallow**: their interface is nearly as complex as their implementation.
-- Extracted pure functions exist mainly for testability, but real bugs hide in caller choreography.
-- Tightly coupled modules leak across their seams.
-- Tests must cross past the interface to assert useful behavior.
-- A module fails the **deletion test**: deleting it would make complexity vanish rather than reappear across callers.
+- Where does understanding one concept require bouncing between many small modules?
+- Where are modules **shallow**, with an interface nearly as complex as the implementation?
+- Where have pure functions been extracted just for testability, but the real bugs hide in how they're called (no **locality**)?
+- Where do tightly-coupled modules leak across their seams?
+- Which parts of the codebase are untested, or hard to test through their current interface?
 
-### 2. Classify candidates
+Apply the **deletion test** to anything you suspect is shallow: would deleting it concentrate complexity, or just move it? A "yes, concentrates" is the signal you want.
 
-For each candidate, classify dependency shape using [DEEPENING.md](DEEPENING.md):
+### 2. Present candidates as an HTML report
 
-- `in-process`
-- `local-substitutable`
-- `ports & adapters`
-- `mock`
+Write a self-contained HTML file to the OS temp directory so nothing lands in the repo. Resolve the temp dir from `$TMPDIR`, falling back to `/tmp` (or `%TEMP%` on Windows), and write to `<tmpdir>/architecture-review-<timestamp>.html` so each run gets a fresh file. Open it for the user (`xdg-open <path>` on Linux, `open <path>` on macOS, `start <path>` on Windows) and tell them the absolute path.
 
-Assign a stable id:
+The report uses **Tailwind via CDN** for layout and styling, and **Mermaid via CDN** for diagrams where a graph/flow/sequence reliably communicates the structure. Mix Mermaid with hand-crafted CSS/SVG visuals: use Mermaid when relationships are graph-shaped (call graphs, dependencies, sequences), and hand-built divs/SVG when you want something more editorial (mass diagrams, cross-sections, collapse animations). Each candidate gets a **before/after visualisation**. Be visual.
 
-- Architecture candidates: `A1`, `A2`, ...
-- If parent also passes security findings for combined reporting, leave those as `S1`, `S2`, ... from the security review.
+For each candidate, render a card with:
 
-Recommendation strength is one of:
+- **Files**: which files/modules are involved
+- **Problem**: why the current architecture is causing friction
+- **Solution**: plain English description of what would change
+- **Benefits**: explained in terms of locality and leverage, and how tests would improve
+- **Before / After diagram**: side-by-side, custom-drawn, illustrating the shallowness and the deepening
+- **Recommendation strength**: one of `Strong`, `Worth exploring`, `Speculative`, rendered as a badge
 
-- `Strong`
-- `Worth exploring`
-- `Speculative`
+End the report with a **Top recommendation** section: which candidate you'd tackle first and why.
 
-Only include candidates with real friction. Do not pad the report.
+**Use CONTEXT.md vocabulary for the domain, and the `/codebase-design` vocabulary for the architecture.** If `CONTEXT.md` defines "Order," talk about "the Order intake module," not "the FooBarHandler," and not "the Order service."
 
-### 3. Produce the HTML report
+**ADR conflicts**: if a candidate contradicts an existing ADR, only surface it when the friction is real enough to warrant revisiting the ADR. Mark it clearly in the card (e.g. a warning callout: _"contradicts ADR-0007, but worth reopening because…"_). Don't list every theoretical refactor an ADR forbids.
 
-Render a self-contained HTML report following [HTML-REPORT.md](HTML-REPORT.md). Each candidate card must include:
+See [HTML-REPORT.md](HTML-REPORT.md) for the full HTML scaffold, diagram patterns, and styling guidance.
 
-- Candidate id and title.
-- Files/modules involved.
-- Problem: one sentence naming the friction.
-- Solution: one sentence naming the deepening.
-- Benefits in terms of **locality**, **leverage**, and test surface.
-- Before/after visualisation.
-- Dependency category.
-- Recommendation strength.
-- ADR conflict callout when relevant.
+Do NOT propose interfaces yet. After the file is written, ask the user: "Which of these would you like to explore?"
 
-Prefer `docs/architecture/reviews/architecture-audit-<YYYY-MM-DD>.html` as the target path. If that path cannot be written by `scribe` because the repo lacks the directory or rejects docs writes, fall back to an OS temp HTML file and return its absolute path.
+### 3. Grilling loop
 
-When this skill is running in `architecture-auditor`, either:
+Once the user picks a candidate, call the Skill tool with "grilling" to walk the decision tree with them: constraints, dependencies, the shape of the deepened module, what sits behind the seam, what tests survive.
 
-1. Task `scribe` with the complete HTML body and target path, then return the written path; or
-2. Return the complete HTML body to parent `architect` for scribe handoff when `scribe` is not available.
+Side effects happen inline as decisions crystallize; call the Skill tool with "domain-modeling" to keep the domain model current as you go:
 
-After writing, parent `architect` opens the report for the user.
-
-### 4. Return an issue-ready summary
-
-Return a concise markdown summary to parent `architect`:
-
-```markdown
-## Architecture audit
-Report: <path or temp path>
-
-| ID | Strength | Dependency | Files | Summary | AFK/HITL |
-|----|----------|------------|-------|---------|----------|
-| A1 | Strong | in-process | `src/...` | ... | AFK |
-
-## Top recommendation
-<candidate id + one sentence>
-
-## Candidate details for to-tickets
-### A1: <title>
-- Files: ...
-- Current friction: ...
-- Deepening: ...
-- Acceptance checks:
-  - ...
-- Characterization tests needed:
-  - ...
-- Risk: Low/Medium/High
-- AFK/HITL: ...
-```
-
-These details must be sufficient for `to-tickets` to create `opencode-task-json` ticket bodies if the user chooses remediation. Do not create the tickets yourself.
-
-### 5. Optional drill-down
-
-Only if the user explicitly picks a candidate to explore, enter a focused design conversation for that candidate.
-
-- Clarify constraints and dependencies.
-- Use [INTERFACE-DESIGN.md](INTERFACE-DESIGN.md) when the user wants alternative interfaces.
-- Persist `CONTEXT.md` or ADR updates only when a new domain term or load-bearing rejection needs to be recorded. Parent `architect`/`scribe` handles writes using `skills/grill-me/CONTEXT-FORMAT.md` and `skills/grill-me/ADR-FORMAT.md` as format references.
-
-Do not turn drill-down into feature planning unless the user explicitly asks for remediation tickets.
+- **Naming a deepened module after a concept not in `CONTEXT.md`?** Add the term to `CONTEXT.md`. Create the file lazily if it doesn't exist.
+- **Sharpening a fuzzy term during the conversation?** Update `CONTEXT.md` right there.
+- **User rejects the candidate with a load-bearing reason?** Offer an ADR, framed as: _"Want me to record this as an ADR so future architecture reviews don't re-suggest it?"_ Only offer when the reason would actually be needed by a future explorer to avoid re-suggesting the same thing; skip ephemeral reasons ("not worth it right now") and self-evident ones.
+- **Want to explore alternative interfaces for the deepened module?** Call the Skill tool with "codebase-design" and use its design-it-twice parallel sub-agent pattern.
