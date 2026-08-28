@@ -117,10 +117,7 @@
           }
         },
         "gpt-5-nano": {
-          "name": "GPT-5 Nano",
-          "options": {
-            "temperature": 0.2
-          }
+          "name": "GPT-5 Nano"
         },
         "gpt-5.6-terra": {
           "name": "GPT-5.6 Terra",
