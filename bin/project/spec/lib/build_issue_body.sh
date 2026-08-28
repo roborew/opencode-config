@@ -25,7 +25,7 @@ ${user_stories_section}
 ${implementation_plan_section}
 
 ## OpenCode task (machine-readable)
-\`\`\`opencode-task-json
+\`\`\`opencode-task-yaml
 ${meta_json}
 \`\`\`
 

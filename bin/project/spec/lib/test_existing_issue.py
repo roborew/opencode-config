@@ -17,8 +17,8 @@ class IssueMatchTests(unittest.TestCase):
         issue = {"number": 1, "title": "Auth: login", "body": ""}
         self.assertTrue(ei.issue_matches(issue, "Auth: login", []))
 
-    def test_yaml_task_id_in_json_fence(self) -> None:
-        body = """```opencode-task-json
+    def test_yaml_task_id_in_yaml_fence(self) -> None:
+        body = """```opencode-task-yaml
 task_id: ses-client
 owner: developer
 ```"""

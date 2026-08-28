@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract sections and opencode-task-json from a GitHub issue body (stdin → JSON stdout)."""
+"""Extract sections and opencode-task-yaml from a GitHub issue body (stdin → JSON stdout)."""
 from __future__ import annotations
 
 import json
@@ -14,12 +14,14 @@ from issue_contract import is_placeholder
 
 
 def extract_json_block(body: str) -> dict | None:
-    m = re.search(r"```opencode-task-json\s*\n(.*?)\n```", body, re.DOTALL)
+    m = re.search(r"```opencode-task-yaml\s*\n(.*?)\n```", body, re.DOTALL)
     if not m:
         return None
     try:
-        return json.loads(m.group(1))
-    except json.JSONDecodeError:
+        import yaml
+        parsed = yaml.safe_load(m.group(1))
+        return parsed if isinstance(parsed, dict) else None
+    except (ValueError, ImportError):
         return None
 
 

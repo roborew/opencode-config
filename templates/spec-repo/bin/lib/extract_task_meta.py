@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Parse opencode-task-yaml or legacy opencode-task-json from a GitHub issue body.
+"""Parse opencode-task-yaml from a GitHub issue body.
 
 Falls back to targeted-issue markdown (## What to build / ## Acceptance criteria) when
 no fenced block exists. Use --embed to inject yaml into a targeted body before publish.
@@ -128,10 +128,9 @@ def embed_task_yaml_block(body: str, title: str, feature_slug: str | None = None
 
 
 def extract_task_block_raw(body: str) -> tuple[str, str] | None:
-    for fence in ("opencode-task-yaml", "opencode-task-json"):
-        m = re.search(rf"```{{1}}{fence}\s*\n(.*?)\n```", body, re.DOTALL)
-        if m:
-            return fence, m.group(1).strip()
+    m = re.search(r"```opencode-task-yaml\s*\n(.*?)\n```", body, re.DOTALL)
+    if m:
+        return "opencode-task-yaml", m.group(1).strip()
     return None
 
 
@@ -143,12 +142,9 @@ def parse_task_meta(body: str) -> dict[str, Any] | None:
     if not content:
         return None
     try:
-        if fence == "opencode-task-json":
-            data = json.loads(content)
-        else:
-            if yaml is None:
-                return None
-            data = yaml.safe_load(content)
+        if yaml is None:
+            return None
+        data = yaml.safe_load(content)
         return data if isinstance(data, dict) else None
     except (json.JSONDecodeError, yaml.YAMLError):
         return None

@@ -10,7 +10,6 @@ Exit 0 = pass; 1 = fail (errors on stderr as JSON lines).
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import sys
 from typing import Any
@@ -36,15 +35,13 @@ def extract_section(body: str, name: str) -> str | None:
 
 
 def extract_meta(body: str) -> dict[str, Any] | None:
-    m = re.search(r"```opencode-task-(?:yaml|json)\s*\n(.*?)\n```", body, re.DOTALL)
+    m = re.search(r"```opencode-task-yaml\s*\n(.*?)\n```", body, re.DOTALL)
     if not m:
         return None
     try:
-        if m.group(0).startswith("```opencode-task-yaml"):
-            parsed = yaml.safe_load(m.group(1)) if yaml else None
-            return parsed if isinstance(parsed, dict) else None
-        return json.loads(m.group(1))
-    except (json.JSONDecodeError, TypeError, ValueError):
+        parsed = yaml.safe_load(m.group(1)) if yaml else None
+        return parsed if isinstance(parsed, dict) else None
+    except (TypeError, ValueError):
         return None
 
 
@@ -62,18 +59,18 @@ def validate(body: str, level: str, expected_task_id: str | None) -> list[str]:
 
     meta = extract_meta(body)
     if meta is None:
-        errors.append("missing or invalid opencode-task-json block")
+        errors.append("missing or invalid opencode-task-yaml block")
         meta = {}
 
     if level in ("fanout", "expand", "orchestrate"):
         if not meta.get("task_id"):
-            errors.append("opencode-task-json missing task_id")
+            errors.append("opencode-task-yaml missing task_id")
         elif expected_task_id and meta.get("task_id") != expected_task_id:
             errors.append(f"task_id mismatch: expected {expected_task_id}, got {meta.get('task_id')}")
 
         for field in ("owner", "commit_message", "acceptance", "test_commands"):
             if field not in meta:
-                errors.append(f"opencode-task-json missing {field}")
+                errors.append(f"opencode-task-yaml missing {field}")
         if meta.get("owner") not in {"developer", "frontend-dev", "ux-dev"}:
             errors.append("opencode-task owner must be developer, frontend-dev, or ux-dev")
         if meta.get("design_delivery") not in (None, "brief-only", "prototype-required"):
@@ -96,7 +93,7 @@ def validate(body: str, level: str, expected_task_id: str | None) -> list[str]:
 
     stages = meta.get("stages") if isinstance(meta, dict) else None
     if not isinstance(stages, list) or len(stages) == 0:
-        errors.append("opencode-task-json missing non-empty stages[]")
+        errors.append("opencode-task-yaml missing non-empty stages[]")
     else:
         for i, stage in enumerate(stages):
             if not isinstance(stage, dict):

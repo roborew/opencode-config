@@ -26,7 +26,7 @@ while read -r num; do
   COUNT=$((COUNT + 1))
   BODY_FILE=$(mktemp)
   gh issue view "$num" --repo "$REPO" --json body -q .body >"$BODY_FILE"
-  TID=$(sed -n '/```opencode-task-json/,/```/p' "$BODY_FILE" | sed '1d;$d' | jq -r '.task_id // empty' 2>/dev/null || true)
+  TID=$(sed -n '/```opencode-task-yaml/,/```/p' "$BODY_FILE" | sed '1d;$d' | yq -r '.task_id // empty' 2>/dev/null || true)
   ARGS=(--level "$LEVEL" --file "$BODY_FILE")
   [[ -n "$TID" ]] && ARGS+=(--task-id "$TID")
   if python3 "$VALIDATE" "${ARGS[@]}"; then
