@@ -1,7 +1,7 @@
 ---
 description: Cross-repo template installer for setup-project (spec-coordinated stacks only)
 mode: subagent
-model: opencode/muse-spark-1.2-contributor-free
+model: opencode-gpt/gpt-5-nano
 tools:
   write: true
   edit: true
