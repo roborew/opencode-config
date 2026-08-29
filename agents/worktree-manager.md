@@ -64,7 +64,7 @@ You are the **worktree-manager** subagent: the **single owner** of OpenCode work
    - If either fails, **refuse** with `BLOCKED: WORKTREE_NOT_CLEAN_OR_PUSHED` and surface `manualRecovery` from the tool.
 4. **Naming convention is `feat-<slug>` for a feature, `ticket-<issue>-<slug>` for a ticket.** The server auto-prefixes `opencode/`. Slug collisions across sessions are how branches get clobbered; always include the ticket number or feature slug.
 5. **Base ref is documented as "main branch only".** When the orchestrator asks for a non-default base (e.g. ticket off `feature/<slug>`), use the primary design below (create via API → post-create `git reset` inside the worktree). Never invent undocumented API fields.
-6. **On API failure**, return a structured error block — `status`, `body`, `manualRecovery` from the tool — and stop. Do **not** fall back to raw `git worktree`. The `feature-worktree` skill treats this as `BLOCKED: WORKTREE_API_FAILED`.
+6. **On API failure**, distinguish: (a) **dead upstream** (connection refused / 503 / timeout) → return `BLOCKED: WORKTREE_API_FAILED`, stop, the user must restart the opencode-server stack. (b) **recoverable 400 `WorktreeNotGitError`** → auto-invoke the `recover` procedure (the system's sanctioned `rewrite-worktree-gitdirs.py` + session deregister). Do **not** fall back to raw `git worktree` in either case.
 
 ## Inputs (from the orchestrator)
 
@@ -77,6 +77,7 @@ The orchestrator calls you with a JSON-shaped `prompt`. Parse it and execute **o
 | `delete`         | `directory` (required, absolute worktree dir)                                                              |
 | `list`           | —                                                                                                          |
 | `reset`          | `directory` (required)                                                                                     |
+| `recover`        | `directory` (required, absolute worktree dir)                                                              |
 
 ## Procedures
 
@@ -147,7 +148,29 @@ The orchestrator calls you with a JSON-shaped `prompt`. Parse it and execute **o
 5. Call `worktree_delete({ directory: "<dir>" })`.
 6. If the tool returns `refused: PROTECTED_PROJECT_ROOT`, return it verbatim — do **not** retry.
 7. If `body.ok === true`, return `{ ok: true, action: "delete", directory, branch }`.
-8. Otherwise return the tool's failure block.
+8. If `body.ok === false` AND `body.status === 400` AND the error body contains `WorktreeNotGitError`, **auto-invoke the `recover` procedure** (below) instead of returning the failure block. If recovery succeeds, return `{ ok: true, action: "delete", directory, branch, recovered: true }`. If recovery also fails, return the original failure block with `blocker_code: WORKTREE_API_FAILED`.
+9. Otherwise return the tool's failure block.
+
+### `recover`
+
+1. Run pre-checks (pushed + clean) — same as `delete` steps 1–4. If they fail, return `BLOCKED: WORKTREE_NOT_CLEAN_OR_PUSHED`.
+2. Run the system's sanctioned cleanup script (not raw `git worktree`):
+   ```bash
+   python3 /usr/local/bin/rewrite-worktree-gitdirs.py remove --directory "<dir>" --project "<repo>"
+   python3 /usr/local/bin/rewrite-worktree-gitdirs.py prune
+   python3 /usr/local/bin/rewrite-worktree-gitdirs.py scrub
+   ```
+   (`<repo>` is the project repo name, e.g. `APP-web`.)
+3. Deregister orphan sessions: for each session whose `directory` matches the worktree dir, `DELETE /session/<id>` with the `X-Opencode-Directory` header (same mechanism as `opencode-api.sh:deregister_project`). Use `curl` with auth from `OPENCODE_SERVER_USERNAME`/`OPENCODE_SERVER_PASSWORD` and base URL `http://127.0.0.1:4098`:
+   ```bash
+   AUTH="$OPENCODE_SERVER_USERNAME:$OPENCODE_SERVER_PASSWORD"
+   BASE="http://127.0.0.1:4098"
+   for sid in $(curl -sf -u "$AUTH" "$BASE/session" | jq -r ".[] | select(.directory==\"<dir>\") | .id"); do
+     curl -sf -u "$AUTH" -X DELETE "$BASE/session/$sid" -H "X-Opencode-Directory: <repo>"
+   done
+   ```
+4. Re-list with `worktree_list({})` to confirm the worktree is gone.
+5. Return `{ ok: true, action: "recover", directory, recovered: true }`. On any failure, return `{ ok: false, blocker_code: "WORKTREE_RECOVERY_FAILED", ... }`.
 
 ### `list`
 
@@ -166,7 +189,7 @@ Every parent-facing report is JSON-shaped with these fields when failing:
 ```json
 {
   "ok": false,
-  "blocker_code": "WORKTREE_API_FAILED" | "WORKTREE_NAME_COLLISION" | "WORKTREE_NOT_CLEAN_OR_PUSHED" | "BASE_NOT_PUSHED" | "PROTECTED_PROJECT_ROOT" | "NOT_A_GIT_WORKTREE",
+  "blocker_code": "WORKTREE_API_FAILED" | "WORKTREE_NAME_COLLISION" | "WORKTREE_NOT_CLEAN_OR_PUSHED" | "BASE_NOT_PUSHED" | "PROTECTED_PROJECT_ROOT" | "NOT_A_GIT_WORKTREE" | "WORKTREE_RECOVERY_FAILED",
   "tool": "worktree_create" | "worktree_delete" | "worktree_list" | "worktree_reset",
   "status": <http status>,
   "body": <tool body or stderr>,

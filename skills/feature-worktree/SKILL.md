@@ -10,7 +10,7 @@ This skill is **routing only**: it does not perform worktree operations itself. 
 ## Hard rules
 
 1. The orchestrator (`orchestrate`) MUST NOT call worktree tools directly. Delegate to `worktree-manager` with a JSON-shaped `prompt` containing one `action`.
-2. Never accept raw `git worktree` as a fallback path. If the API fails, surface `BLOCKED: WORKTREE_API_FAILED` and stop. The user must restart the opencode-server stack (or fix the upstream) before retrying.
+2. Never accept raw `git worktree` as a fallback path. On API failure, distinguish: (a) **dead upstream** (connection refused / 503) → surface `BLOCKED: WORKTREE_API_FAILED` and stop; the user must restart the opencode-server stack. (b) **recoverable `WorktreeNotGitError` (400)** → `worktree-manager` auto-invokes the sanctioned `recover` action (the system's own `rewrite-worktree-gitdirs.py` + session deregister), which is **not** raw `git worktree`. If recovery fails, then surface `BLOCKED: WORKTREE_API_FAILED`.
 3. The pre-delete checks (pushed, clean) and the self-guard against `OPENCODE_APPS_DIR` are owned by `worktree-manager` and `plugins/worktree.js` respectively. Do not re-implement them here.
 4. Naming convention is `feat-<slug>` for a feature, `ticket-<issue>-<slug>` for a ticket. The server auto-prefixes `opencode/`.
 5. Branches always look like `opencode/feat-<slug>` and `opencode/ticket-<issue>-<slug>` (never `feature/...` or `ticket/...` on the wire).
@@ -73,6 +73,21 @@ When `opencode-server` restarts and worktree directories exist but no session is
 ```
 
 This calls `POST /experimental/worktree/reset` and reconciles the session linkage. After reset, re-list with `action: "list"` to confirm the GUI sees the worktree.
+
+## Recovery
+
+### Stuck worktrees (WorktreeNotGitError)
+
+If worktrees are stuck in the GUI / `worktree_list` after a failed delete, dispatch:
+
+```json
+{
+  "action": "recover",
+  "directory": "<worktree dir>"
+}
+```
+
+This runs the system's sanctioned cleanup script (`rewrite-worktree-gitdirs.py remove/prune/scrub`) and deregisters orphan sessions. It does **not** use raw `git worktree`.
 
 ## Failure response
 

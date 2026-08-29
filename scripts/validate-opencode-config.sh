@@ -182,6 +182,22 @@ for tool in worktree_create worktree_list worktree_delete worktree_reset; do
     ERR=1
   fi
 done
+if ! grep -q 'async execute({ directory }, context)' plugins/worktree.js 2>/dev/null; then
+  echo "  MISSING: context in worktree_delete/reset execute signature in plugins/worktree.js"
+  ERR=1
+fi
+if ! grep -q 'v2.worktree.remove({' plugins/worktree.js 2>/dev/null; then
+  echo "  MISSING: v2.worktree.remove call in plugins/worktree.js"
+  ERR=1
+fi
+if ! grep -q 'directory: (context && context.directory) || undefined' plugins/worktree.js 2>/dev/null; then
+  echo "  MISSING: project directory query param passed to remove/reset in plugins/worktree.js"
+  ERR=1
+fi
+if ! grep -q 'scheduleGitCleanup' plugins/worktree.js 2>/dev/null; then
+  echo "  MISSING: scheduleGitCleanup defense-in-depth cleanup in plugins/worktree.js"
+  ERR=1
+fi
 if [[ ! -f agents/worktree-manager.md ]]; then
   echo "  MISSING: agents/worktree-manager.md"
   ERR=1
@@ -196,6 +212,22 @@ if ! grep -q 'worktree-manager: allow' agents/orchestrate.md 2>/dev/null; then
 fi
 if grep -q 'git worktree add' skills/feature-worktree/SKILL.md 2>/dev/null; then
   echo "  ERROR: feature-worktree SKILL still documents raw git worktree fallback"
+  ERR=1
+fi
+if ! grep -q 'recover' agents/worktree-manager.md 2>/dev/null; then
+  echo "  MISSING: recover action in agents/worktree-manager.md"
+  ERR=1
+fi
+if ! grep -q 'WORKTREE_RECOVERY_FAILED' agents/worktree-manager.md 2>/dev/null; then
+  echo "  MISSING: WORKTREE_RECOVERY_FAILED blocker code in agents/worktree-manager.md"
+  ERR=1
+fi
+if ! grep -q 'rewrite-worktree-gitdirs.py' agents/worktree-manager.md 2>/dev/null; then
+  echo "  MISSING: sanctioned cleanup script reference in agents/worktree-manager.md"
+  ERR=1
+fi
+if ! grep -q 'recover' skills/feature-worktree/SKILL.md 2>/dev/null; then
+  echo "  MISSING: recover action in skills/feature-worktree/SKILL.md"
   ERR=1
 fi
 if ! grep -q 'do not recommend upgrading the Docker/base Node' scripts/preflight-runtime.sh 2>/dev/null; then

@@ -36,6 +36,7 @@
  *   _is_worktree_path + _is_protected_project_root.
  */
 
+import { spawn } from "node:child_process";
 import { tool } from "@opencode-ai/plugin";
 import { createOpencodeClient } from "@opencode-ai/sdk/v2";
 
@@ -118,6 +119,26 @@ function buildV2Client(ctx) {
     return createOpencodeClient({ baseUrl, headers });
   } catch (_err) {
     return null;
+  }
+}
+
+// Fire-and-forget the system's sanctioned cleanup script after a successful
+// delete. The plugin talks to loopback :4098 directly, bypassing the :4097
+// delete-guard proxy that schedules rewrite-worktree-gitdirs.py remove, so this
+// compensates. Best-effort and idempotent; never blocks the tool response.
+function scheduleGitCleanup(directory, project) {
+  if (!directory) return;
+  const script = "/usr/local/bin/rewrite-worktree-gitdirs.py";
+  try {
+    const args = ["python3", script, "remove", "--directory", directory];
+    if (project) args.push("--project", project);
+    const child = spawn(args[0], args.slice(1), {
+      detached: true,
+      stdio: "ignore",
+    });
+    child.unref();
+  } catch (_) {
+    /* best-effort */
   }
 }
 
@@ -222,7 +243,7 @@ export const WorktreePlugin = async (ctx) => {
             .string()
             .describe("Absolute worktree directory path to delete."),
         },
-        async execute({ directory }) {
+        async execute({ directory }, context) {
           if (!v2) return unavailable("DELETE", { directory });
           const reason = protectedRootReason(directory);
           if (reason) {
@@ -242,13 +263,16 @@ export const WorktreePlugin = async (ctx) => {
               })
             );
           }
-          return JSON.stringify(
-            await unwrap(
-              v2.worktree.remove({ worktreeRemoveInput: { directory } }),
-              "DELETE",
-              { directory }
-            )
+          const res = await unwrap(
+            v2.worktree.remove({
+              directory: (context && context.directory) || undefined,
+              worktreeRemoveInput: { directory },
+            }),
+            "DELETE",
+            { directory }
           );
+          if (res.ok) scheduleGitCleanup(directory, context && context.directory);
+          return JSON.stringify(res);
         },
       }),
 
@@ -260,7 +284,7 @@ export const WorktreePlugin = async (ctx) => {
             .string()
             .describe("Absolute worktree directory path to reset."),
         },
-        async execute({ directory }) {
+        async execute({ directory }, context) {
           if (!v2) return unavailable("POST", { directory });
           if (!directory || typeof directory !== "string") {
             return JSON.stringify({
@@ -271,7 +295,10 @@ export const WorktreePlugin = async (ctx) => {
           }
           return JSON.stringify(
             await unwrap(
-              v2.worktree.reset({ worktreeResetInput: { directory } }),
+              v2.worktree.reset({
+                directory: (context && context.directory) || undefined,
+                worktreeResetInput: { directory },
+              }),
               "POST",
               { directory }
             )
