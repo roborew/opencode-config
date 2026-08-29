@@ -120,6 +120,22 @@ if ! grep -q 'feature-worktree' agents/orchestrate.md; then
   echo "  MISSING: feature-worktree orchestrate routing"
   ERR=1
 fi
+if ! grep -q 'gh pr checks' skills/orchestrate-completion/SKILL.md || ! grep -q 'pr_stabilization' skills/orchestrate-completion/SKILL.md; then
+  echo "  MISSING: CI stabilization loop language in orchestrate-completion"
+  ERR=1
+fi
+if ! grep -q 'code-review' skills/docker-sandbox/SKILL.md || ! grep -q 'APPROVED' skills/docker-sandbox/SKILL.md || ! grep -q 'BLOCKED' skills/docker-sandbox/SKILL.md; then
+  echo "  MISSING: lifecycle-aware destroy language in docker-sandbox Hard Rule 5"
+  ERR=1
+fi
+if ! grep -q 'pr_stabilization_fix' agents/developer.md; then
+  echo "  MISSING: pr_stabilization_fix execution mode in developer agent"
+  ERR=1
+fi
+if ! grep -q 'sandbox_id' agents/code-review.md; then
+  echo "  MISSING: sandbox_id reuse language in code-review agent"
+  ERR=1
+fi
 
 echo "Checking worktree-env / preflight bootstrap scripts..."
 for f in scripts/worktree-env.sh scripts/preflight-worktree-verify.sh scripts/preflight-runtime.sh; do
