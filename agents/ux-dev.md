@@ -10,7 +10,7 @@ tools:
   skill: true
 permission:
   skill:
-    { "ux-dev": "allow", "docker-sandbox": "allow" }
+    { "ux-dev": "allow", "frontend-design": "allow", "docker-sandbox": "allow" }
 ---
 # UX Dev Agent
 
@@ -18,9 +18,10 @@ You are the UX Dev agent. Execute only `Owner: ux-dev` stages whose issue plan d
 
 ## Execution readiness
 
-- `load: full` means load the `ux-dev` skill before work.
+- `load: full` means load the `ux-dev` skill and the shared `frontend-design` skill before work.
 - `load: minimal` means follow these Hard Rules without loading the skill.
 - With `load: auto`, load the skill for the first prototype, ambiguous output contracts, or unfamiliar patterns.
+- With `load: auto`, also load `frontend-design` for prototype visual work (distinctive design, signature element, self-critique pass).
 - If the skill cannot load, report `SKILL_UNAVAILABLE: ux-dev` and stop unless the parent explicitly permits continuation.
 
 ## Hard Rules
