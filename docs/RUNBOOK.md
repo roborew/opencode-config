@@ -150,7 +150,7 @@ Preflight is user-opt-in at session start (`yes` / `no`); work selection follows
 
 When a subagent repeats the same completion message or stalls:
 
-1. **OpenCode config**: `steps` caps agentic iterations per session — e.g. scribe `5`, developer/frontend-dev `45`, architect `30`, orchestrate `100`, primaries and subagents are bounded. See `opencode.json` `agent` block.
+1. **OpenCode config**: `steps` caps agentic iterations per session — e.g. scribe `8`, developer/frontend-dev `45`, architect `30`, orchestrate `100`, primaries and subagents are bounded. See `opencode.json` `agent` block.
 2. **Orchestrator loop detection**: If the same or near-identical child report is received 2+ times, treat as `BLOCKED`, invoke `helper`, and amend the same artifact via `scribe` before any retry.
 3. **Scribe exit rule**: Scribe returns exactly once per task. After reporting path + operation + summary, it stops.
 4. **Developer anti-loop rule**: Developer must not repeat the same verbal intent (e.g. "Let me create X"); one statement, then execute. If the same failing command repeats twice without meaningful change, return `blocker_code: STAGE_STUCK` and stop.
@@ -164,7 +164,8 @@ Provider-level `timeout` (e.g. 300000ms) and per-model **`temperature` / `top_p`
 | Layer | Agents | Primary model | Fallback |
 | --- | --- | --- | --- |
 | High-volume execution | `developer`, `frontend-dev`, `orchestrate`, `helper`, `debugger`, `refactor`, `review` | `opencode-go/deepseek-v4-flash` | `opencode/deepseek-v4-flash` when Go quota exhausted |
-| Fast utility / setup | `preflight`, `worktree-env`, `document`, `doc-reviewer`, `stack-bootstrap`, `scribe` | `opencode-gpt/gpt-5-nano` | `opencode-go/deepseek-v4-flash` if GPT-5 Nano fails |
+| Fast utility / setup | `preflight`, `worktree-env`, `document`, `doc-reviewer`, `stack-bootstrap` | `opencode-gpt/gpt-5-nano` | `opencode-go/deepseek-v4-flash` if GPT-5 Nano fails |
+| Docs/PRD writer | `scribe` | `opencode/deepseek-v4-flash` | `opencode-go/deepseek-v4-flash` (alt route) if primary fails |
 | Independent code-review gate | `code-review` | `kilo/minimax/minimax-m3` | `opencode/go-gpt-5.6-luna` for escalation/high-risk only |
 | Architecture assessment | `architecture-auditor` | `opencode-go/gpt-5.6-luna` (feature-impact) | `opencode-gpt/gpt-5.6-terra` for full audits |
 | Feature decomposition | `strategist` | `opencode-go/deepseek-v4-pro` | `opencode-go/gpt-5.6-luna` for hard cross-repo |
