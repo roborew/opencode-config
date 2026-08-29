@@ -7,8 +7,22 @@
  *                  (entrypoint copies config-repo plugins into the runtime
  *                  plugin dir alongside server-side docker/plugins/*.js).
  *
- * No raw fetch needed: the in-process SDK `client` from PluginInput carries
- * HTTP Basic Auth automatically (OPENCODE_SERVER_USERNAME/PASSWORD).
+ * IMPORTANT — which client to use:
+ *   Plugins receive `ctx.client`, which is the **v1** OpencodeClient
+ *   (@opencode-ai/sdk). The v1 client has NO `worktree` namespace. The
+ *   `/experimental/worktree` endpoints live only on the **v2** client
+ *   (@opencode-ai/sdk/v2). So this plugin builds its own v2 client pointed
+ *   at `ctx.serverUrl` (loopback) with HTTP Basic Auth from
+ *   OPENCODE_SERVER_USERNAME/PASSWORD — the same auth the in-process v1
+ *   client carries automatically. Calling `ctx.client.worktree` (as a prior
+ *   version did) is always undefined and made the plugin throw at init,
+ *   silently dropping all four tools.
+ *
+ * Tool definitions use the `tool()` helper + Zod `args` (via `tool.schema`)
+ * from `@opencode-ai/plugin` — the only shape OpenCode's plugin loader
+ * registers (ToolDefinition). A `parameters` (JSON Schema) object is the
+ * MCP-server shape, NOT a plugin ToolDefinition, and the loader will not
+ * register it. `execute` returns a ToolResult (a JSON string here).
  *
  * Delete safety has two layers:
  *   1. The *********:4097 delete-guard proxy blocks DELETE whose body
@@ -21,6 +35,9 @@
  * Mirrors opencode-server/docker/worktree-delete-guard.py:
  *   _is_worktree_path + _is_protected_project_root.
  */
+
+import { tool } from "@opencode-ai/plugin";
+import { createOpencodeClient } from "@opencode-ai/sdk/v2";
 
 const HOST_WT = (process.env.OPENCODE_WORKTREES_DIR || "").replace(/\/+$/, "");
 const HOST_APPS = (process.env.OPENCODE_APPS_DIR || "").replace(/\/+$/, "");
@@ -86,162 +103,181 @@ function fail(status, body, method, opts = {}) {
   };
 }
 
-export const WorktreePlugin = async (_ctx) => {
-  // Tool factories are registered once at plugin init; ctx.client is the
-  // in-process SDK client that talks to the upstream opencode serve on
-  // loopback. Auth is carried automatically.
-  const client = _ctx && _ctx.client;
-  if (!client || !client.worktree) {
-    throw new Error("worktree plugin: in-process SDK client is unavailable");
+// Build the v2 SDK client once at plugin init. The v1 ctx.client has no
+// `worktree` namespace; the /experimental/worktree API is v2-only.
+function buildV2Client(ctx) {
+  const baseUrl = ctx && ctx.serverUrl && (ctx.serverUrl.origin || String(ctx.serverUrl));
+  if (!baseUrl) return null;
+  const user = process.env.OPENCODE_SERVER_USERNAME || "";
+  const pass = process.env.OPENCODE_SERVER_PASSWORD || "";
+  const headers = {};
+  if (user) {
+    headers.Authorization = "Basic " + Buffer.from(user + ":" + pass).toString("base64");
   }
+  try {
+    return createOpencodeClient({ baseUrl, headers });
+  } catch (_err) {
+    return null;
+  }
+}
+
+// Normalize a v2 RequestResult ({ data, error, request, response }) into the
+// plugin's { ok, status, body } envelope. With throwOnError=false (default)
+// HTTP errors do NOT throw — they arrive as { data: undefined, error }.
+async function unwrap(promise, method, opts = {}) {
+  try {
+    const res = await promise;
+    const status = res && res.response && res.response.status;
+    if (!res || res.error != null || res.data === undefined) {
+      return fail(
+        status ?? 0,
+        res && res.error != null ? res.error : null,
+        method,
+        { ...opts, error: `worktree_${method.toLowerCase()} returned status ${status ?? 0}` }
+      );
+    }
+    return { ok: true, status: status ?? 200, body: res.data };
+  } catch (err) {
+    return fail(err?.status ?? 0, err?.body ?? String(err?.message || err), method, {
+      ...opts,
+      error: String(err?.message || err),
+    });
+  }
+}
+
+// Tools are registered unconditionally. If the v2 client could not be built,
+// each execute returns a structured 503 with a manualRecovery curl — matching
+// the worktree-manager failure contract (BLOCKED: WORKTREE_API_FAILED). We
+// deliberately do NOT throw at plugin init: throwing would silently drop all
+// four tools, so the subagent would not see `worktree_create` at all and would
+// confabulate a "no MCP server" diagnosis (which is what happened).
+function unavailable(method, opts = {}) {
+  return JSON.stringify(
+    fail(503, "v2 worktree client unavailable in this environment", method, {
+      ...opts,
+      error:
+        "worktree plugin: could not build @opencode-ai/sdk/v2 client (ctx.serverUrl missing or createOpencodeClient failed) — tool registered but cannot reach /experimental/worktree",
+    })
+  );
+}
+
+export const WorktreePlugin = async (ctx) => {
+  const v2 = buildV2Client(ctx);
 
   return {
     tool: {
-      worktree_create: {
+      worktree_create: tool({
         description:
           "Create an OpenCode worktree under OPENCODE_WORKTREES_DIR via the /experimental/worktree API. Branch is auto-prefixed opencode/<name>. After create, the worktree appears in the Desktop GUI and a session is auto-started.",
-        parameters: {
-          type: "object",
-          properties: {
-            name: {
-              type: "string",
-              description:
-                "Worktree name (no slashes). Convention: feat-<slug> or ticket-<issue>-<slug>.",
-            },
-          },
-          required: ["name"],
+        args: {
+          name: tool.schema
+            .string()
+            .describe(
+              "Worktree name (no slashes). Convention: feat-<slug> or ticket-<issue>-<slug>."
+            ),
         },
-        execute: async ({ name }) => {
+        async execute({ name }, context) {
+          if (!v2) return unavailable("POST", { name });
           if (!name || typeof name !== "string" || name.includes("/")) {
-            return {
-              ok: false,
-              status: 0,
-              error:
-                "worktree_create: `name` is required and must not contain '/'",
-              manualRecovery: guiRecovery({ method: "POST", name }),
-            };
-          }
-          try {
-            const res = await client.worktree.create({
-              worktreeCreateInput: { name },
-            });
-            return { ok: true, status: 200, body: res };
-          } catch (err) {
-            return fail(
-              err?.status ?? 0,
-              err?.body ?? String(err?.message || err),
-              "POST",
-              { name, error: String(err?.message || err) }
+            return JSON.stringify(
+              fail(0, null, "POST", {
+                name,
+                error: "worktree_create: `name` is required and must not contain '/'",
+              })
             );
           }
+          return JSON.stringify(
+            await unwrap(
+              v2.worktree.create({
+                directory: (context && context.directory) || undefined,
+                worktreeCreateInput: { name },
+              }),
+              "POST",
+              { name }
+            )
+          );
         },
-      },
+      }),
 
-      worktree_list: {
+      worktree_list: tool({
         description:
           "List worktrees under the current project directory. Returns string[] of worktree directory paths.",
-        parameters: { type: "object", properties: {} },
-        execute: async () => {
-          try {
-            const res = await client.worktree.list();
-            return { ok: true, status: 200, body: res };
-          } catch (err) {
-            return fail(
-              err?.status ?? 0,
-              err?.body ?? String(err?.message || err),
-              "GET",
-              { error: String(err?.message || err) }
-            );
-          }
+        args: {},
+        async execute(_args, context) {
+          if (!v2) return unavailable("GET");
+          return JSON.stringify(
+            await unwrap(
+              v2.worktree.list({ directory: (context && context.directory) || undefined }),
+              "GET"
+            )
+          );
         },
-      },
+      }),
 
-      worktree_delete: {
+      worktree_delete: tool({
         description:
           "Delete an OpenCode worktree by directory path. Self-guards against deleting any path under OPENCODE_APPS_DIR (mirrors the *********:4097 delete-guard proxy). The worktree-manager subagent pre-checks pushed/clean state before calling this.",
-        parameters: {
-          type: "object",
-          properties: {
-            directory: {
-              type: "string",
-              description: "Absolute worktree directory path to delete.",
-            },
-          },
-          required: ["directory"],
+        args: {
+          directory: tool.schema
+            .string()
+            .describe("Absolute worktree directory path to delete."),
         },
-        execute: async ({ directory }) => {
+        async execute({ directory }) {
+          if (!v2) return unavailable("DELETE", { directory });
           const reason = protectedRootReason(directory);
           if (reason) {
-            return {
+            return JSON.stringify({
               ok: false,
               status: 0,
               error: reason,
               refused: "PROTECTED_PROJECT_ROOT",
               manualRecovery: guiRecovery({ method: "DELETE", directory }),
-            };
+            });
           }
           if (!directory || typeof directory !== "string") {
-            return {
-              ok: false,
-              status: 0,
-              error: "worktree_delete: `directory` is required",
-              manualRecovery: guiRecovery({ method: "DELETE", directory }),
-            };
-          }
-          try {
-            const res = await client.worktree.remove({
-              directory,
-              worktreeRemoveInput: { directory },
-            });
-            return { ok: true, status: 200, body: res };
-          } catch (err) {
-            return fail(
-              err?.status ?? 0,
-              err?.body ?? String(err?.message || err),
-              "DELETE",
-              { directory, error: String(err?.message || err) }
+            return JSON.stringify(
+              fail(0, null, "DELETE", {
+                directory,
+                error: "worktree_delete: `directory` is required",
+              })
             );
           }
+          return JSON.stringify(
+            await unwrap(
+              v2.worktree.remove({ worktreeRemoveInput: { directory } }),
+              "DELETE",
+              { directory }
+            )
+          );
         },
-      },
+      }),
 
-      worktree_reset: {
+      worktree_reset: tool({
         description:
           "Reconcile a worktree directory after a server restart or stale state. Calls POST /experimental/worktree/reset.",
-        parameters: {
-          type: "object",
-          properties: {
-            directory: {
-              type: "string",
-              description: "Absolute worktree directory path to reset.",
-            },
-          },
-          required: ["directory"],
+        args: {
+          directory: tool.schema
+            .string()
+            .describe("Absolute worktree directory path to reset."),
         },
-        execute: async ({ directory }) => {
+        async execute({ directory }) {
+          if (!v2) return unavailable("POST", { directory });
           if (!directory || typeof directory !== "string") {
-            return {
+            return JSON.stringify({
               ok: false,
               status: 0,
               error: "worktree_reset: `directory` is required",
-            };
-          }
-          try {
-            const res = await client.worktree.reset({
-              directory,
-              worktreeResetInput: { directory },
             });
-            return { ok: true, status: 200, body: res };
-          } catch (err) {
-            return {
-              ok: false,
-              status: err?.status ?? 0,
-              body: err?.body ?? String(err?.message || err),
-              error: String(err?.message || err),
-            };
           }
+          return JSON.stringify(
+            await unwrap(
+              v2.worktree.reset({ worktreeResetInput: { directory } }),
+              "POST",
+              { directory }
+            )
+          );
         },
-      },
+      }),
     },
   };
 };

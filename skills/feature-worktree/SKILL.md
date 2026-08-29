@@ -5,7 +5,7 @@ description: Coordinate feature and ticket worktrees via the worktree-manager su
 
 # Feature Worktree
 
-This skill is **routing only**: it does not perform worktree operations itself. All worktree lifecycle (create, list, delete, reset) is delegated to the `worktree-manager` subagent, which calls the four `worktree_*` tools registered by `plugins/worktree.js`. **Raw `git worktree add`/`git worktree remove`/`git branch opencode/...` are forbidden** — they bypass GUI registration and are not coordinated with session start.
+This skill is **routing only**: it does not perform worktree operations itself. All worktree lifecycle (create, list, delete, reset) is delegated to the `worktree-manager` subagent, which calls the four `worktree_*` tools registered by `plugins/worktree.js`. **Raw git worktree subcommands (`worktree add`, `worktree remove`, `branch opencode/...`) are forbidden** — they bypass GUI registration and are not coordinated with session start.
 
 ## Hard rules
 
