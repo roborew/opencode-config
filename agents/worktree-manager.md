@@ -1,7 +1,7 @@
 ---
 description: Drive OpenCode worktree lifecycle via the /experimental/worktree API (creates GUI-registered worktrees/sessions)
 mode: subagent
-model: opencode/gpt-5-nano
+model: opencode-gpt/gpt-5-nano
 steps: 15
 tools:
   write: false

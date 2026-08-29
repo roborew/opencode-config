@@ -116,15 +116,6 @@
             "top_p": 0.95
           }
         },
-        "gpt-5-nano": {
-          "name": "GPT-5 Nano"
-        },
-        "gpt-5.6-terra": {
-          "name": "GPT-5.6 Terra",
-          "options": {
-            "temperature": 0.2
-          }
-        },
         "qwen3.7-max": {
           "name": "Qwen3.7 Max",
           "options": {
@@ -177,6 +168,22 @@
             "temperature": 0.2,
             "top_p": 0.9
           }
+        }
+      }
+    },
+    "opencode-gpt": {
+      "npm": "@ai-sdk/openai",
+      "name": "OpenCode Zen (GPT)",
+      "options": {
+        "baseURL": "https://opencode.ai/zen/v1",
+        "timeout": 900000
+      },
+      "models": {
+        "gpt-5-nano": {
+          "name": "GPT-5 Nano"
+        },
+        "gpt-5.6-terra": {
+          "name": "GPT-5.6 Terra"
         }
       }
     },
@@ -370,7 +377,7 @@
     },
     "worktree-manager": {
       "mode": "subagent",
-      "model": "opencode/gpt-5-nano",
+      "model": "opencode-gpt/gpt-5-nano",
       "steps": 15
     },
     "preflight": {
