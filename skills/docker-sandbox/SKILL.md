@@ -44,7 +44,7 @@ Names: sibling `opencode-sandbox-<slug>`, publish helper `opencode-sandbox-route
    - Never `.env.example` / invent values. Fix: `./scripts/setup.sh projects …` create+paste, then worktree-env if linked.
 3. Prefer documented compose (`docker-compose.test.yml`, `compose.test.yaml`, README). Ask once if ambiguous; never invent a stack.
 4. **Self-contained compose required for live/review stacks:** use the app’s documented listener and private service topology. Do not add cloudflared to app Compose.
-5. Always **destroy** what you create (finally). `destroy` unexposes first.
+5. **Lifecycle-aware destroy.** Per-ticket TDD loop: developer creates the sandbox and keeps it alive after GREEN (does not destroy); code-review reuses via `sandbox status --id <sandbox_id>` and destroys after `APPROVED` or `ENV_BLOCKED`, keeps alive on `BLOCKED` for developer retry. Sandbox feature build mode (menu 2): developer creates and destroys per the existing finally rule. `destroy` unexposes first.
 6. Never mount host `docker.sock` into nested app compose; never GPU/CUDA sandboxes.
 7. **Expose only when asked.** Hostname = `{slug}.{apex}` (not `reviews.*`). The app must bind the requested `--port` in the sibling before exposure.
 8. **Preview atomically:** use `sandbox preview`, never a manual combination of Compose up and `sandbox expose`. It derives `<slug>.<apex>` and waits for the requested port before creating the Traefik route. Project instructions own any app-specific environment variables and host/tenant behavior.
@@ -53,7 +53,7 @@ Names: sibling `opencode-sandbox-<slug>`, publish helper `opencode-sandbox-route
 
 ## ID hygiene
 
-Slug from branch/feature (DNS-label sanitize). One sandbox per worktree session unless `status` shows ready id — reuse.
+Slug from branch/feature (DNS-label sanitize). One sandbox per worktree session. The sandbox persists across developer → code-review within the same ticket session. code-review is the destroyer on `APPROVED`/`ENV_BLOCKED`; developer keeps it alive on completion.
 
 ## App apex discovery
 
@@ -70,7 +70,8 @@ sandbox create --id <slug> --worktree "$(git rev-parse --show-toplevel)"
 sandbox exec --id <slug> -- docker compose -f docker-compose.test.yml build
 sandbox exec --id <slug> -- docker compose -f docker-compose.test.yml run --rm test
 # … or compose up -d for a live app before expose
-sandbox destroy --id <slug>
+# developer keeps the sandbox alive after GREEN; code-review reuses it via
+# sandbox status --id <slug> and destroys after APPROVED or ENV_BLOCKED
 ```
 
 ## Direct Docker fallback (non-Sysbox — Mac / local dev)
@@ -80,8 +81,9 @@ When `sandbox probe` is unavailable but `docker` is present (e.g. Docker Desktop
 ```bash
 docker compose -f docker-compose.test.yml build
 docker compose -f docker-compose.test.yml run --rm test
-# cleanup in a finally path:
-docker compose -f docker-compose.test.yml down
+# developer does NOT run `down` after GREEN — code-review reuses the built
+# images with `run --rm test`, then runs `down` after APPROVED or ENV_BLOCKED
+# (keeps alive on BLOCKED for developer retry)
 ```
 
 - Same compose file and `test` service as the Sysbox path — the two backends are interchangeable for verification.

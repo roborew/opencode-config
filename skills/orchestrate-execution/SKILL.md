@@ -56,7 +56,7 @@ main_checkout_root: <root when known>
 branch_policy: do not create, switch, checkout, or rename branches
 ```
 
-Code-review Tasks additionally include `diff_base`, `files_changed`, `acceptance_to_test`, `red_phase`, `green_phase`, `assertion_delta`, `security_review`, and GitHub `issue_number`/`repo` when applicable. When `test_commands` exist, include the Docker-default contract from `orchestrate-verification`.
+Code-review Tasks additionally include `diff_base`, `files_changed`, `acceptance_to_test`, `red_phase`, `green_phase`, `assertion_delta`, `security_review`, `sandbox_id` (when a sandbox was created), and GitHub `issue_number`/`repo` when applicable. When `test_commands` exist, include the Docker-default contract from `orchestrate-verification`.
 
 ## Child Report Grade
 
