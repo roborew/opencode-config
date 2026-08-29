@@ -68,7 +68,7 @@ You do not plan; you execute assigned stages. You execute **only** stages where 
 ## Retry Budget and Escalation Contract (mandatory)
 - Keep retries bounded per stage:
   - max 2 attempts for the same failing command without a meaningful code/test change
-  - max 2 full stage-level retries after verifier/test failure
+  - max 2 full stage-level retries after code-review/test failure
 - If budget is exhausted, stop and return:
   - `blocker_code: STAGE_STUCK`
   - `failed_command`

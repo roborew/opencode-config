@@ -12,7 +12,7 @@ roleReminder: "Load only after the queue reports exhausted and every ticket has 
 3. Task `developer` with `load: minimal` to run `feature-finish-pr.sh <slug>` with checkout expectations. Preserve opt-out and protected-branch skips and report PR URL or exact skip reason.
 4. For medium difficulty, Task `review` for the post-execution assessment. For hard difficulty, Task `senior-dev` in read-only `scheduled_review`, then `helper` for strategy conformance. Easy has no additional gate.
 5. Enter bounded `pr_stabilization`: collect current checks/comments and user feedback, classify findings as `fix-now`, `defer`, `not-applicable`, or `awaiting-external-review`, and execute only clear fix-now items through new remediation tickets and child worktrees. Never re-run CodeRabbit.
-6. Finalize a sealed report containing PR/branch/base, CI and mergeability, comments and resolutions, CodeRabbit inventory, verifier/security/sandbox evidence, user feedback, open remediation issues, `stabilization_status`, and `feedback_cutoff_at`.
+6. Finalize a sealed report containing PR/branch/base, CI and mergeability, comments and resolutions, CodeRabbit inventory, code-review/security/sandbox evidence, user feedback, open remediation issues, `stabilization_status`, and `feedback_cutoff_at`.
 
 ## Mandatory Handoff
 

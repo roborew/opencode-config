@@ -67,7 +67,7 @@ bash "$OC/skills/github-issue-run/lib/issue-state-transition.sh" "<repo>" "<numb
 | When | Label |
 |------|-------|
 | Start work | `state:in-progress` |
-| Verifier PASS (all stages done for issue) | `state:ready-for-review` |
+| Code-review approval (all stages done for issue) | `state:ready-for-review` |
 | Blocked / env failure | `state:blocked` |
 | Accepted after Mode F Phase 1 | `state:done` (set by **architect** — orchestrate must **not** use this label) |
 

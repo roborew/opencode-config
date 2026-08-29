@@ -78,7 +78,7 @@ while IFS= read -r num; do
     continue
   fi
   if [[ "$labels" != *"verified"* ]]; then
-    echo "SKIP: ${REPO}#${num} (not verified — missing 'verified' label; run the verifier first)" >&2
+    echo "SKIP: ${REPO}#${num} (not verified — missing 'verified' label; run code-review first)" >&2
     skipped=$((skipped + 1))
     continue
   fi

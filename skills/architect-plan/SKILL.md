@@ -127,7 +127,7 @@ Assign each sub-problem an ID (e.g. `sp-1`, `sp-data-model`, `sp-ui-shell`).
 
 When **Difficulty: easy**:
 
-1. Using investigation evidence from Step 1, author the full feature artifact yourself: `Context`, `Goal`, `Difficulty: easy`, `StagePlan`, `Tasks`, `FilesToChange`, `StageAcceptanceChecks`, `AcceptanceChecks`, `CompletionReport`, `ReviewDecisionGate`, `VerifierInputs`, `DocumentationOutputs`, `Risks`, `OutOfScope`, etc., per `docs/plan-artifact-schema.md`.
+1. Using investigation evidence from Step 1, author the full feature artifact yourself: `Context`, `Goal`, `Difficulty: easy`, `StagePlan`, `Tasks`, `FilesToChange`, `StageAcceptanceChecks`, `AcceptanceChecks`, `CompletionReport`, `ReviewDecisionGate`, `CodeReviewInputs`, `DocumentationOutputs`, `Risks`, `OutOfScope`, etc., per `docs/plan-artifact-schema.md`.
 2. Every stage must have Owner, tests, and executable checks (same bar as strategist output).
 3. Go to **Step 5: Scribe and handoff** (skip Steps 3–4).
 
@@ -163,7 +163,7 @@ After all strategist sub-problems report back:
 1. **Collect** all Sub-Problem Reports.
 2. **Merge stages** into a single ordered StagePlan. Resolve cross-sub-problem dependencies (e.g. if sp-2's UI depends on sp-1's data model, order sp-1 stages first).
 3. **Combine** Tasks, FilesToChange, StageAcceptanceChecks, Risks from all reports.
-4. **Add global sections**: Context, Goal, **Difficulty** (copy the level from Step 0), AcceptanceChecks (end-to-end), CompletionReport, ReviewDecisionGate, VerifierInputs, DocumentationOutputs, OutOfScope.
+4. **Add global sections**: Context, Goal, **Difficulty** (copy the level from Step 0), AcceptanceChecks (end-to-end), CompletionReport, ReviewDecisionGate, CodeReviewInputs, DocumentationOutputs, OutOfScope.
 5. **Note gaps**: If any strategist reported gaps, investigate those gaps with `claude-context` and fill them in the combined plan.
 6. **Set artifact metadata**: `artifact_type: feature`, `slug`, path `.plan/feature.<slug>.md`.
 
@@ -190,7 +190,7 @@ Follow `docs/plan-artifact-schema.md` exactly. At minimum include:
 - `Context`, `Goal`, **`Difficulty`** (`easy` | `medium` | `hard`)
 - `StagePlan`, `Tasks`, `FilesToChange` — **Tasks must order test-first; FilesToChange must include test file paths per stage**
 - `StageAcceptanceChecks`, `AcceptanceChecks` — **every stage MUST have at least one executable test; reject plans where any stage lacks tests**
-- `CompletionReport`, `ReviewDecisionGate`, `VerifierInputs`, `DocumentationOutputs`
+- `CompletionReport`, `ReviewDecisionGate`, `CodeReviewInputs`, `DocumentationOutputs`
 - `Risks`, `OutOfScope`
 
 ## Stage sizing budget (mandatory for features)

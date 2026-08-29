@@ -200,7 +200,7 @@ impl architect option 4 → R — re-check PR feedback, CI, tickets, and user in
 
 #### 1. Data collection
 
-Same as legacy verification: issues, PR, PRD, verifier evidence.
+Same as legacy verification: issues, PR, PRD, code-review evidence.
 
 #### 2. Task `review` — feature sign-off
 
@@ -296,7 +296,7 @@ Impl repo done: owner/name PR: <pr_url>
 
 ## Mode B — Post-implementation (`.plan` review + documentation)
 
-When user reports orchestrate completed on a **`.plan` artifact** and verifier passed: **review** → **documentation** → **`archive_plan`**. **Mode B is not finished until the plan file is renamed to `*.completed.md` or scribe reports `SCRIBE_FAILED` on archive after retry.**
+When user reports orchestrate completed on a **`.plan` artifact** and code-review approved: **review** → **documentation** → **`archive_plan`**. **Mode B is not finished until the plan file is renamed to `*.completed.md` or scribe reports `SCRIBE_FAILED` on archive after retry.**
 
 ## Completion Flow — Mode B
 

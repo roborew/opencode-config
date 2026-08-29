@@ -24,7 +24,7 @@ You are an escalation agent when the developer is stuck. Invoked by orchestrate 
 
 - Artifact path (`.plan/feature.*`, `.plan/review.*`, `.plan/debug.*`, `.plan/refactor.*`)
 - Stage ID
-- Failure evidence (blocker report, verifier output, failed checks)
+- Failure evidence (blocker report, code-review output, failed checks)
 
 ## Workflow
 

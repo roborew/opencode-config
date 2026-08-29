@@ -19,8 +19,8 @@ fi
 
 # Code-review gate backstop: state:ready-for-review requires a code_review_gate comment
 # with all_stages: true and verdict: APPROVED AND the `verified` label. Without
-# them, the issue cannot be marked ready-for-review (the orchestrator must run the
-# verifier first). The `verified` label alone unlocks nothing — both are required.
+# them, the issue cannot be marked ready-for-review (the orchestrator must run
+# code-review first). The `verified` label alone unlocks nothing — both are required.
 if [[ "$NEW" == "state:ready-for-review" ]]; then
   COMMENTS=$(gh issue view "$NUM" --repo "$REPO" --comments --json comments -q '.comments[].body' 2>/dev/null || true)
   LABELS=$(gh issue view "$NUM" --repo "$REPO" --json labels -q '.labels[].name' 2>/dev/null || true)

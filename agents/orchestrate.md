@@ -70,7 +70,7 @@ Discard copied skill prose and old child transcripts when state changes. A skill
 | Sandbox build/refresh/expose/destroy requested | `orchestrate-sandbox` | Not for GitHub ticket queues |
 | Immediately after every implementer Task | `orchestrate-verification` | Not for final feature sign-off |
 | Required child fails, loops, or environment blocks | `orchestrate-recovery` | Not for happy-path progression |
-| Queue exhausted and all tickets are accepted by verifier | `orchestrate-completion` | Not for per-stage verification |
+| Queue exhausted and all tickets have code-review approval | `orchestrate-completion` | Not for per-stage verification |
 | Normal lifecycle invariants and fail-closed rules | `orchestrate-execution` | Kernel only; detailed procedures live in trigger skills |
 
 If any required skill load fails, stop with `SKILL_UNAVAILABLE: <skill>`. Include `load: full|minimal|auto` in every child Task prompt and require one final `report_to_parent` payload.
@@ -81,7 +81,7 @@ If any required skill load fails, stop with `SKILL_UNAVAILABLE: <skill>`. Includ
 2. **Checkout identity gate:** Run it before work selection, transitions, or implementation. Pass `impl_repo_path`, `expected_branch`, `is_linked_worktree`, `main_checkout_root`, and `branch_policy` to every implementation/verification Task. Children never create or switch branches.
 3. Preflight is optional environment preparation; it never chooses a checkout. Use `worktree-env` then `preflight` only after the user answers yes or requests a rerun.
 4. Delegate GitHub commands and helper scripts to `developer` with `load: minimal`; delegate implementation to the stage Owner; delegate acceptance to `code-review`.
-5. Execute one ticket/stage at a time. Acceptance verification is mandatory before stage advancement, issue transition, or todo completion. A developer report never substitutes for a verifier report.
+5. Execute one ticket/stage at a time. Acceptance verification is mandatory before stage advancement, issue transition, or todo completion. A developer report never substitutes for a code-review report.
 6. If a required code-review report is empty, malformed, or step-limited, treat it as `BLOCKED`; retry it once with `load: full`, then use recovery. Never substitute implementer output.
 7. Normal GitHub readiness failure stops and returns to spec architect issue-expand. It never enters flat mode or local-plan compatibility.
 8. CodeRabbit runs at most once after the complete queue, never per ticket/stage or after remediation. Final review/documentation belongs to implementation architect after handoff.

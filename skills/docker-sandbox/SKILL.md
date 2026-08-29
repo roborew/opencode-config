@@ -11,7 +11,7 @@ Load when a stage needs Docker Compose build/test and/or optional web review exp
 
 **Not** Cloudflare Workers Sandbox (`skills/cloudflare/references/sandbox/` — Durable Object / `@cloudflare/sandbox`). This skill is only the opencode-server Sysbox sibling CLI (`sandbox probe|create|exec|…`).
 
-Orchestrate does not load this skill; it passes `sandbox: preferred|required` and load instructions to `developer` / `frontend-dev` / `verifier`. Menu **(2)** / `execution_mode: sandbox_feature_build` is the parallel build-refresh path (no issue queue).
+Orchestrate does not load this skill; it passes `sandbox: preferred|required` and load instructions to `developer` / `frontend-dev` / `code-review`. Menu **(2)** / `execution_mode: sandbox_feature_build` is the parallel build-refresh path (no issue queue).
 
 ## Division of responsibility (do not invent new skills)
 
@@ -108,7 +108,7 @@ Use an app’s documented `sandbox expose` procedure only when it requires a non
 
 ## Evidence
 
-`sandbox exec` logs are valid verifier evidence when sandbox is ready and compose tests are documented.
+`sandbox exec` logs are valid code-review evidence when sandbox is ready and compose tests are documented.
 
 ## On unavailable
 

@@ -102,7 +102,7 @@ if [[ -n "$feature_slug" ]]; then
   labels+=("feature:$feature_slug")
 fi
 
-# Every targeted/remediation issue is seeded `unverified`; `verified` is set only on verifier APPROVED.
+# Every targeted/remediation issue is seeded `unverified`; `verified` is set only on code-review APPROVED.
 labels+=("unverified")
 if [[ ${#repo[@]} -ge 2 ]]; then
   gh label create "unverified" --repo "${repo[1]}" 2>/dev/null || true

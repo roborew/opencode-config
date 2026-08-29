@@ -13,4 +13,4 @@ roleReminder: "Load immediately after every implementer Task and before any stag
 4. Grade code-review `APPROVED` only when every criterion has non-missing coverage, manual criteria have evidence or accepted deviation, security is resolved, and the report is complete. An empty or step-limited return is `BLOCKED`; retry once with `load: full`, then load `orchestrate-recovery`.
 5. For GitHub stage mode, Task `developer` with `load: minimal` posts the `code_review_gate:` comment and atomically swaps `unverified` to `verified` before the next stage. After the last stage, include `all_stages: true`, `stages_verified`, and `verdict: APPROVED` before `state:ready-for-review`.
 
-Never use an implementer as the verifier. Never advance a stage, transition an issue, or close a todo before this gate passes.
+Never use an implementer as the code-review gate. Never advance a stage, transition an issue, or close a todo before this gate passes.

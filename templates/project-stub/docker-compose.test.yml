@@ -1,6 +1,6 @@
 # docker-compose.test.yml — universal verification backend
 #
-# Required for every project with test_commands. The verifier (and developer
+# Required for every project with test_commands. Code-review (and developer
 # test runs) execute test_commands via this file — Sysbox `sandbox exec` on
 # opencode-server, or direct `docker compose -f docker-compose.test.yml` on
 # local dev (Docker Desktop). Host execution is NOT the default.

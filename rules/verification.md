@@ -1,12 +1,12 @@
 # Verification convention (Docker-default)
 
-Scope: how implementation is verified across orchestrate, developer, and verifier.
+Scope: how implementation is verified across orchestrate, developer, and code-review.
 
 ## Principle
 
 Verification runs in a **reproducible Docker environment**, never on the host as the
 primary path. This removes the host-toolchain gap (e.g. Ruby/mise/bundle missing on a
-subagent host) that previously incentivized bypassing the verifier gate.
+subagent host) that previously incentivized bypassing the code-review gate.
 
 ## Contract
 
@@ -35,10 +35,10 @@ Probe order: `sandbox probe` → `sandbox exec`; else `docker` present → direc
   `test_commands` but has no compose test file — it cannot enter the orchestrate loop.
 - **Preflight**: records `compose_test_file`, `docker`, `sandbox`, and
   `verification_gap`.
-- **Verifier**: runs `test_commands` via the Docker path by default. Host execution is
+- **Code-review**: runs `test_commands` via the Docker path by default. Host execution is
   only APPROVED-eligible when the user explicitly approves it for a confirmed
   host-runnable project.
-- **Verifier gate backstop** (`issue-state-transition.sh`): refuses
+- **Code-review gate backstop** (`issue-state-transition.sh`): refuses
   `state:ready-for-review` without a `code_review_gate:` comment with
   `all_stages: true` and `verdict: APPROVED`.
 

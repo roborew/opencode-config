@@ -129,4 +129,4 @@ test -d node_modules && echo "node_modules: present" || echo "node_modules: MISS
 3. `worktree-env.sh` completes the copy (or `ok_existing`) without prompting.
 4. If `sandbox` is ready, preflight's optional `.env` / Infisical key-name presence notes complete via bash only (`grep -l`, `awk`, `test -e`) without a permission prompt.
 5. **Validation of the agent-level override:** `agents/preflight.md` and `agents/worktree-env.md` contain `tools.read: false`, `permission.edit` with `".env": "allow"` / `".env.*": "allow"` / `"**/.env": "allow"` / `"**/.env.*": "allow"`, and `permission.external_directory: { "*": "allow" }`. The `permission.bash` block mirrors the dangerous denies from global `opencode.json` (`rm -rf /*`, `sudo *`, etc.) and has `"*": "allow"`.
-6. **Negative check:** No agent outside `preflight` / `worktree-env` inherits those `.env` allows — global `opencode.json` still denies `.env` for everyone else (developer, frontend-dev, verifier, etc.).
+6. **Negative check:** No agent outside `preflight` / `worktree-env` inherits those `.env` allows — global `opencode.json` still denies `.env` for everyone else (developer, frontend-dev, code-review, etc.).

@@ -19,7 +19,7 @@ Coordinate an existing GitHub ticket queue. Do not write files, execute shell, i
 5. Run exactly one seam at a time: dispatch `test-writer` for RED, the Owner-matched implementer for GREEN, then `code-review` in ticket mode. Never advance without an `APPROVED` code-review report.
 6. An empty, malformed, or step-limited required child report is `BLOCKED`, not success. Required skill load failure is `BLOCKED: REQUIRED_SKILL_NOT_LOADED`; perform no state transition.
 7. Preserve `state:*`, `verified`, `unverified`, `code_review_gate:`, commit-reference, and close-at-merge contracts exactly.
-8. CodeRabbit is a single feature/artifact-wide gate after the final verifier pass, never per stage, ticket, or remediation. Final implementation sign-off and documentation remain with the implementation architect.
+8. CodeRabbit is a single feature/artifact-wide gate after the final code-review approval, never per stage, ticket, or remediation. Final implementation sign-off and documentation remain with the implementation architect.
 
 ## Lifecycle States
 
@@ -64,4 +64,4 @@ Code-review Tasks additionally include `diff_base`, `files_changed`, `acceptance
 
 ## Completion Definition
 
-Orchestration is complete only after every ticket/stage has an `APPROVED` verifier report, required CodeRabbit/difficulty gates are resolved, PR stabilization is finalized or explicitly skipped, and the completion handoff names the exact target and implementation-architect next action.
+Orchestration is complete only after every ticket/stage has an `APPROVED` code-review report, required CodeRabbit/difficulty gates are resolved, PR stabilization is finalized or explicitly skipped, and the completion handoff names the exact target and implementation-architect next action.

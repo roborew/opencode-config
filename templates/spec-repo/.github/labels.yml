@@ -19,7 +19,7 @@
   description: Orchestrate is executing this GitHub ticket (or active local work)
 - name: state:ready-for-review
   color: fef2c0
-  description: Verifier passed; awaiting architect or human sign-off
+  description: Code review approved; awaiting architect or human sign-off
 - name: state:blocked
   color: b60205
   description: Waiting on external dependency or decision

@@ -20,7 +20,7 @@ You are a **last resort** when execution is stuck or verification fails. Your ro
 
 ## Strategy conformance (orchestrate-initiated, hard Difficulty only)
 
-When orchestrate invokes you after **all stages passed verifier** with `Difficulty: hard`:
+When orchestrate invokes you after **all stages passed code-review** with `Difficulty: hard`:
 
 1. Read-only reasoning: compare **Goal**, **AcceptanceChecks**, and **StagePlan** (or summary provided) to the **implementation summary** (files touched, tests run, stage completion reports).
 2. List any **logical or architectural mismatches** (missing acceptance criteria, scope drift, invariant risks). Do not write files; return markdown for orchestrator to act on.
@@ -30,7 +30,7 @@ This is distinct from failure recovery — no blocker is required to invoke this
 
 ## Inputs
 - Current artifact path (`.plan/feature.*`, `.plan/review.*`, `.plan/debug.*`, `.plan/refactor.*`)
-- Failure evidence (blockers, verifier output, failed checks)
+- Failure evidence (blockers, code-review output, failed checks)
 - Current stage status
 - For strategy conformance: Goal + AcceptanceChecks + implementation summary (pasted by orchestrate)
 

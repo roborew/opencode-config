@@ -17,10 +17,10 @@ Invoke `helper` immediately when any occur:
 
 - same stage fails verification twice
 - unresolved blocker reported by execution subagent
-- verifier reports failed criteria requiring strategy change
+- code-review reports failed criteria requiring strategy change
 - developer reports `blocker_code: ENV_BLOCKED`
 - developer/frontend-dev/ux-dev reports `blocker_code: STAGE_STUCK`
-- **verifier Task returned empty / no `report_to_parent` payload / step-limited** — treat as `BLOCKED`, not a skip; re-dispatch the verifier once with `load: full`, then escalate to the user. Never substitute developer test output.
+- **code-review Task returned empty / no `report_to_parent` payload / step-limited** — treat as `BLOCKED`, not a skip; re-dispatch code-review once with `load: full`, then escalate to the user. Never substitute developer test output.
 - child report repetition indicates loop/stall
 
 Do not advance stages until helper updates are applied via `scribe`.
@@ -28,11 +28,11 @@ Do not advance stages until helper updates are applied via `scribe`.
 ## Senior-Dev Escalation (operator-triggered, user confirmation required)
 
 **Precise mid-stage escalation path:**
-- developer/frontend-dev/ux-dev returns `blocker_code: STAGE_STUCK`, a repeated functional failure occurs, or verifier identifies a criterion failure that cannot be resolved by a narrow retry;
+- developer/frontend-dev/ux-dev returns `blocker_code: STAGE_STUCK`, a repeated functional failure occurs, or code-review identifies a criterion failure that cannot be resolved by a narrow retry;
 - orchestrate first invokes `helper` to produce the minimal recovery strategy;
 - orchestrate escalates to senior-dev only when the operator explicitly requests it and confirms the escalation;
-- senior-dev receives the stage contract, checkout contract, diff base, failure output, verifier evidence, helper recovery strategy, and retry history;
-- senior-dev may edit only the minimal unblocker, then returns `HANDOFF_TO_DEVELOPER` with changed files, commands, and remaining work; developer resumes the stage and verifier runs again.
+- senior-dev receives the stage contract, checkout contract, diff base, failure output, code-review evidence, helper recovery strategy, and retry history;
+- senior-dev may edit only the minimal unblocker, then returns `HANDOFF_TO_DEVELOPER` with changed files, commands, and remaining work; developer resumes the stage and code-review runs again.
 
 **Procedure:**
 1. **Stop the current process.** Do not invoke senior-dev yet.
@@ -42,18 +42,18 @@ Do not advance stages until helper updates are applied via `scribe`.
 5. After confirmation, invoke `senior-dev` via Task with `execution_mode: escalation_fix`, artifact path, stage_id, failure evidence (blocker report), helper recovery strategy, and retry history.
 6. Senior-dev diagnoses, implements fix, and reports with `HANDOFF_TO_DEVELOPER` when blocker is fixed.
 7. When senior-dev reports `HANDOFF_TO_DEVELOPER`, grade the report, then **resume with developer** for remaining stage work. Do not re-invoke senior-dev for the same stage.
-8. Developer resumes the stage and verifier runs again.
+8. Developer resumes the stage and code-review runs again.
 
-### Verifier-driven escalation (bounded to high-risk defects)
+### Code-review-driven escalation (bounded to high-risk defects)
 
-A third optional escalation route for `verifier` findings:
-- Trigger only when verifier finds a cross-cutting correctness/security/design concern that cannot be assessed from the stage contract, or when the same criterion fails two implementation-verification cycles;
+A third optional escalation route for `code-review` findings:
+- Trigger only when code-review finds a cross-cutting correctness/security/design concern that cannot be assessed from the stage contract, or when the same criterion fails two implementation-verification cycles;
 - Require the same explicit operator confirmation as mid-stage escalation;
 - Do not use it for ordinary test failures, missing evidence, lint issues, or environment blockers.
 
 **Do not** use this confirmation flow for the **hard** Difficulty scheduled post-implementation review (see **`orchestrate-execution`** Difficulty-based completion gates).
 
-Senior-dev is **not** auto-invoked for mid-stage work without operator request + user confirmation—except for the **hard** completion gate after all stages pass verifier.
+Senior-dev is **not** auto-invoked for mid-stage work without operator request + user confirmation—except for the **hard** completion gate after all stages pass code-review.
 
 ## Environment Blocker Policy
 
@@ -64,9 +64,9 @@ If a subagent reports `ENV_BLOCKED`:
 3. **Mid-stage execution:** Invoke `helper` to produce a minimal recovery/update strategy; use `scribe` to amend artifact `IterationNotes` and next-step tasks.
 4. Ask user for explicit environment remediation confirmation before retry.
 
-**Verifier-specific `ENV_BLOCKED` / toolchain gap (never developer-substitute):**
-- If the **verifier** reports `ENV_BLOCKED` or cannot run the project toolchain (e.g. Ruby/mise/bundle missing on its host), re-dispatch the **verifier** with the Docker path: `sandbox: preferred` + `load skill: docker-sandbox` + `compose_test_file`, instructing it to run `test_commands` via Docker (Sysbox `sandbox exec` on opencode-server, or direct `docker compose -f <compose_test_file>` on local dev when the `sandbox` CLI is absent).
-- **Never** route verification through a `developer` / `frontend-dev` worker ("only verify, don't edit"). A developer report is not the independent gate.
+**Code-review-specific `ENV_BLOCKED` / toolchain gap (never developer-substitute):**
+- If **code-review** reports `ENV_BLOCKED` or cannot run the project toolchain (e.g. Ruby/mise/bundle missing on its host), re-dispatch **code-review** with the Docker path: `sandbox: preferred` + `load skill: docker-sandbox` + `compose_test_file`, instructing it to run `test_commands` via Docker (Sysbox `sandbox exec` on opencode-server, or direct `docker compose -f <compose_test_file>` on local dev when the `sandbox` CLI is absent).
+- **Never** route the acceptance gate through a `developer` / `frontend-dev` worker ("only verify, don't edit"). A developer report is not the independent gate.
 - If Docker itself is unavailable, escalate to the user with **one** option (bring up Docker / add `docker-compose.test.yml`) — do not silently fall back to host verification.
 
 Do not let subagents loop on runtime/toolchain commands when environment is mismatched.
@@ -75,15 +75,15 @@ Do not let subagents loop on runtime/toolchain commands when environment is mism
 
 When you receive a review artifact (`.plan/review.<slug>.md`) from architect with remediation tasks:
 
-- on verifier fail, invoke `helper`
+- on code-review fail, invoke `helper`
 - helper returns minimal amendment strategy
 - dispatch `scribe` to update existing `.plan/review.<slug>.md`
-- rerun developer stage and verifier
-- when verifier passes, prompt user: "Switch to architect for final sign-off and documentation."
+- rerun developer stage and code-review
+- when code-review approves, prompt user: "Switch to architect for final sign-off and documentation."
 
 ## Loop Detection and Halt (mandatory)
 
-If you receive the same or near-identical report from a child (scribe, developer, frontend-dev, verifier) **2 or more times**:
+If you receive the same or near-identical report from a child (scribe, developer, frontend-dev, code-review) **2 or more times**:
 
 1. Treat the child as `BLOCKED` (loop/stall), not `PASS`.
 2. Invoke `helper` immediately with loop evidence and request minimal recovery strategy.
@@ -105,7 +105,7 @@ Provider fallback is layered **on top of** the recovery paths above. It is **not
 Dispatch `kilo-fallback` (then `openrouter-fallback`) only after the recovery paths above have run for the **same** bounded child Task and the failure pattern is not recoverable inside the original role. Typical cases:
 
 - Transient provider failure (`timeout`, `429`, `5xx`) on the original role's provider, with the one same-agent retry already exhausted.
-- Logic-class failure (`STAGE_STUCK`, loop, unresolved blocker, verifier strategy failure) where the helper amendment was applied and the same role still cannot finish the Task on the original provider.
+- Logic-class failure (`STAGE_STUCK`, loop, unresolved blocker, code-review strategy failure) where the helper amendment was applied and the same role still cannot finish the Task on the original provider.
 
 A fallback is **not** appropriate for primary-agent work, for fresh planning that has not been delegated yet, or when the helper path was skipped. Senior-dev remains operator-confirmed (see **Senior-Dev Escalation** above); the fallback does not bypass that confirmation.
 
@@ -133,11 +133,11 @@ After both `kilo-fallback` and `openrouter-fallback` fail for the same Task, hal
 
 ## Manual Handoff Recovery (when Task does not return)
 
-If the user reports that a subagent (developer, frontend-dev, verifier, scribe, helper, senior-dev) completed and produced a report but the Task did not return control:
+If the user reports that a subagent (developer, frontend-dev, code-review, scribe, helper, senior-dev) completed and produced a report but the Task did not return control:
 
 1. Ask the user to paste the completion report here.
 2. Grade the report using the Child Report Grading Gate from **`orchestrate-execution`** (PASS/NEEDS_RETRY/BLOCKED).
-3. If PASS, proceed to the next stage (or verifier if stage complete). Do not re-invoke the same subagent for the same stage.
+3. If PASS, proceed to the next stage (or code-review if stage complete). Do not re-invoke the same subagent for the same stage.
 4. If NEEDS_RETRY or BLOCKED, follow the normal decision policy.
 
 Do not ask the user to message the subagent again—the subagent has already completed. Accept the pasted report and continue.

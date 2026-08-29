@@ -40,7 +40,7 @@ When non-empty, **orchestrate** runs one stage per loop (`execution_mode: github
 | `objective` | yes | One stage goal |
 | `files` | no | Paths to touch (from codebase discovery) |
 | `acceptance` | yes | Stage acceptance strings |
-| `test_commands` | yes | Commands for verifier |
+| `test_commands` | yes | Commands for code-review |
 | `commit_message` | yes | Subject for this stage's commit (`Refs: #n`) |
 
 Human-readable detail lives under **## Implementation planning** (same content as a `.plan` artifact, adapted for GitHub).
