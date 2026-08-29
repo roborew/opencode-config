@@ -1,7 +1,7 @@
 ---
 description: Markdown and docs writer (write-only). PRD, docs, registry — not .plan artifacts in GitHub-first flow.
 mode: subagent
-model: opencode-go/deepseek-v4-flash
+model: opencode-gpt/gpt-5-nano
 tools:
   write: true
   edit: false
