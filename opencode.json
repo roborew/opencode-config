@@ -176,15 +176,12 @@
       "name": "OpenCode Zen (GPT)",
       "options": {
         "baseURL": "https://opencode.ai/zen/v1",
+        "apiKey": "{env:OPENCODE_API_KEY}",
         "timeout": 900000
       },
       "models": {
-        "gpt-5-nano": {
-          "name": "GPT-5 Nano"
-        },
-        "gpt-5.6-terra": {
-          "name": "GPT-5.6 Terra"
-        }
+        "gpt-5-nano": { "name": "GPT-5 Nano" },
+        "gpt-5.6-terra": { "name": "GPT-5.6 Terra" }
       }
     },
     "opencode-go": {
