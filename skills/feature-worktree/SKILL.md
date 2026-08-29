@@ -1,23 +1,79 @@
 ---
 name: feature-worktree
-description: Coordinate feature and ticket worktrees with dependency-safe manual batches.
+description: Coordinate feature and ticket worktrees via the worktree-manager subagent (which drives the /experimental/worktree API so worktrees and sessions register in the Desktop GUI).
 ---
 
 # Feature Worktree
 
-Run inside the feature worktree session. For setup, call `worktree_create(branch="feature/<slug>", baseBranch="develop")`, push the branch, and record `baseBranch` in the checkout contract. Present auto versus manual scheduling once; default to manual batches.
+This skill is **routing only**: it does not perform worktree operations itself. All worktree lifecycle (create, list, delete, reset) is delegated to the `worktree-manager` subagent, which calls the four `worktree_*` tools registered by `plugins/worktree.js`. **Raw `git worktree add`/`git worktree remove`/`git branch opencode/...` are forbidden** — they bypass GUI registration and are not coordinated with session start.
 
-Build the dependency DAG from each ticket's `depends_on`. Batch independent tickets, sequence dependent or overlapping-file tickets, and create each child with `worktree_create(branch="ticket/<issue>-<slug>", baseBranch="feature/<slug>")`. Run test-writer RED, the Owner GREEN stage, and code-review ticket mode in the child. Open sub-PRs with `head=ticket/<issue>-<slug>` and `base=feature/<slug>`.
+## Hard rules
 
-After a child merges, call `worktree_delete(reason)` and in the feature worktree run `git fetch` followed by `git merge --ff-only origin/feature/<slug>` before dependent work. Never delete unmerged or unpushed work.
+1. The orchestrator (`orchestrate`) MUST NOT call worktree tools directly. Delegate to `worktree-manager` with a JSON-shaped `prompt` containing one `action`.
+2. Never accept raw `git worktree` as a fallback path. If the API fails, surface `BLOCKED: WORKTREE_API_FAILED` and stop. The user must restart the opencode-server stack (or fix the upstream) before retrying.
+3. The pre-delete checks (pushed, clean) and the self-guard against `OPENCODE_APPS_DIR` are owned by `worktree-manager` and `plugins/worktree.js` respectively. Do not re-implement them here.
+4. Naming convention is `feat-<slug>` for a feature, `ticket-<issue>-<slug>` for a ticket. The server auto-prefixes `opencode/`.
+5. Branches always look like `opencode/feat-<slug>` and `opencode/ticket-<issue>-<slug>` (never `feature/...` or `ticket/...` on the wire).
 
-The feature worktree persists through PR stabilization. Only ticket worktrees are deleted on sub-PR merge. The feature worktree is deleted only after spec `feature-complete` merge (or manually by the user).
+## Setup (feature worktree)
 
-If plugin tools are unavailable or fail, stop and print:
+Run inside the parent repo session. Issue a single `worktree-manager` Task:
 
-```sh
-git worktree add -b feature/<slug> ../feature-<slug> develop
-git push -u origin feature/<slug>
+```json
+{
+  "action": "create_feature",
+  "slug": "<slug>",
+  "base": "develop"
+}
 ```
 
-Resume only after the user confirms the feature worktree exists. Never fall back to a branch-only parent.
+`worktree-manager` returns `{ ok: true, name, branch: "opencode/feat-<slug>", directory, base, reset_applied }`. Record `directory` and `branch` in the checkout contract. Push the branch yourself after the Task succeeds (the plugin does not push).
+
+Present auto versus manual scheduling once; default to manual batches.
+
+## Ticket fan-out
+
+Build the dependency DAG from each ticket's `depends_on`. Batch independent tickets, sequence dependent or overlapping-file tickets, and for each ticket dispatch:
+
+```json
+{
+  "action": "create_ticket",
+  "issue": <int>,
+  "slug": "<slug>",
+  "base": "opencode/feat-<slug>"
+}
+```
+
+Run test-writer RED, the Owner GREEN stage, and code-review ticket mode in the child. Open sub-PRs with `head=opencode/ticket-<issue>-<slug>` and `base=opencode/feat-<slug>`.
+
+## Ticket teardown
+
+After a child sub-PR merges, dispatch:
+
+```json
+{
+  "action": "delete",
+  "directory": "<ticket worktree dir>"
+}
+```
+
+`worktree-manager` performs the pushed/clean pre-checks, then calls `worktree_delete`. In the feature worktree run `git fetch` followed by `git merge --ff-only origin/feat-<slug>` before dependent work. Never delete unmerged or unpushed work.
+
+The feature worktree persists through PR stabilization. Only ticket worktrees are deleted on sub-PR merge. The feature worktree is deleted only after spec `feature-complete` merge (or manually by the user) — also via `worktree-manager`.
+
+## Restart / recovery
+
+When `opencode-server` restarts and worktree directories exist but no session is attached, dispatch:
+
+```json
+{
+  "action": "reset",
+  "directory": "<worktree dir>"
+}
+```
+
+This calls `POST /experimental/worktree/reset` and reconciles the session linkage. After reset, re-list with `action: "list"` to confirm the GUI sees the worktree.
+
+## Failure response
+
+If `worktree-manager` returns any `blocker_code`, surface it to the user verbatim (alongside `manualRecovery` if present) and stop. Do not retry, do not fall back, do not skip.

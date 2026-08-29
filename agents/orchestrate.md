@@ -15,6 +15,7 @@ permission:
     "*": deny
     scribe: allow
     worktree-env: allow
+    worktree-manager: allow
     preflight: allow
     developer: allow
     frontend-dev: allow

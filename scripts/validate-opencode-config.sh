@@ -159,6 +159,45 @@ if ! grep -q 'scripts/preflight-runtime.sh' agents/preflight.md skills/preflight
   echo "  MISSING: preflight-runtime.sh reference in preflight agent/skill"
   ERR=1
 fi
+
+echo "Checking worktree-manager + worktree plugin wiring..."
+if [[ ! -f plugins/worktree.js ]]; then
+  echo "  MISSING: plugins/worktree.js"
+  ERR=1
+elif ! node --check plugins/worktree.js >/dev/null 2>&1; then
+  echo "  FAIL: plugins/worktree.js syntax check"
+  ERR=1
+fi
+if ! grep -q '/experimental/worktree' plugins/worktree.js 2>/dev/null; then
+  echo "  MISSING: /experimental/worktree route in plugins/worktree.js"
+  ERR=1
+fi
+if ! grep -q 'OPENCODE_APPS_DIR' plugins/worktree.js 2>/dev/null; then
+  echo "  MISSING: OPENCODE_APPS_DIR self-guard in plugins/worktree.js"
+  ERR=1
+fi
+for tool in worktree_create worktree_list worktree_delete worktree_reset; do
+  if ! grep -q "$tool:" plugins/worktree.js 2>/dev/null; then
+    echo "  MISSING: $tool registration in plugins/worktree.js"
+    ERR=1
+  fi
+done
+if [[ ! -f agents/worktree-manager.md ]]; then
+  echo "  MISSING: agents/worktree-manager.md"
+  ERR=1
+fi
+if ! grep -q '"worktree-manager"' opencode.json 2>/dev/null; then
+  echo "  MISSING: worktree-manager agent entry in opencode.json"
+  ERR=1
+fi
+if ! grep -q 'worktree-manager: allow' agents/orchestrate.md 2>/dev/null; then
+  echo "  MISSING: worktree-manager in orchestrate task allow-list"
+  ERR=1
+fi
+if grep -q 'git worktree add' skills/feature-worktree/SKILL.md 2>/dev/null; then
+  echo "  ERROR: feature-worktree SKILL still documents raw git worktree fallback"
+  ERR=1
+fi
 if ! grep -q 'do not recommend upgrading the Docker/base Node' scripts/preflight-runtime.sh 2>/dev/null; then
   echo "  MISSING: Docker/image Node policy note in preflight-runtime.sh"
   ERR=1

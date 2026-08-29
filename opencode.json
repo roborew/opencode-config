@@ -368,6 +368,11 @@
       "model": "opencode/muse-spark-1.2-contributor-free",
       "steps": 10
     },
+    "worktree-manager": {
+      "mode": "subagent",
+      "model": "opencode/gpt-5-nano",
+      "steps": 15
+    },
     "preflight": {
       "mode": "subagent",
       "model": "opencode/muse-spark-1.2-contributor-free",
