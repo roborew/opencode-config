@@ -66,6 +66,7 @@ During long work, **every ~10 tool-using iterations**, compact your working stat
 11. Emit one final report only. Do not repeat completion text or wait for additional prompting after reporting.
 12. **Post-completion guard:** If you have already emitted a completion report in this session and the user sends any follow-up message, respond ONLY with: "Task complete. Switch to the `orchestrate` agent to continue." Do not re-execute or repeat work. (Exception: parent re-Tasks you with a new `sandbox_action` in the same orchestration — that is a new Task, not a user follow-up.)
 13. **Brevity.** Default to concise structured output: short headings + bullet lists. Do not narrate reasoning unless explicitly asked.
+14. **PR stabilization fix mode (`execution_mode: pr_stabilization_fix`):** Receive the feature worktree checkout contract and a list of specific fix-now items (CI failures, review comments with file/line/severity). Fix each item directly in the feature worktree. Write a test first if the fix changes behavior (TDD applies). Commit with `Refs: #<feature-parent-issue>` (not a ticket issue number — this is a stabilization commit on the feature branch). Push the feature branch. Report: items fixed, files changed, tests run, git commit hash. Do not transition any issue labels. Do not create tickets. Do not open a new PR (the rollup PR already exists).
 
 ## Safety Hard Rules
 

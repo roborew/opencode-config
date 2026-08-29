@@ -11,6 +11,8 @@ Build the dependency DAG from each ticket's `depends_on`. Batch independent tick
 
 After a child merges, call `worktree_delete(reason)` and in the feature worktree run `git fetch` followed by `git merge --ff-only origin/feature/<slug>` before dependent work. Never delete unmerged or unpushed work.
 
+The feature worktree persists through PR stabilization. Only ticket worktrees are deleted on sub-PR merge. The feature worktree is deleted only after spec `feature-complete` merge (or manually by the user).
+
 If plugin tools are unavailable or fail, stop and print:
 
 ```sh

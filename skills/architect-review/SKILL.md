@@ -97,7 +97,7 @@ Run when:
 
 | Stabilization status | Phase R behavior |
 |---------------------|------------------|
-| `ready_for_architect` | Validate the sealed bundle, PRD tickets, issue states, CI, and only feedback newer than the `feedback_cutoff_at` timestamp. Return Merge-ready when all evidence is complete. May create remediation only for newly discovered material issues, new hosted feedback after cutoff, missing ticket/acceptance evidence, or explicit user-reported product defects. Must **not** re-ticket already resolved/deferred comments or repeat broad feedback collection. |
+| `ready_for_architect` | The sealed bundle guarantees CI green + all actionable comments resolved by orchestrator. Validate the sealed bundle, PRD tickets, issue states, CI, and only feedback newer than the `feedback_cutoff_at` timestamp. Return Merge-ready when all evidence is complete. May create remediation only for findings newer than `feedback_cutoff_at`, substantive product defects or missing acceptance evidence, or explicit user-reported product defects. Must **not** re-ticket already resolved/deferred comments or repeat broad feedback collection. |
 | Blocked or unsealed | Perform full triage as before (R1–R6). Label output `unsealed`. |
 
 A second architect → orchestrator loop is permitted only for findings newer than the stabilization cutoff or genuinely substantive/missing work, with the reason explicitly recorded.
