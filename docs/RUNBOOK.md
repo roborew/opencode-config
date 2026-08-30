@@ -230,6 +230,22 @@ Content: full body from parent (markdown or .env.example template lines)
 Constraints: approved paths only; markdown or .env.example only
 ```
 
+## Redeploying the config on the opencode-server host
+
+The server's `OPENCODE_CONFIG_DIR` (default `/home/opencode/.config/opencode`) is a git checkout of this repo. Config (agents, skills, scripts, plugins) is read at **process start** — an in-place `git pull` changes nothing until the server restarts.
+
+```bash
+cd /home/opencode/.config/opencode
+git fetch origin && git checkout feature/worktrees && git pull --ff-only
+npm install          # restores plugin deps (@opencode-ai/plugin, sdk) — gitignored, so a FRESH CLONE has none
+# restart the server (compose restart or systemctl restart opencode-server), then:
+grep "\[worktree-plugin\]" <server boot log>
+```
+
+The boot log must show `[worktree-plugin] loaded (v2 client: ok; args schema: zod)`. `plain-fallback` means the plugin deps did not resolve — tools still register and every call returns a structured 503 with the fix, but run `npm install` + restart to restore full function. A missing beacon line entirely means the plugin file was not discovered — check `${OPENCODE_CONFIG_DIR}/plugins/worktree.js` exists. Without deps the tools exist but cannot reach the worktree API; without the file the tools do not exist at all and `worktree-manager` fails fast with `WORKTREE_TOOLS_NOT_REGISTERED`.
+
+A fresh clone (not a pull) loses `node_modules` — that is the known cause of "the worktree-manager can't find worktree_create" after a redeploy: the plugin's npm imports failed, the loader silently dropped it, and the tools vanished from every session.
+
 ## Troubleshooting: CRLF / `env: bash\r`
 
 On macOS/Linux, **CRLF** line endings in shell scripts break the shebang (`env: bash\r: No such file or directory`). OpenCode config scripts use LF.

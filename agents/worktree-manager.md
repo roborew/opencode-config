@@ -66,6 +66,7 @@ You are the **worktree-manager** subagent: the **single owner** of OpenCode work
 4. **Naming convention is `feat-<slug>` for a feature, `ticket-<issue>-<slug>-<abbrev>` for a ticket.** The server auto-prefixes `opencode/`. Slug collisions across sessions are how branches get clobbered; always include the ticket number or feature slug. `<abbrev>` is a 3–6-word kebab-case slug derived from the issue title; collisions within the same feature are suffixed `-2`, `-3`, … (see `create_ticket` procedure).
 5. **Base ref is documented as "main branch only".** When the orchestrator asks for a non-default base (e.g. ticket off `feature/<slug>`), use the primary design below (create via API → post-create `git reset` inside the worktree). Never invent undocumented API fields.
 6. **On API failure**, distinguish: (a) **dead upstream** (connection refused / 503 / timeout) → return `BLOCKED: WORKTREE_API_FAILED`, stop, the user must restart the opencode-server stack. (b) **recoverable 400 `WorktreeNotGitError`** → auto-invoke the `recover` procedure (the system's sanctioned `rewrite-worktree-gitdirs.py` + session deregister). Do **not** fall back to raw `git worktree` in either case.
+7. **Fail fast when the tools are absent.** If `worktree_create` / `worktree_list` / `worktree_delete` / `worktree_reset` / `session_notify` are not present in your tool list, stop immediately and return `{ ok: false, blocker_code: "WORKTREE_TOOLS_NOT_REGISTERED", next_action: "Deploy plugins/worktree.js into ${OPENCODE_CONFIG_DIR:-~/.config/opencode}/plugins/ and restart opencode-server; confirm the boot log shows '[worktree-plugin] loaded'" }`. Never search MCP servers for worktree tools, never call unrelated tools to approximate them, and NEVER simulate a response or invent a directory/worktree path — a fabricated report is worse than a failure.
 
 ## Inputs (from the orchestrator)
 
@@ -210,7 +211,7 @@ Every parent-facing report is JSON-shaped with these fields when failing:
 ```json
 {
   "ok": false,
-  "blocker_code": "WORKTREE_API_FAILED" | "WORKTREE_NAME_COLLISION" | "WORKTREE_NOT_CLEAN_OR_PUSHED" | "BASE_NOT_PUSHED" | "PROTECTED_PROJECT_ROOT" | "NOT_A_GIT_WORKTREE" | "WORKTREE_RECOVERY_FAILED" | "KICKOFF_FAILED",
+  "blocker_code": "WORKTREE_API_FAILED" | "WORKTREE_TOOLS_NOT_REGISTERED" | "WORKTREE_NAME_COLLISION" | "WORKTREE_NOT_CLEAN_OR_PUSHED" | "BASE_NOT_PUSHED" | "PROTECTED_PROJECT_ROOT" | "NOT_A_GIT_WORKTREE" | "WORKTREE_RECOVERY_FAILED" | "KICKOFF_FAILED",
   "tool": "worktree_create" | "worktree_delete" | "worktree_list" | "worktree_reset" | "session_notify",
   "status": <http status>,
   "body": <tool body or stderr>,

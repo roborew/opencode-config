@@ -233,6 +233,7 @@ The coder session owns `state:in-progress` (set during `ticket-lifecycle` §0 Bo
 | Failure | Where it surfaces | Response |
 |---|---|---|
 | `worktree-manager` returns `blocker_code` | develop orchestrator loop | Surface verbatim, stop, do not retry. |
+| `worktree-manager` returns `WORKTREE_TOOLS_NOT_REGISTERED` | develop orchestrator loop | The worktree plugin is not loaded in this environment. Surface `next_action` verbatim and stop: deploy `plugins/worktree.js` into the config `plugins/` dir, restart opencode-server, confirm the boot log shows `[worktree-plugin] loaded` before retrying. |
 | `worktree-manager` returns `blocker_code: "KICKOFF_FAILED"` (advisory only) | develop orchestrator loop | Relay the envelope's `human_instruction` to the user IMMEDIATELY (never silent); record advisory in lifecycle log; brief file fallback stands. Retry via `worktree-manager` `kickoff` action, or the user opens the GUI session and types anything. **Do not pause the batch.** |
 | `scripts/dev-loop-batch.sh` exits 1 | develop orchestrator loop | All tickets done → exit loop, go to §8. |
 | `scripts/dev-loop-batch.sh` exits 2 | develop orchestrator loop | gh/API failure — surface stderr verbatim, stop. Never treat as "all tickets done" (an empty lifecycle log + exit 2 is a transport failure, not completion). |

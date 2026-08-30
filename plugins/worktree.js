@@ -18,9 +18,20 @@
  *   version did) is always undefined and made the plugin throw at init,
  *   silently dropping all four tools.
  *
- * Tool definitions use the `tool()` helper + Zod `args` (via `tool.schema`)
- * from `@opencode-ai/plugin` — the only shape OpenCode's plugin loader
- * registers (ToolDefinition). A `parameters` (JSON Schema) object is the
+ * IMPORTANT — dependency-free registration:
+ *   `@opencode-ai/plugin` and `@opencode-ai/sdk/v2` are imported via guarded
+ *   dynamic imports. A config checkout without node_modules (fresh clone, no
+ *   `npm install`) still registers every tool — the loader would otherwise
+ *   silently drop the plugin on import failure and the worktree_* tools would
+ *   vanish from every session. On the fallback path: args use plain JSON
+ *   Schema (the registry's legacy path — optional args become required with a
+ *   documented "" convention) and every call returns the structured 503
+ *   manual-recovery envelope. `npm install` in the config dir + restart
+ *   restores full function.
+ *
+ * Tool definitions use the {description, args, execute} shape (ToolDefinition)
+ * — @opencode-ai/plugin's tool() is an identity function, so a local identity
+ * is equivalent. A `parameters` (JSON Schema) object at the TOP LEVEL is the
  * MCP-server shape, NOT a plugin ToolDefinition, and the loader will not
  * register it. `execute` returns a ToolResult (a JSON string here).
  *
@@ -39,8 +50,42 @@
 import { spawn } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
-import { tool } from "@opencode-ai/plugin";
-import { createOpencodeClient } from "@opencode-ai/sdk/v2";
+
+// Dependency-free registration. @opencode-ai/plugin and the v2 SDK are resolved with
+// guarded dynamic imports so a config checkout WITHOUT node_modules (fresh clone, no
+// `npm install`) still registers every tool instead of the loader silently dropping the
+// plugin — which used to make worktree_create/list/delete/reset/session_notify vanish
+// from every session's tool list with only a server-log error. On the fallback path the
+// tools are live: args use plain JSON Schema (the registry's legacy path) and every call
+// returns the structured 503 manual-recovery envelope until the deps are installed.
+let toolSchema = null; // zod (from @opencode-ai/plugin's tool.schema)
+let pluginDepsError = null;
+try {
+  const pluginPkg = await import("@opencode-ai/plugin");
+  toolSchema = pluginPkg.tool.schema;
+} catch (err) {
+  pluginDepsError = String((err && err.message) || err);
+}
+let createOpencodeClient = null;
+let sdkImportError = null;
+try {
+  ({ createOpencodeClient } = await import("@opencode-ai/sdk/v2"));
+} catch (err) {
+  sdkImportError = String((err && err.message) || err);
+}
+
+// @opencode-ai/plugin's tool() is an identity function — the definition shape
+// {description, args, execute} is what the registry accepts.
+const tool = (input) => input;
+
+// String arg spec: zod when the plugin package resolved (preserves optional args);
+// plain JSON Schema otherwise (registry legacy path — every arg becomes required, so
+// optional ones document the "" convention in their description).
+function argString(description, optional = false) {
+  if (toolSchema) return toolSchema.string().describe(description);
+  const note = optional ? ' (optional — pass "" when not applicable)' : "";
+  return { type: "string", description: `${description}${note}` };
+}
 
 const HOST_WT = (process.env.OPENCODE_WORKTREES_DIR || "").replace(/\/+$/, "");
 const HOST_APPS = (process.env.OPENCODE_APPS_DIR || "").replace(/\/+$/, "");
@@ -77,7 +122,7 @@ function protectedRootReason(directory) {
 
 // GUI recovery snippet — the Desktop UI talks to the same API, so a curl
 // here is the manual fallback the user can run from their machine.
-function guiRecovery({ method, name, directory }) {
+function guiRecovery({ method, name, directory, payload }) {
   const host = process.env.OPENCODE_PROXY_HOST || "*********";
   const port = process.env.OPENCODE_PROXY_PORT || "4097";
   const user = process.env.OPENCODE_SERVER_USERNAME || "opencode";
@@ -95,8 +140,8 @@ function guiRecovery({ method, name, directory }) {
   }
   if (method === "PROMPT_ASYNC") {
     const dirQ = directory ? `?directory=${encodeURIComponent(directory)}` : "";
-    const payload = (opts && opts.payload) || "{}";
-    return `curl -sS -u '${auth}' -X POST '${base}/session/${name}${dirQ}' \\\n  -H 'Content-Type: application/json' \\\n  -d '${payload.replace(/'/g, "'\\''")}'`;
+    const payloadText = payload || "{}";
+    return `curl -sS -u '${auth}' -X POST '${base}/session/${name}${dirQ}' \\\n  -H 'Content-Type: application/json' \\\n  -d '${payloadText.replace(/'/g, "'\\''")}'`;
   }
   return `# no manual recovery snippet for ${method}`;
 }
@@ -114,6 +159,7 @@ function fail(status, body, method, opts = {}) {
 // Build the v2 SDK client once at plugin init. The v1 ctx.client has no
 // `worktree` namespace; the /experimental/worktree API is v2-only.
 function buildV2Client(ctx) {
+  if (!createOpencodeClient) return null;
   const baseUrl = ctx && ctx.serverUrl && (ctx.serverUrl.origin || String(ctx.serverUrl));
   if (!baseUrl) return null;
   const user = process.env.OPENCODE_SERVER_USERNAME || "";
@@ -336,27 +382,44 @@ function unavailable(method, opts = {}) {
 export const WorktreePlugin = async (ctx) => {
   const v2 = buildV2Client(ctx);
 
+  // Boot-log beacon: grep the opencode-server boot log for this line to confirm
+  // the plugin loaded. If it is absent, the plugin file was never discovered in
+  // the config dir (check ${OPENCODE_CONFIG_DIR:-~/.config/opencode}/plugins/)
+  // and worktree-manager must fail fast with WORKTREE_TOOLS_NOT_REGISTERED.
+  console.log(
+    `[worktree-plugin] loaded (v2 client: ${v2 ? "ok" : "unavailable"}; args schema: ${
+      toolSchema ? "zod" : "plain-fallback"
+    })`
+  );
+  if (pluginDepsError) {
+    console.error(
+      `[worktree-plugin] @opencode-ai/plugin import failed (${pluginDepsError}) — ` +
+        `tools registered with plain fallback schemas. Run the config-dir dependency ` +
+        `install (npm install) and restart opencode to restore zod schemas.`
+    );
+  }
+  if (sdkImportError) {
+    console.error(
+      `[worktree-plugin] @opencode-ai/sdk/v2 import failed (${sdkImportError}) — ` +
+        `every worktree_* call returns the 503 manual-recovery envelope until the deps ` +
+        `are installed. Run the config-dir dependency install (npm install) and restart opencode.`
+    );
+  }
+
   return {
     tool: {
 worktree_create: tool({
         description:
           "Create an OpenCode worktree under OPENCODE_WORKTREES_DIR via the /experimental/worktree API. Branch is auto-prefixed opencode/<name>. After create, the worktree appears in the Desktop GUI and a session is auto-started. When `kickoff_message` is provided, the plugin writes a durable brief file into the worktree gitdir (NEVER in the working tree — never in `git status`), polls for the auto-started GUI session in the worktree directory, and — if the server did not auto-start one — creates the coder session explicitly (session_source: \"created\"), then injects a short pointer message via `session.promptAsync`. On any kickoff failure the envelope carries `human_instruction` with exact recovery steps (GUI bootstrap via brief file, or worktree-manager kickoff retry). `kickoff_agent` switches the session's agent for the injected message (default `coder` — ticket sessions run as the `coder` primary agent loading `ticket-lifecycle`).",
         args: {
-          name: tool.schema
-            .string()
-            .describe(
-              "Worktree name (no slashes). Convention: feat-<slug> or ticket-<issue>-<slug>-<abbrev>."
-            ),
-          kickoff_message: tool.schema
-            .string()
-            .optional()
-            .describe(
-              "Short pointer text to inject into the auto-started GUI session. When present, also writes <gitdir>/opencode-ticket-brief.json before injecting."
-            ),
-          kickoff_agent: tool.schema
-            .string()
-            .optional()
-            .describe("Agent for the kickoff message (default `coder`)."),
+          name: argString(
+            "Worktree name (no slashes). Convention: feat-<slug> or ticket-<issue>-<slug>-<abbrev>."
+          ),
+          kickoff_message: argString(
+            "Short pointer text to inject into the auto-started GUI session. When present, also writes <gitdir>/opencode-ticket-brief.json before injecting.",
+            true
+          ),
+          kickoff_agent: argString("Agent for the kickoff message (default `coder`).", true),
         },
         async execute({ name, kickoff_message, kickoff_agent }, context) {
           if (!v2) return unavailable("POST", { name });
@@ -471,9 +534,7 @@ worktree_create: tool({
         description:
           "Delete an OpenCode worktree by directory path. Self-guards against deleting any path under OPENCODE_APPS_DIR (mirrors the *********:4097 delete-guard proxy). The worktree-manager subagent pre-checks pushed/clean state before calling this.",
         args: {
-          directory: tool.schema
-            .string()
-            .describe("Absolute worktree directory path to delete."),
+          directory: argString("Absolute worktree directory path to delete."),
         },
         async execute({ directory }, context) {
           if (!v2) return unavailable("DELETE", { directory });
@@ -512,9 +573,7 @@ worktree_create: tool({
         description:
           "Reconcile a worktree directory after a server restart or stale state. Calls POST /experimental/worktree/reset.",
         args: {
-          directory: tool.schema
-            .string()
-            .describe("Absolute worktree directory path to reset."),
+          directory: argString("Absolute worktree directory path to reset."),
         },
         async execute({ directory }, context) {
           if (!v2) return unavailable("POST", { directory });
@@ -542,23 +601,13 @@ worktree_create: tool({
         description:
           "Inject a short message into an existing session via POST /session/{id}/prompt_async (204 fire-and-forget). Used by ticket sessions to report back to the develop orchestrator, and by the worktree-manager to retry a kickoff that landed before the GUI session was registered. Pass exactly one of `sessionID` or `directory`: `directory` resolves to the newest session in that directory with no parentID (the auto-started GUI session for a ticket worktree). `agent` switches the session's agent for this message only (default: leave unchanged). Returns { ok, session_id, target_directory, agent, admitted }. Manual recovery: curl POST /session/<id>/prompt_async shown in `manualRecovery`.",
         args: {
-          sessionID: tool.schema
-            .string()
-            .optional()
-            .describe("Target session id (mutually exclusive with `directory`)."),
-          directory: tool.schema
-            .string()
-            .optional()
-            .describe(
-              "Target worktree directory; resolves to the newest no-parent session in it (mutually exclusive with `sessionID`)."
-            ),
-          agent: tool.schema
-            .string()
-            .optional()
-            .describe("Agent override for this message (optional)."),
-          message: tool.schema
-            .string()
-            .describe("Message text to inject (short pointer only)."),
+          sessionID: argString("Target session id (mutually exclusive with `directory`).", true),
+          directory: argString(
+            "Target worktree directory; resolves to the newest no-parent session in it (mutually exclusive with `sessionID`).",
+            true
+          ),
+          agent: argString("Agent override for this message (optional).", true),
+          message: argString("Message text to inject (short pointer only)."),
         },
         async execute({ sessionID, directory, agent, message }, context) {
           if (!v2) return unavailable("PROMPT_ASYNC", {});
