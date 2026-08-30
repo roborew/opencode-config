@@ -375,7 +375,7 @@
     "worktree-manager": {
       "mode": "subagent",
       "model": "opencode-gpt/gpt-5-nano",
-      "steps": 15
+      "steps": 20
     },
     "preflight": {
       "mode": "subagent",

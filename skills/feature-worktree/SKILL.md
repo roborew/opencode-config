@@ -31,7 +31,7 @@ Run inside the parent repo session. Issue a single `worktree-manager` Task:
 
 Present auto versus manual scheduling once; default to manual batches.
 
-> **Develop-loop path (default when `ORCHESTRATE_DEVELOP_LOOP` is unset or `1`):** the develop orchestrator loads `orchestrate-develop-loop` instead of running the manual schedule from this skill. The develop loop creates the feature worktree the same way, then dispatches one **bounded full-ticket Task per ticket** (`execution_mode: github_issue_full`) which internally loops all `stages[]` and self-stabilizes the sub-PR. The develop loop owns batch sizing, auto-spawn, and merge/cleanup; this skill still owns the worktree-creation JSON shapes and naming conventions it documents. `auto_spawn` on `create_ticket` is the orchestrator-side hint that the ticket Task should run unattended (no per-ticket prompts); `worktree-manager` echoes it back but never spawns anything itself.
+> **Develop-loop path (default when `ORCHESTRATE_DEVELOP_LOOP` is unset or `1`):** the develop orchestrator loads `orchestrate-develop-loop` instead of running the manual schedule from this skill. The develop loop creates the feature worktree the same way, then for each runnable ticket creates a ticket worktree via `worktree-manager create_ticket` with `kickoff_agent` + `kickoff_message` (the plugin writes `<gitdir>/opencode-ticket-brief.json` and injects the message into the auto-started GUI session via `session.promptAsync`). The auto-started GUI session IS the ticket session — it loads `ticket-lifecycle`, reads the brief file, and reconstructs from GitHub (see `ticket-lifecycle` §0 Bootstrap). The develop loop owns batch sizing, auto-spawn, merge/cleanup; this skill still owns the worktree-creation JSON shapes and naming conventions it documents. `auto_spawn` on `create_ticket` is the orchestrator-side hint that the ticket Task should run unattended (no per-ticket prompts); `worktree-manager` echoes it back but never spawns anything itself.
 
 ## Ticket fan-out
 
@@ -44,11 +44,13 @@ Build the dependency DAG from each ticket's `depends_on`. Batch independent tick
   "slug": "<slug>",
   "base": "opencode/feat-<slug>",
   "title": "<issue title>",
-  "auto_spawn": true
+  "auto_spawn": true,
+  "kickoff_agent": "developer" | "frontend-dev" | "ux-dev",
+  "kickoff_message": "<short pointer — see ticket-lifecycle §0>"
 }
 ```
 
-`worktree-manager` derives `<abbrev>` from the title (or fetches it via `gh issue view`), dedupes collisions as `-2/-3`, and echoes `abbrev` + `auto_spawn` in the response. On the develop-loop path, immediately dispatch a bounded Task to the matched implementer with `execution_mode: github_issue_full`, the resolved `directory`, `branch`, `abbrev`, and the full `opencode_meta` (which carries `stages[]`); the ticket session loads `ticket-lifecycle` and runs every stage + sub-PR stabilization internally. On the legacy `github-issue-run` path, run test-writer RED, the Owner GREEN stage, and code-review ticket mode in the child. Open sub-PRs with `head=opencode/ticket-<issue>-<slug>-<abbrev>` and `base=opencode/feat-<slug>`.
+`worktree-manager` derives `<abbrev>` from the title (or fetches it via `gh issue view`), dedupes collisions as `-2/-3`, and echoes `abbrev` + `auto_spawn` + kickoff status in the response. The plugin writes a durable brief file to `<worktree-gitdir>/opencode-ticket-brief.json`, polls for the auto-started GUI session, and injects the kickoff message via `session.promptAsync`. The auto-started GUI session **IS** the ticket session — it loads `ticket-lifecycle`, reads the brief file, reconstructs the rest from GitHub, and runs every stage + sub-PR stabilization internally. On the legacy `github-issue-run` path, run test-writer RED, the Owner GREEN stage, and code-review ticket mode in the child. Open sub-PRs with `head=opencode/ticket-<issue>-<slug>-<abbrev>` and `base=opencode/feat-<slug>`.
 
 ## Ticket teardown
 
@@ -80,10 +82,13 @@ The feature worktree persists through PR stabilization. Only ticket worktrees ar
 
 | Marker | Emitted by | Consumed by |
 |---|---|---|
-| `HANDOFF_TO_TICKET_SESSION` | develop orchestrator when dispatching the bounded `github_issue_full` Task | ticket session (`ticket-lifecycle`) |
 | `HANDOFF_TO_FEATURE_ARCHITECT` | develop orchestrator when the last ticket merges into `opencode/feat-<slug>` | architect agent in `opencode/feat-<slug>` (`architect-feature-signoff`) |
 | `READY_FOR_HUMAN_REVIEW` | ticket session when sub-PR is green and comment-clean | develop orchestrator surfaces to user (single human gate per PR) |
 | `BLOCKED` | ticket session on preflight-after-repair, CI-exhaustion, or cross-ticket review | develop orchestrator surfaces verbatim and pauses the batch |
+| `ticket_report:` (issue comment) | ticket session on terminal report | develop orchestrator's `dev-loop-watch.sh` + `scripts/dev-loop-poller.sh` — durable wake channel and out-of-band merge detector |
+| `DEV_LOOP_WAKE: { repo, feature, reason }` | poller (`scripts/dev-loop-poller.sh`) when `ticket_report:` delta detected | develop orchestrator; ignored if no active loop for that feature |
+
+There is **no** `HANDOFF_TO_TICKET_SESSION` marker — the ticket session is the auto-started GUI session for the worktree, not a `task`-tool dispatch. The `session_notify` tool injects report-back messages into an existing session via `POST /session/{id}/prompt_async`; it does not dispatch a new subagent.
 
 ## Restart / recovery
 

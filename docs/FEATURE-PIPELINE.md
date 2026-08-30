@@ -9,7 +9,7 @@ User overview (diagram + how-to): [../README.md#feature-flow-prd--sign-off](../R
 | Stage | Repo | Select | Your choice | Your job | This stage owns |
 |-------|------|--------|-------------|----------|-----------------|
 | Plan / PRD | **spec** (`*-spec`) | **architect** → `hi` | **1. Product feature / PRD — …** | Answer grill; **approve** `docs/prd/<slug>.md`; **approve** issue plans | Planning + per-work-repo handoffs only — not code, not PR polish |
-| Build | **each work repo** | **orchestrate** on `develop` (new session) | Paste handoff / `feature:<slug>` | Wait until the feature PR exists | Develop orchestrator owns `opencode/feat-<slug>` + per-ticket worktrees; each ticket session runs a bounded full-ticket Task end-to-end and self-stabilizes its sub-PR |
+| Build | **each work repo** | **orchestrate** on `develop` (new session) | Paste handoff / `feature:<slug>` | Wait until the feature PR exists | Develop orchestrator owns `opencode/feat-<slug>` + per-ticket worktrees; each ticket worktree's auto-started GUI session IS the ticket session — it self-bootstraps from `<gitdir>/opencode-ticket-brief.json` and reconstructs from GitHub, then runs every `stages[]` entry + sub-PR stabilization and posts one `ticket_report:` comment |
 | Review / accept / docs / merge | **same work repo, feature worktree** | **architect** (new session) → `hi` | **4. Review / sign-off — Mode F …** then **R.** / **1.** / **2.** | Drive review; when happy: **Phase 1** (`state:done`, tickets stay open) then **Phase 2** docs; **merge gate** with human confirmation | **All PR readiness, ticket acceptance, and feature-PR merge.** Work-repo architect is where you sign off the work before spec |
 | Remediation loop | **same work repo** | **orchestrate** ↔ **architect** | After **R**, if changes needed: **orchestrate** again → then architect → **4** → **R** again | Stay in the work repo until you are happy | Loop until Merge-ready — **do not go to spec yet** |
 | Final close | **spec** | **architect** → `hi` | **3. Feature complete — …** | Only after **every** work repo finished Mode F; choose human vs agent **merge gate** | **Merge + close only:** close tickets already `state:done`, merge PRs, close PRD. Spec does **not** re-do review or PR prep |
@@ -19,20 +19,22 @@ Shape:
 ```text
 SPEC (start)          WORK REPO develop (build → review → fix → review)   SPEC (finish)
 architect / 1    →    develop orchestrator (develop branch)               architect / 3
-                     └─→ bounded full-ticket Task per ticket (auto)
-                          (sub-PRs self-stabilize inside the Task)
-                     └─→ sub-PRs merge into opencode/feat-<slug>
-                     →  architect / 4 (in feature worktree)
-                        Phase R → Phase 1 (state:done) → Phase 2 docs → merge gate
+                      └─→ create_ticket + kickoff (per ticket, auto)
+                           (auto-started GUI session IS the ticket session;
+                            brief file in <gitdir> + GitHub = source of truth)
+                           (sub-PRs self-stabilize inside the ticket session)
+                      └─→ sub-PRs merge into opencode/feat-<slug>
+                      →  architect / 4 (in feature worktree)
+                         Phase R → Phase 1 (state:done) → Phase 2 docs → merge gate
 PRD + handoffs        build → review → (fix → review)*                  merge + close
 ```
 
 ### Develop-loop details
 
-- The **develop orchestrator** is the *only* persistent session in the impl repo. It lives in the `develop` branch, owns all `worktree-manager` calls and remote-branch deletes, and dispatches one bounded full-ticket Task per ticket with `execution_mode: github_issue_full`.
-- **Ticket sessions** (developer/frontend-dev/ux-dev) own the full lifecycle: silent preflight → every `stages[]` entry → sub-PR open → PR stabilization (CI + comments, max 3 iterations) → one terminal `READY_FOR_HUMAN_REVIEW` or `BLOCKED`. The develop orchestrator never loads `orchestrate-verification` for ticket work.
+- The **develop orchestrator** is the *only* persistent session in the impl repo. It lives in the `develop` branch, owns all `worktree-manager` calls and remote-branch deletes. For each runnable ticket it dispatches `worktree-manager create_ticket` with `kickoff_agent` + `kickoff_message`; the plugin writes `<worktree-gitdir>/opencode-ticket-brief.json` and injects the kickoff message into the auto-started GUI session via `session.promptAsync`. There is no `task`-tool ticket dispatch — subagents would inherit the develop cwd and `checkout-contract.sh --verify` would reject them.
+- **Ticket sessions** (developer/frontend-dev/ux-dev) own the full lifecycle: `ticket-lifecycle` §0 Bootstrap (read brief file + reconstruct from GitHub) → silent preflight → every `stages[]` entry → sub-PR open → PR stabilization (CI + comments, max 3 iterations) → one terminal `ticket_report:` comment (mandatory durable channel) + best-effort `session_notify` to `develop_session_id`. The develop orchestrator never loads `orchestrate-verification` for ticket work.
 - The develop orchestrator merges each sub-PR after human approval, deletes the ticket worktree + remote ticket branch, and re-batches until `dev-loop-batch.sh` exits 1. Then it hands off to **architect / 4** inside the feature worktree (`architect-feature-signoff`) for full audit + CodeRabbit + accept + merge.
-- The single human gate is **PR review** (one notification per sub-PR; one merge gate at the feature level).
+- The single human gate is **PR review** (one notification per sub-PR; one merge gate at the feature level). The develop orchestrator wakes on terminal reports via `session_notify` (in-session); out-of-band GitHub-UI merges are detected by `scripts/dev-loop-poller.sh` (server-host cron, ~2-min interval — see `docs/RUNBOOK.md`).
 
 ### Hard reminders
 

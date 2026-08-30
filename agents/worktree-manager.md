@@ -1,8 +1,8 @@
 ---
-description: Drive OpenCode worktree lifecycle via the /experimental/worktree API (creates GUI-registered worktrees/sessions)
+description: Drive OpenCode worktree lifecycle via the /experimental/worktree API (creates GUI-registered worktrees/sessions) and inject kickoff/report-back messages via session_notify
 mode: subagent
 model: opencode-gpt/gpt-5-nano
-steps: 15
+steps: 20
 tools:
   write: false
   edit: false
@@ -10,6 +10,7 @@ tools:
   worktree_list: true
   worktree_delete: true
   worktree_reset: true
+  session_notify: true
   bash: true
   skill: true
 permission:
@@ -73,7 +74,8 @@ The orchestrator calls you with a JSON-shaped `prompt`. Parse it and execute **o
 | `action`     | Extra fields                                                                                                |
 | ------------ | ----------------------------------------------------------------------------------------------------------- |
 | `create_feature` | `slug` (required), `base` (optional, default `"develop"`)                                                |
-| `create_ticket`  | `issue` (required, integer), `slug` (required), `base` (required, e.g. `opencode/feat-<slug>`), `title` (optional, used to derive `<abbrev>`; if absent, fetched via `gh issue view <issue> --json title`), `auto_spawn` (optional boolean, default `false` — orchestrator-side flag echoed in the returned JSON; worktree-manager itself does not spawn anything) |
+| `create_ticket`  | `issue` (required, integer), `slug` (required), `base` (required, e.g. `opencode/feat-<slug>`), `title` (optional, used to derive `<abbrev>`; if absent, fetched via `gh issue view <issue> --json title`), `auto_spawn` (optional boolean, default `false` — orchestrator-side flag echoed in the returned JSON; worktree-manager itself does not spawn anything), `kickoff_agent` (optional, defaults to `developer`), `kickoff_message` (optional, short pointer text — see Bootstrap brief contract in `skills/ticket-lifecycle/SKILL.md`) |
+| `kickoff`        | `directory` (required, absolute worktree dir), `agent` (optional, defaults to `developer`), `message` (required, short pointer text) |
 | `delete`         | `directory` (required, absolute worktree dir)                                                              |
 | `list`           | —                                                                                                          |
 | `reset`          | `directory` (required)                                                                                     |
@@ -121,7 +123,7 @@ The orchestrator calls you with a JSON-shaped `prompt`. Parse it and execute **o
    - If empty after trimming, fall back to `ticket`.
 2. **Collision dedupe:** list existing ticket worktree branches in this feature (`git -C <REPO_ROOT> branch -r | grep -E "origin/opencode/ticket-<issue>-<slug>-" || true`); if `<issue>-<slug>-<abbrev>` already exists, try `<abbrev>-2`, `<abbrev>-3`, … (cap at `-9`; on overflow return `BLOCKED: WORKTREE_NAME_COLLISION`).
 3. Derive `name = "ticket-" + issue + "-" + slug + "-" + abbrev`. Same validation as `create_feature` (no `/`, no whitespace, length ≤ 64).
-4. Call `worktree_create({ name })`.
+4. Call `worktree_create({ name, kickoff_agent, kickoff_message })`. The plugin writes a durable brief JSON to `<worktree-gitdir>/opencode-ticket-brief.json` (NEVER into the working tree — see `skills/ticket-lifecycle/SKILL.md` §0 Bootstrap), resolves the develop orchestrator session id, polls for the auto-started GUI session, and injects the kickoff message via `session.promptAsync`. The tool envelope is `{ ok, status, body: { name, branch, directory }, brief_file, session_id, develop_session_id, kickoff_agent, kickoff: "admitted"|"no_session_after_poll"|"failed" }`.
 5. **Pre-flight for base**: ensure `base` (e.g. `opencode/feat-<slug>`) exists on the remote. If not, return `BLOCKED: BASE_NOT_PUSHED` and instruct the orchestrator to push `opencode/feat-<slug>` first.
    ```bash
    git -C "$REPO_ROOT" rev-parse --verify "origin/$base" || echo MISSING
@@ -135,7 +137,8 @@ The orchestrator calls you with a JSON-shaped `prompt`. Parse it and execute **o
    ```
    The branch name stays `opencode/ticket-<issue>-<slug>-<abbrev>`; only the tree content is rebased onto the feature branch.
 8. Verify with `git -C "$directory" rev-parse --abbrev-ref HEAD` → expect `opencode/ticket-<issue>-<slug>-<abbrev>`. Verify with `git -C "$directory" merge-base --is-ancestor "origin/$base" HEAD` → expect success.
-9. Return the same shape as `create_feature` with `action: "create_ticket"`, plus `auto_spawn` echoed back from the input (default `false`) and `abbrev` (the derived `<abbrev>`, including any `-2/-3` suffix) so the orchestrator can use it in the bounded full-ticket Task prompt without re-deriving.
+9. Return the same shape as `create_feature` with `action: "create_ticket"`, plus `auto_spawn` echoed back from the input (default `false`), `abbrev` (the derived `<abbrev>`, including any `-2/-3` suffix), and the kickoff fields echoed from the tool envelope: `session_id`, `develop_session_id`, `kickoff` status, `brief_file`. If `kickoff !== "admitted"`, surface `blocker_code: "KICKOFF_FAILED"` (advisory, not a hard stop — the brief file fallback stands; the orchestrator may retry with `kickoff` action, or the user may open the GUI session and type any message — the bootstrap reads the brief file).
+10. **Idempotence note**: the brief file path is stable for the lifetime of the worktree gitdir. A second `create_ticket` for the same issue is blocked by Hard Rule 4 (name collision → `-2` suffix). A `kickoff` retry after a restart reuses the same brief file (the plugin overwrites it deterministically).
 
 ### `delete`
 
@@ -183,6 +186,18 @@ The orchestrator calls you with a JSON-shaped `prompt`. Parse it and execute **o
 1. Call `worktree_list({})`.
 2. Return `{ ok: true, action: "list", worktrees: body.body }`.
 
+### `kickoff`
+
+Used to retry ticket kickoff after a `KICKOFF_FAILED` advisory (create-time race) or after a server restart + `reset` (the GUI session list is empty until the auto-start re-fires). The plugin resolves the worktree directory to its newest no-parent session via `session.list` and re-injects the same short pointer text.
+
+1. Validate `directory` and `message` are present strings.
+2. Call `session_notify({ directory, agent: agent || "developer", message })`.
+3. Return:
+   - On `{ ok: true, admitted: true }` → `{ ok: true, action: "kickoff", directory, session_id, agent }`.
+   - On `{ ok: false, status: 404 }` → surface `{ ok: false, blocker_code: "KICKOFF_FAILED", directory, error: body.error, manualRecovery: body.manualRecovery }`. The brief file in the worktree gitdir is still authoritative — the user can open the GUI session and type any message, the bootstrap (`ticket-lifecycle` §0) reads the brief file and reconstructs the ticket context from GitHub.
+   - On other failures → return the tool's failure block with `blocker_code: "KICKOFF_FAILED"`.
+4. **Never delete or recreate the worktree on a failed kickoff.** The worktree exists, the brief file exists; only the message injection failed. Do not retry by re-running `create_ticket` (Hard Rule 4 name collision would suffix `-2`).
+
 ### `reset`
 
 1. Call `worktree_reset({ directory: "<dir>" })`.
@@ -195,8 +210,8 @@ Every parent-facing report is JSON-shaped with these fields when failing:
 ```json
 {
   "ok": false,
-  "blocker_code": "WORKTREE_API_FAILED" | "WORKTREE_NAME_COLLISION" | "WORKTREE_NOT_CLEAN_OR_PUSHED" | "BASE_NOT_PUSHED" | "PROTECTED_PROJECT_ROOT" | "NOT_A_GIT_WORKTREE" | "WORKTREE_RECOVERY_FAILED",
-  "tool": "worktree_create" | "worktree_delete" | "worktree_list" | "worktree_reset",
+  "blocker_code": "WORKTREE_API_FAILED" | "WORKTREE_NAME_COLLISION" | "WORKTREE_NOT_CLEAN_OR_PUSHED" | "BASE_NOT_PUSHED" | "PROTECTED_PROJECT_ROOT" | "NOT_A_GIT_WORKTREE" | "WORKTREE_RECOVERY_FAILED" | "KICKOFF_FAILED",
+  "tool": "worktree_create" | "worktree_delete" | "worktree_list" | "worktree_reset" | "session_notify",
   "status": <http status>,
   "body": <tool body or stderr>,
   "manualRecovery": "<curl snippet from the tool>",
@@ -204,8 +219,10 @@ Every parent-facing report is JSON-shaped with these fields when failing:
 }
 ```
 
+`KICKOFF_FAILED` is an **advisory, not a hard stop**: the worktree exists, the brief file is durable on disk, and the ticket session can still bootstrap from it (the user opens the GUI session and types any message, the bootstrap reads the brief file and reconstructs from GitHub). The orchestrator records it and continues — the develop loop does not block on it.
+
 Never throw, never silently advance, never call `git worktree` as a fallback.
 
 ## One-shot contract
 
-Each invocation handles **one** action. The orchestrator calls you once per worktree lifecycle event (feature create, ticket create, ticket delete, restart-reset). Do not batch. `auto_spawn` on `create_ticket` is purely an orchestrator-side hint you echo back; you do not spawn any child process or call any other agent yourself.
+Each invocation handles **one** action. The orchestrator calls you once per worktree lifecycle event (feature create, ticket create, ticket kickoff retry, ticket delete, restart-reset). Do not batch. `auto_spawn` on `create_ticket` is purely an orchestrator-side hint you echo back; you do not spawn any child process or call any other agent yourself. The kickoff message you pass to `worktree_create` is the **same short pointer** the develop orchestrator composes in `orchestrate-develop-loop` §3a — you do not compose a separate brief.

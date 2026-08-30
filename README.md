@@ -327,9 +327,11 @@ See **[Feature flow (PRD → sign-off)](#feature-flow-prd--sign-off)** for the f
 | Step | Repo | Select | You do |
 |------|------|--------|--------|
 | Plan | **spec** | **architect** → `hi` → **1. Product feature / PRD …** | Approve PRD and issue plans; copy handoffs |
-| Build | **each work repo** | **orchestrate** (new session) | Paste `feature:<slug>` / handoff; wait for PR |
+| Build | **each work repo** | **orchestrate** (new session) | Paste `feature:<slug>` / handoff; wait for PR. Tickets are auto-kicked: each ticket worktree's GUI session is the ticket session, self-bootstraps from `<gitdir>/opencode-ticket-brief.json` and GitHub, returns exactly one `ticket_report:` comment per ticket. |
 | Review loop | **same work repo** | **architect** → `hi` → **4. Review / sign-off …** → **R** ↔ **orchestrate** until happy → **1** → **2** | Accept (`state:done`); docs; leave PR merge-ready |
 | Close | **spec** | **architect** → `hi` → **3. Feature complete …** | Merge gate after every work repo finished Mode F |
+
+The develop orchestrator wakes on every ticket's terminal report via `session_notify` (in-session message injection into the develop orchestrator's session) and via the optional `scripts/dev-loop-poller.sh` (server-host cron, ~2-min interval) for out-of-band GitHub-UI merges. See **[docs/RUNBOOK.md](docs/RUNBOOK.md)** for the poller timer setup.
 
 Optional same-session path after a short HANDOFF block: `/compact` then switch agent. If the provider errors on tool history, use `/new` instead.
 

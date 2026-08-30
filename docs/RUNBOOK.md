@@ -258,6 +258,58 @@ On macOS/Linux, **CRLF** line endings in shell scripts break the shebang (`env: 
 
 **Prevention:** Spec repos receive [`.gitattributes`](../templates/spec-repo/.gitattributes) on align for doc paths. Config-repo CI runs `scripts/check-crlf.sh` on `bin/`, `bin/project/`, `scripts/`, `templates/`, and `.gitattributes`.
 
+## Ticket-session poller (`scripts/dev-loop-poller.sh`)
+
+The develop orchestrator's primary wake for terminal ticket reports is in-session `session_notify` (the ticket session injects the `ticket_report:` message directly into the develop orchestrator's session). For out-of-band events — GitHub-UI merges, missed in-session notifies, poller-disabled intervals — `scripts/dev-loop-poller.sh` runs as a cron or systemd timer on the opencode-server host (Linux; this config repo lives on macOS but the server runs on a Linux host with loopback `127.0.0.1:4098`).
+
+**Install (systemd timer, ~2-min interval):**
+
+```ini
+# /etc/systemd/system/opencode-dev-loop-poller.service
+[Unit]
+Description=OpenCode develop-loop poller (ticket_report wakes)
+After=opencode-server.service
+
+[Service]
+Type=oneshot
+Environment=OPENCODE_SERVER_USERNAME=opencode
+Environment=OPENCODE_SERVER_PASSWORD=<from secrets>
+Environment=OPENCODE_SERVER_PORT=4098
+Environment=OPENCODE_CONFIG=/home/opencode/.config/opencode
+Environment=DEV_LOOP_REPOS=BlocShed/BlocShed-web,BlocShed/BlocShed-api
+ExecStart=/home/opencode/.config/opencode/scripts/dev-loop-poller.sh
+User=opencode
+```
+
+```ini
+# /etc/systemd/system/opencode-dev-loop-poller.timer
+[Unit]
+Description=Run opencode-dev-loop-poller every 2 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+AccuracySec=15s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now opencode-dev-loop-poller.timer
+sudo journalctl -u opencode-dev-loop-poller.service -f
+```
+
+**Cron alternative:**
+
+```cron
+*/2 * * * * OPENCODE_SERVER_USERNAME=opencode OPENCODE_SERVER_PASSWORD='<from secrets>' OPENCODE_CONFIG=/home/opencode/.config/opencode DEV_LOOP_REPOS=BlocShed/BlocShed-web,BlocShed/BlocShed-api /home/opencode/.config/opencode/scripts/dev-loop-poller.sh >> /var/log/opencode-dev-loop-poller.log 2>&1
+```
+
+The poller is idempotent — state files in `~/.local/state/opencode/dev-loop/<owner-repo>.json` dedupe wake messages per `(repo, issue, ticket_report)` tuple. A `DEV_LOOP_WAKE` for a feature with no active loop in the develop orchestrator's lifecycle log is silently ignored ("ignore if not yours").
+
 ## Smoke Checklist
 
 - Architected features include required sections (`Difficulty`, `StagePlan`, `StageAcceptanceChecks`, `CompletionReport`, `CodeReviewInputs`, `DocumentationOutputs`).

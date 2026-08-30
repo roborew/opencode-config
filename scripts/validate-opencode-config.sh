@@ -235,6 +235,45 @@ if ! grep -q 'do not recommend upgrading the Docker/base Node' scripts/preflight
   ERR=1
 fi
 
+echo "Checking ticket-session kickoff reliability wiring..."
+for needle in 'session_notify:' 'session.promptAsync' 'opencode-ticket-brief.json' 'kickoff_message'; do
+  if ! grep -q "$needle" plugins/worktree.js 2>/dev/null; then
+    echo "  MISSING: $needle in plugins/worktree.js"
+    ERR=1
+  fi
+done
+for needle in 'kickoff' 'KICKOFF_FAILED' 'session_notify: true'; do
+  if ! grep -q "$needle" agents/worktree-manager.md 2>/dev/null; then
+    echo "  MISSING: $needle in agents/worktree-manager.md"
+    ERR=1
+  fi
+done
+for needle in 'ticket_report:' 'Bootstrap' 'opencode-ticket-brief.json'; do
+  if ! grep -q "$needle" skills/ticket-lifecycle/SKILL.md 2>/dev/null; then
+    echo "  MISSING: $needle in skills/ticket-lifecycle/SKILL.md"
+    ERR=1
+  fi
+done
+for f in skills/github-issue-run/lib/dev-loop-watch.sh scripts/dev-loop-poller.sh; do
+  if [[ ! -f "$f" ]]; then
+    echo "  MISSING: $f"
+    ERR=1
+  elif [[ ! -x "$f" ]]; then
+    echo "  NOT EXECUTABLE: $f"
+    ERR=1
+  fi
+done
+for agent in developer.md frontend-dev.md ux-dev.md; do
+  if ! grep -q 'session_notify: true' "agents/$agent" 2>/dev/null; then
+    echo "  MISSING: session_notify in agents/$agent"
+    ERR=1
+  fi
+done
+if ! grep -q '"worktree-manager"' opencode.json 2>/dev/null; then
+  echo "  MISSING: worktree-manager agent entry in opencode.json"
+  ERR=1
+fi
+
 if [[ $ERR -ne 0 ]]; then
   echo "validate-opencode-config: FAILED"
   exit 1

@@ -37,6 +37,8 @@
  */
 
 import { spawn } from "node:child_process";
+import { readFile, writeFile } from "node:fs/promises";
+import { setTimeout as sleep } from "node:timers/promises";
 import { tool } from "@opencode-ai/plugin";
 import { createOpencodeClient } from "@opencode-ai/sdk/v2";
 
@@ -91,6 +93,11 @@ function guiRecovery({ method, name, directory }) {
   if (method === "GET") {
     return `curl -sS -u '${auth}' '${base}/experimental/worktree?directory=$PWD'`;
   }
+  if (method === "PROMPT_ASYNC") {
+    const dirQ = directory ? `?directory=${encodeURIComponent(directory)}` : "";
+    const payload = (opts && opts.payload) || "{}";
+    return `curl -sS -u '${auth}' -X POST '${base}/session/${name}${dirQ}' \\\n  -H 'Content-Type: application/json' \\\n  -d '${payload.replace(/'/g, "'\\''")}'`;
+  }
   return `# no manual recovery snippet for ${method}`;
 }
 
@@ -142,6 +149,119 @@ function scheduleGitCleanup(directory, project) {
   }
 }
 
+// Parse `<worktree>/.git` (a FILE for linked worktrees) to locate the gitdir.
+// Returns null when `.git` is a directory (worktree dir IS the gitdir — cannot
+// host a brief file outside the working tree). Brief file lives in gitdir so it
+// auto-cleans on `git worktree remove` / gitdir pruning, and never appears in
+// `git status` (the worktree-manager delete pre-check `git status --porcelain`
+// stays valid).
+async function resolveWorktreeGitdir(worktreeDir) {
+  if (!worktreeDir) return null;
+  let raw;
+  try {
+    raw = await readFile(`${worktreeDir}/.git`, "utf8");
+  } catch (_) {
+    return null;
+  }
+  const m = /^gitdir:\s*(.+)\s*$/m.exec(raw);
+  return m ? m[1].trim() : null;
+}
+
+// Resolve the develop orchestrator session id from a context (worktree-manager's
+// calling session). The worktree-manager runs in a child session whose parent is
+// the develop orchestrator — we look it up via session.list with directory =
+// context.directory (the project main checkout), find the calling sessionID,
+// then take its parentID. Falls back to context.sessionID itself if no parent.
+async function resolveDevelopSessionId(v2, context) {
+  const dir = context && context.directory;
+  const myId = context && context.sessionID;
+  if (!v2 || !dir || !myId) return null;
+  try {
+    const res = await v2.session.list({ directory: dir });
+    const list = (res && res.data) || [];
+    const me = list.find((s) => s && s.id === myId);
+    return (me && me.parentID) || myId || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// Write the durable brief JSON into the worktree gitdir. NEVER in the working
+// tree (would pollute `git status`, fail worktree-manager delete pre-check, and
+// not auto-clean on worktree removal).
+async function writeBriefFile(gitdir, brief) {
+  if (!gitdir || !brief) return null;
+  const path = `${gitdir}/opencode-ticket-brief.json`;
+  await writeFile(path, JSON.stringify(brief, null, 2), "utf8");
+  return path;
+}
+
+// Poll for the auto-started GUI session in a freshly-created worktree dir.
+// Selection: newest by time.created, directory === worktreeDir, parentID absent.
+// Up to `tries * intervalMs` total. Returns session id or null.
+async function pollForTicketSession(v2, projectDir, worktreeDir, tries = 10, intervalMs = 1500) {
+  if (!v2 || !worktreeDir) return null;
+  for (let i = 0; i < tries; i += 1) {
+    try {
+      const res = await v2.session.list({ directory: projectDir });
+      const list = (res && res.data) || [];
+      const matches = list.filter(
+        (s) => s && s.directory === worktreeDir && !s.parentID
+      );
+      if (matches.length) {
+        matches.sort((a, b) => (b.time?.created || 0) - (a.time?.created || 0));
+        return matches[0].id || null;
+      }
+    } catch (_) {
+      /* retry */
+    }
+    if (i < tries - 1) await sleep(intervalMs);
+  }
+  return null;
+}
+
+// Look up a session id by directory (newest, no parentID). Used by session_notify
+// when the caller supplies `directory` instead of `sessionID`.
+async function resolveSessionByDir(v2, projectDir, targetDir) {
+  if (!v2 || !targetDir) return null;
+  try {
+    const res = await v2.session.list({ directory: projectDir });
+    const list = (res && res.data) || [];
+    const matches = list.filter(
+      (s) => s && s.directory === targetDir && !s.parentID
+    );
+    if (!matches.length) return null;
+    matches.sort((a, b) => (b.time?.created || 0) - (a.time?.created || 0));
+    return matches[0].id || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// Call session.promptAsync. SDK contract: 204 + void data on success. We must
+// NOT route this through `unwrap()` — its `data === undefined` check would treat
+// 204 as failure (and 204 has no body). Check `error == null` + status directly.
+async function callPromptAsync(v2, params) {
+  try {
+    const res = await v2.session.promptAsync(params);
+    const status = res && res.response && res.response.status;
+    if (res && res.error == null && (status === 204 || status === 200)) {
+      return { ok: true, status: status || 204 };
+    }
+    return {
+      ok: false,
+      status: status || 0,
+      error: (res && res.error) || `promptAsync unexpected status ${status || 0}`,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      status: err?.status || 0,
+      error: String(err?.message || err),
+    };
+  }
+}
+
 // Normalize a v2 RequestResult ({ data, error, request, response }) into the
 // plugin's { ok, status, body } envelope. With throwOnError=false (default)
 // HTTP errors do NOT throw — they arrive as { data: undefined, error }.
@@ -187,17 +307,27 @@ export const WorktreePlugin = async (ctx) => {
 
   return {
     tool: {
-      worktree_create: tool({
+worktree_create: tool({
         description:
-          "Create an OpenCode worktree under OPENCODE_WORKTREES_DIR via the /experimental/worktree API. Branch is auto-prefixed opencode/<name>. After create, the worktree appears in the Desktop GUI and a session is auto-started.",
+          "Create an OpenCode worktree under OPENCODE_WORKTREES_DIR via the /experimental/worktree API. Branch is auto-prefixed opencode/<name>. After create, the worktree appears in the Desktop GUI and a session is auto-started. When `kickoff_message` is provided, the plugin writes a durable brief file into the worktree gitdir (NEVER in the working tree — never in `git status`) and injects a short pointer message into the auto-started GUI session via `session.promptAsync`. `kickoff_agent` switches the session's agent for the injected message (default `developer`).",
         args: {
           name: tool.schema
             .string()
             .describe(
-              "Worktree name (no slashes). Convention: feat-<slug> or ticket-<issue>-<slug>."
+              "Worktree name (no slashes). Convention: feat-<slug> or ticket-<issue>-<slug>-<abbrev>."
             ),
+          kickoff_message: tool.schema
+            .string()
+            .optional()
+            .describe(
+              "Short pointer text to inject into the auto-started GUI session. When present, also writes <gitdir>/opencode-ticket-brief.json before injecting."
+            ),
+          kickoff_agent: tool.schema
+            .string()
+            .optional()
+            .describe("Agent for the kickoff message (default `developer`)."),
         },
-        async execute({ name }, context) {
+        async execute({ name, kickoff_message, kickoff_agent }, context) {
           if (!v2) return unavailable("POST", { name });
           if (!name || typeof name !== "string" || name.includes("/")) {
             return JSON.stringify(
@@ -207,16 +337,70 @@ export const WorktreePlugin = async (ctx) => {
               })
             );
           }
-          return JSON.stringify(
-            await unwrap(
-              v2.worktree.create({
-                directory: (context && context.directory) || undefined,
-                worktreeCreateInput: { name },
-              }),
-              "POST",
-              { name }
-            )
+          const base = await unwrap(
+            v2.worktree.create({
+              directory: (context && context.directory) || undefined,
+              worktreeCreateInput: { name },
+            }),
+            "POST",
+            { name }
           );
+          if (!base.ok) return JSON.stringify(base);
+
+          // No kickoff requested: keep the existing envelope shape exactly.
+          if (!kickoff_message || typeof kickoff_message !== "string") {
+            return JSON.stringify(base);
+          }
+
+          // Kickoff path: write brief file, resolve develop session, inject.
+          const projectDir = context && context.directory;
+          const worktreeDir = (base.body && base.body.directory) || null;
+          const gitdir = await resolveWorktreeGitdir(worktreeDir);
+          const developSessionId = await resolveDevelopSessionId(v2, context);
+          const brief = {
+            execution_mode: "github_issue_full",
+            issue_number: null,
+            repo: null,
+            issue_url: null,
+            feature_slug: null,
+            feature_branch: null,
+            expected_branch: base.body && base.body.branch
+              ? base.body.branch
+              : `opencode/${name}`,
+            worktree_directory: worktreeDir,
+            agent: kickoff_agent || "developer",
+            develop_session_id: developSessionId,
+            auto_spawn_consent: true,
+            kickoff_message,
+            created_at: new Date().toISOString(),
+          };
+          const briefFile = await writeBriefFile(gitdir, brief);
+          const ticketSessionId = await pollForTicketSession(v2, projectDir, worktreeDir);
+          let kickoffStatus = "no_session_after_poll";
+          let promptResult = null;
+          if (ticketSessionId) {
+            const agent = kickoff_agent || "developer";
+            promptResult = await callPromptAsync(v2, {
+              sessionID: ticketSessionId,
+              directory: projectDir,
+              agent,
+              parts: [{ type: "text", text: kickoff_message }],
+            });
+            if (promptResult.ok) {
+              kickoffStatus = "admitted";
+            } else {
+              kickoffStatus = "failed";
+            }
+          }
+          return JSON.stringify({
+            ...base,
+            brief_file: briefFile,
+            session_id: ticketSessionId,
+            develop_session_id: developSessionId,
+            kickoff_agent: kickoff_agent || "developer",
+            kickoff: kickoffStatus,
+            kickoff_error: promptResult && !promptResult.ok ? promptResult.error : null,
+          });
         },
       }),
 
@@ -303,6 +487,117 @@ export const WorktreePlugin = async (ctx) => {
               { directory }
             )
           );
+        },
+      }),
+
+      session_notify: tool({
+        description:
+          "Inject a short message into an existing session via POST /session/{id}/prompt_async (204 fire-and-forget). Used by ticket sessions to report back to the develop orchestrator, and by the worktree-manager to retry a kickoff that landed before the GUI session was registered. Pass exactly one of `sessionID` or `directory`: `directory` resolves to the newest session in that directory with no parentID (the auto-started GUI session for a ticket worktree). `agent` switches the session's agent for this message only (default: leave unchanged). Returns { ok, session_id, target_directory, agent, admitted }. Manual recovery: curl POST /session/<id>/prompt_async shown in `manualRecovery`.",
+        args: {
+          sessionID: tool.schema
+            .string()
+            .optional()
+            .describe("Target session id (mutually exclusive with `directory`)."),
+          directory: tool.schema
+            .string()
+            .optional()
+            .describe(
+              "Target worktree directory; resolves to the newest no-parent session in it (mutually exclusive with `sessionID`)."
+            ),
+          agent: tool.schema
+            .string()
+            .optional()
+            .describe("Agent override for this message (optional)."),
+          message: tool.schema
+            .string()
+            .describe("Message text to inject (short pointer only)."),
+        },
+        async execute({ sessionID, directory, agent, message }, context) {
+          if (!v2) return unavailable("PROMPT_ASYNC", {});
+          if (!message || typeof message !== "string") {
+            return JSON.stringify(
+              fail(0, null, "PROMPT_ASYNC", {
+                error: "session_notify: `message` is required",
+              })
+            );
+          }
+          const hasId = !!sessionID;
+          const hasDir = !!directory;
+          if (hasId === hasDir) {
+            return JSON.stringify(
+              fail(0, null, "PROMPT_ASYNC", {
+                error:
+                  "session_notify: exactly one of `sessionID` or `directory` is required",
+              })
+            );
+          }
+          const projectDir = (context && context.directory) || undefined;
+          let resolvedId = sessionID || null;
+          let targetDir = null;
+          if (!resolvedId) {
+            resolvedId = await resolveSessionByDir(v2, projectDir, directory);
+            if (!resolvedId) {
+              const payload = JSON.stringify({
+                parts: [{ type: "text", text: message }],
+                agent,
+              }).replace(/'/g, "'\\''");
+              return JSON.stringify(
+                fail(404, null, "PROMPT_ASYNC", {
+                  directory,
+                  error:
+                    "session_notify: no session found for directory (session not yet registered or wrong path)",
+                  manualRecovery: guiRecovery({
+                    method: "PROMPT_ASYNC",
+                    name: "<sessionID>",
+                    directory,
+                    payload,
+                  }),
+                })
+              );
+            }
+            targetDir = directory;
+          } else {
+            // Best-effort directory capture for response shape.
+            targetDir = directory || null;
+          }
+          const parts = [{ type: "text", text: message }];
+          const params = { sessionID: resolvedId, parts };
+          if (projectDir) params.directory = projectDir;
+          if (agent) params.agent = agent;
+          const promptResult = await callPromptAsync(v2, params);
+          const payload = JSON.stringify({ parts, agent }).replace(
+            /'/g,
+            "'\\''"
+          );
+          if (!promptResult.ok) {
+            return JSON.stringify(
+              fail(promptResult.status || 502, promptResult.error, "PROMPT_ASYNC", {
+                name: resolvedId,
+                directory: targetDir,
+                error: promptResult.error,
+                manualRecovery: guiRecovery({
+                  method: "PROMPT_ASYNC",
+                  name: resolvedId,
+                  directory: targetDir,
+                  payload,
+                }),
+              })
+            );
+          }
+          return JSON.stringify({
+            ok: true,
+            status: promptResult.status || 204,
+            session_id: resolvedId,
+            target_directory: targetDir,
+            agent: agent || null,
+            admitted: true,
+            manualRecovery: guiRecovery({
+              method: "PROMPT_ASYNC",
+              name: resolvedId,
+              directory: targetDir,
+              payload,
+            }),
+          });
         },
       }),
     },

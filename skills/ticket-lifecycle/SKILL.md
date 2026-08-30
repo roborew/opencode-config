@@ -2,10 +2,10 @@
 name: ticket-lifecycle
 description: "Bounded full-ticket execution + self-stabilization contract for `execution_mode: github_issue_full`. Loaded inside the ticket session (developer/frontend-dev/ux-dev) so the ticket owns every stage, sub-PR, and PR stabilization loop end-to-end and returns exactly one terminal report."
 modelTier: "fast"
-roleReminder: "Load only when the parent dispatches a Task with `execution_mode: github_issue_full`. The post-completion guard at the bottom of developer/frontend-dev/ux-dev skills must NOT fire between stages — only after the terminal report."
+roleReminder: "Load on the first message of any session whose cwd is a ticket worktree (any first message — injected kickoff, user 'begin', or resume). The post-completion guard at the bottom of developer/frontend-dev/ux-dev skills must NOT fire between stages — only after the terminal report."
 ---
 
-> You are operating inside a **bounded full-ticket Task** dispatched by the develop orchestrator (under `orchestrate-develop-loop`). The orchestrator is **not** present between stages — you own every stage, every `code-review` per stage, the sub-PR, and the PR stabilization loop. You return exactly **one** terminal report and stop.
+> You are operating inside a **ticket session**: an OpenCode GUI session that was auto-started by `worktree_create` inside an `opencode/ticket-<issue>-<slug>-<abbrev>` worktree. You own every stage, every `code-review` per stage, the sub-PR, and the PR stabilization loop. You return exactly **one** terminal report and stop.
 
 ## Hard rules
 
@@ -19,29 +19,68 @@ roleReminder: "Load only when the parent dispatches a Task with `execution_mode:
 8. **Stabilization is bounded.** PR stabilization loop runs **at most 3 iterations**. On exhaustion, return `BLOCKED: STABILIZATION_EXHAUSTED` with the remaining fix-now items.
 9. **Cross-ticket review comments are not yours to fix.** If `pr-stabilize-watch.sh` returns comments whose fix would touch files in another ticket's branch, return `BLOCKED: CROSS_TICKET_REVIEW` so the develop orchestrator hands off to `architect-feature-signoff` early.
 10. **Issue state transitions** (`state:in-progress` on entry, `state:ready-for-review` when the sub-PR opens) are yours; use `issue-state-transition.sh` via a delegated `developer` Task.
+11. **You are the auto-started GUI session for this worktree.** The develop orchestrator does **not** dispatch you via `task` (cwd inheritance would put you on `develop`); you are reached via the kickoff message injected by the plugin or via any user message. You must self-bootstrap from disk + GitHub — do not depend on inputs from the orchestrator.
 
-## Required inputs (from the dispatch)
+## §0 Bootstrap (must run before any stage work)
 
-The develop orchestrator passes:
+Runs on **any** first message: the injected kickoff pointer, a user "begin", or a resume after a server restart. Never depend on the kickoff message containing the full brief — it is a short pointer by design, and a truncated message must not stall you.
 
-```text
-execution_mode:        github_issue_full
-load:                  full
-impl_repo_path:        <absolute git root>
-expected_branch:       opencode/ticket-<issue>-<slug>-<abbrev>
-is_linked_worktree:    true
-main_checkout_root:    <root when known>
-branch_policy:         do not create, switch, checkout, or rename branches
-worktree_directory:    <abs ticket worktree path>
-feature_branch:        opencode/feat-<slug>
-abbrev:                <derived title slug, may end in -2/-3>
-issue_number:          <int>
-repo:                  OWNER/REPO
-opencode_meta:         { task_id, owner, acceptance, test_commands, stages[], commit_message, ... }
-auto_spawn_consent:    true|false
-```
+1. **Read the brief file.** The plugin wrote `<worktree-gitdir>/opencode-ticket-brief.json`. Resolve gitdir:
 
-If `execution_mode` is missing, you are on the legacy single-stage path — load your agent Hard Rules and behave like the legacy `github-issue-run` flow.
+   ```bash
+   gitdir="$(git rev-parse --path-format=absolute --git-dir)"
+   brief="$gitdir/opencode-ticket-brief.json"
+   ```
+
+   Read `$brief` if it exists and parses as JSON. Capture `execution_mode`, `issue_number`, `repo`, `issue_url`, `feature_slug`, `feature_branch`, `expected_branch`, `agent`, `develop_session_id`, `kickoff_message`, `auto_spawn_consent`, `created_at`.
+
+2. **If the brief file is missing or unparseable, reconstruct from GitHub + git state — never ask the user to paste anything:**
+
+   ```bash
+   # branch shape: opencode/ticket-<issue>-<slug>-<abbrev>
+   branch="$(git rev-parse --abbrev-ref HEAD)"
+   issue_number="$(printf '%s' "$branch" | sed -nE 's#^opencode/ticket-([0-9]+)-.*$#\1#p')"
+   repo="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
+   feature_slug="$(printf '%s' "$branch" | sed -nE 's#^opencode/ticket-[0-9]+-([a-z0-9-]+)-[a-z0-9-]+$#\1#p')"
+   # feature_branch from the issue's `feature:<slug>` label
+   feature_branch="opencode/feat-${feature_slug}"
+   body="$(gh issue view "$issue_number" --repo "$repo" --json body -q .body)"
+   opencode_meta="$(printf '%s' "$body" | awk '/^```opencode-task-yaml$/{f=1;next} /^```$/{if(f){f=0;exit}} f' | python3 -c 'import sys,json; print(json.dumps(json.load(sys.stdin)))' 2>/dev/null || echo null)"
+   expected_branch="$branch"
+   agent="${agent:-developer}"
+   develop_session_id="${develop_session_id:-null}"
+   kickoff_message="${kickoff_message:-<bootstrap from GitHub>}"
+   ```
+
+3. **Verify the checkout contract** (cwd IS the ticket worktree by construction — `worktree_create` made the GUI session there):
+
+   ```bash
+   git rev-parse --is-inside-work-tree                # expect true
+   git rev-parse --abbrev-ref HEAD                    # expect opencode/ticket-<n>-<slug>-<abbrev>
+   git merge-base --is-ancestor "origin/$feature_branch" HEAD   # expect success after the develop orchestrator's post-create reset
+   ```
+
+   Mismatch → `BLOCKED: CHECKOUT_CONTRACT_FAILED` (the only bounce-out).
+
+4. **Resume-safe idempotence.** If the issue already has `state:in-progress` and the worktree has commits or a PR is open, **resume, never restart**: jump to §2 stage loop at the current stage (read the most recent `code_review_gate:` comment to find the last APPROVED stage index; advance from `index+1`). Do not re-run RED/GREEN for already-approved stages. Do not re-post duplicate `code_review_gate:` comments.
+
+5. **Set `state:in-progress`** (delegated `developer` Task with `cwd` already on the ticket worktree — no `OPENCODE_EXPECT_*` dance needed because you ARE the ticket worktree):
+
+   ```bash
+   bash <OC>/skills/github-issue-run/lib/issue-state-transition.sh "<repo>" "<issue_number>" state:in-progress
+   ```
+
+   `state:in-progress` automatically removes `verified` and adds `unverified` — the verification gate will re-arm when this ticket reaches `state:ready-for-review` again.
+
+## Required inputs (truth sources)
+
+The develop orchestrator no longer passes the full payload in the dispatch message (you are not dispatched). The three sources of truth, in priority order:
+
+1. **Brief file** `<worktree-gitdir>/opencode-ticket-brief.json` — written by the plugin, survives restarts, durable until the worktree gitdir is pruned.
+2. **GitHub issue + worktree branch** — `opencode-task-yaml` body, `feature:<slug>` label, `state:*` labels, `Blocked by:` section, branch name shape.
+3. **Kickoff message** — a short pointer only; do not require it to contain the full payload. A truncated kickoff is not a failure.
+
+If the brief file is missing but the branch + repo reconstruct cleanly, proceed (reconstruction is the resilience path; this is exactly the #245 incident fix). Only bounce out on `BLOCKED: CHECKOUT_CONTRACT_FAILED`.
 
 ## Procedure
 
@@ -49,17 +88,15 @@ If `execution_mode` is missing, you are on the legacy single-stage path — load
 
 ```bash
 # delegated developer with load: minimal
-git -C "<worktree_directory>" rev-parse --is-inside-work-tree  # expect true
-git -C "<worktree_directory>" rev-parse --abbrev-ref HEAD      # expect <expected_branch>
-
-# If not on the expected branch -> BLOCKED: CHECKOUT_CONTRACT_FAILED
+git rev-parse --is-inside-work-tree  # expect true
+git rev-parse --abbrev-ref HEAD      # expect <expected_branch>
 ```
 
 Then run **`worktree-env`** with `load: full` and **`preflight`** with `load: full`, repair-first, **silently**. Surface only if preflight reports `Status: Blocked` after one repair pass; otherwise proceed to step 2 without prompting.
 
 ### 2. Loop every `opencode_meta.stages[]` entry
 
-For each `stage` in `opencode_meta.stages` (in order):
+For each `stage` in `opencode_meta.stages` (in order, **starting from `last_approved_stage_index + 1`** on resume):
 
 1. **RED** — dispatch `test-writer` (or implementer RED for non-test stages) with the stage scope and capture `red_phase`.
 2. **GREEN** — execute the stage as `Owner` (developer | frontend-dev | ux-dev) per `stage.owner`. Capture `green_phase` and `assertion_delta`.
@@ -102,6 +139,30 @@ switch report.classify:
 
 ### 5. Terminal report
 
+Emit the terminal report (in-session, normal prose), **post the `ticket_report:` comment on the issue** (mandatory durable channel — same pattern as `code_review_gate:`), and best-effort `session_notify` the develop orchestrator before stopping.
+
+#### 5a. Post the `ticket_report:` comment (mandatory)
+
+```bash
+gh issue comment "<issue_number>" --repo "<repo>" --body "$(cat <<'EOF'
+ticket_report:
+  status: READY_FOR_HUMAN_REVIEW | BLOCKED
+  issue: <repo>#<issue_number>
+  pr_url: <url>                    # READY only
+  ci_state: pass|pending|fail       # READY only
+  stages_completed: <count>
+  blocker_code: <code>             # BLOCKED only
+  reason: <one-line>                # BLOCKED only
+  next_action: <what the develop orchestrator should do>
+  notify_status: admitted|failed|<reason>   # see §5c
+EOF
+)"
+```
+
+The develop orchestrator's `dev-loop-watch.sh` parses `ticket_report:` comments to surface state and detect out-of-band GitHub-UI merges; the poller (`scripts/dev-loop-poller.sh`) also diffs them to wake the develop orchestrator when it is idle. Without this comment, the develop orchestrator stays paused and the watch/poller cannot detect the terminal state.
+
+#### 5b. Block shape
+
 Exactly one of:
 
 ```yaml
@@ -127,6 +188,23 @@ BLOCKED:
   recommended_helper_request: <one concrete request>
 ```
 
+#### 5c. Best-effort wake via `session_notify`
+
+```text
+message = "ticket_report: <repo>#<n> | status: READY_FOR_HUMAN_REVIEW | pr: <url> | ci: pass | stages: <n>\nnext_action: merge sub-PR on human approval"
+# or, for BLOCKED:
+message = "ticket_report: <repo>#<n> | status: BLOCKED | blocker: <code> | reason: <one-line>"
+
+result = delegated developer load: minimal \
+  session_notify { sessionID: <develop_session_id>, agent: orchestrate, message }
+
+if result.admitted == true: record notify_status: admitted
+elif result.status == 404: record notify_status: develop_session_id_stale (the brief file's stored id may be stale after a restart — the ticket_report: comment + poller are the durable wake path)
+else:                       record notify_status: <error from result.error>
+```
+
+The `ticket_report:` comment is the **mandatory** durable channel. `session_notify` is best-effort; its failure is recorded in the comment but never blocks the terminal report.
+
 Emit the terminal report and stop. The post-completion guard now fires (per implementer Hard Rules) — any subsequent user message is answered with: "Task complete. Switch to the `orchestrate` agent to continue."
 
 ## Anti-loop
@@ -141,4 +219,6 @@ Emit the terminal report and stop. The post-completion guard now fires (per impl
 - `skills/code-review/SKILL.md` — ticket mode (no full regression / no CodeRabbit).
 - `skills/preflight/SKILL.md` — repair pass and output schema.
 - `skills/github-issue-run/lib/pr-stabilize-watch.sh` — CI-watch + comment classifier.
+- `skills/github-issue-run/lib/dev-loop-watch.sh` — develop orchestrator's per-issue watcher.
 - `skills/orchestrate-develop-loop/SKILL.md` — the parent orchestrator.
+- `plugins/worktree.js` — `worktree_create` (kickoff params) and `session_notify`.

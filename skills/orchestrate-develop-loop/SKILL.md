@@ -9,9 +9,9 @@ roleReminder: "Load only when `ORCHESTRATE_DEVELOP_LOOP` is unset or `1` and the
 
 ## Scope
 
-Run the **develop** branch as the single persistent orchestration session for one `(feature:<slug>, impl-repo)` pair. From `develop`, create the feature worktree, then dispatch **one bounded full-ticket Task per ticket** (`execution_mode: github_issue_full`) in DAG-respecting batches. Each ticket session owns its own stages, sub-PR, and PR stabilization. The develop loop only reacts to the terminal ticket report (`READY_FOR_HUMAN_REVIEW` | `BLOCKED`). When all tickets merge into the feature branch, hand off to `architect-feature-signoff`.
+Run the **develop** branch as the single persistent orchestration session for one `(feature:<slug>, impl-repo)` pair. From `develop`, create the feature worktree, then **for each runnable ticket, create a ticket worktree + kick the auto-started GUI session** with a short pointer message (the ticket session itself loads `ticket-lifecycle`, reads the brief file the plugin wrote into the worktree gitdir, and reconstructs the rest from GitHub). The develop loop only reacts to terminal ticket reports (`READY_FOR_HUMAN_REVIEW` | `BLOCKED`) — posted as `ticket_report:` comments on the issue and best-effort injected back via `session_notify`. When all tickets merge into the feature branch, hand off to `architect-feature-signoff`.
 
-The develop orchestrator does **not** load `orchestrate-verification` on the happy path; ticket-mode per-stage code-review runs *inside* the bounded Task.
+The develop loop does **not** dispatch ticket subagents via the `task` tool. Subagents inherit the parent's cwd (`develop`), so they would land on the wrong branch and `checkout-contract.sh --verify` would correctly reject them (`SubtaskPartInput` in the installed SDK has no `directory` field). The auto-started GUI session for the ticket worktree IS the ticket session — it has the correct cwd by construction.
 
 ## Entry conditions
 
@@ -57,62 +57,121 @@ while true:
   for entry in batch:
     ticket = entry.number
     title  = entry.title
-    meta   = entry.opencode_meta
+    abbrev = <derive from title or pass via entry if worktree-manager echoes it>
+    branch_name = "opencode/ticket-<n>-<slug>-<abbrev>"
 
-    # 3a. create ticket worktree
-    dispatch worktree-manager create_ticket { issue, slug, base: opencode/feat-<slug>, title, auto_spawn: true }
-    record { directory, branch: opencode/ticket-<n>-<slug>-<abbrev>, abbrev }
+    # 3a. create ticket worktree + kick the auto-started GUI session
+    kickoff_message = compose_kickoff_message(
+        issue=entry, feature_slug=slug, branch=branch_name,
+        worktree_dir=DIRECTORY_FROM_RESPONSE, brief_file=<gitdir>/opencode-ticket-brief.json)
 
-    # 3b. state transition
-    delegated developer: bash <OC>/skills/github-issue-run/lib/issue-state-transition.sh <repo> <n> state:in-progress
-      (set OPENCODE_EXPECT_REPO_ROOT + OPENCODE_EXPECT_BRANCH=<abbrev-branch> first)
+    dispatch worktree-manager create_ticket {
+      issue, slug, base: opencode/feat-<slug>, title,
+      auto_spawn: true,
+      kickoff_agent: matched implementer (developer | frontend-dev | ux-dev),
+      kickoff_message,
+    }
 
-    # 3c. dispatch bounded full-ticket Task
-    Task <implementer> execution_mode: github_issue_full, load: full, with HANDOFF_TO_TICKET_SESSION marker
-        passing: impl_repo_path, expected_branch (opencode/ticket-...-abbrev), is_linked_worktree: true,
-                 main_checkout_root, branch_policy, worktree_directory, feature_branch, abbrev,
-                 issue_number, repo, opencode_meta, auto_spawn_consent
+    record {
+      directory, branch: opencode/ticket-<n>-<slug>-<abbrev>, abbrev,
+      session_id, develop_session_id, kickoff (admitted|no_session_after_poll|failed)
+    }
+
+    if kickoff != admitted:
+      # advisory only — brief file fallback stands.
+      # The orchestrator may retry via worktree-manager `kickoff` action,
+      # or the user may open the GUI session and type any message —
+      # ticket-lifecycle §0 reads the brief file and reconstructs from GitHub.
+      surface advisory in lifecycle log; do NOT pause the batch.
+      # The poller/scripts/dev-loop-poller.sh + dev-loop-watch.sh will detect
+      # the ticket_report: comment regardless of how the ticket was kicked.
+
+  # 3b. (removed) state:in-progress is now set inside the ticket session itself
+  #     via issue-state-transition.sh delegated to a developer Task whose cwd
+  #     IS the ticket worktree (no OPENCODE_EXPECT_* dance). See ticket-lifecycle §0.
+
+  # 3c. (removed) there is NO task-tool ticket dispatch. The auto-started GUI
+  #     session IS the ticket session; it self-bootstraps from the brief file
+  #     in its worktree gitdir (see ticket-lifecycle §0).
 
   # 3d. wait for terminal reports (one per ticket in batch)
-  # develop orchestrator blocks here; ticket sessions run autonomously to READY_FOR_HUMAN_REVIEW | BLOCKED.
-
-  for each READY_FOR_HUMAN_REVIEW { pr_url, ci_evidence, comment_resolutions }:
-    notify user: "PR ready for review: <pr_url>"   # ONLY HUMAN GATE
-    wait for user: "yes, happy with that ticket" (or user has already merged)
-
-    # 3e. merge sub-PR into opencode/feat-<slug> if not already merged
-    delegated developer: gh pr merge <pr_url> --squash --delete-branch=false (or --merge per repo policy)
-      on failure: surface mergeable/branch-protection error verbatim, pause batch
-      on success: continue
-
-    # 3f. fetch + fast-forward feature branch in the worktree
-    delegated developer (cd <feature worktree directory>):
-      git fetch origin opencode/feat-<slug>
-      git merge --ff-only origin/opencode/feat-<slug>
-
-    # 3g. delete the ticket worktree
-    dispatch worktree-manager delete { directory: <ticket worktree dir> }
-
-    # 3h. delete the remote ticket branch
-    delegated developer: git push origin --delete opencode/ticket-<n>-<slug>-<abbrev>
-      (developer is the only delegated actor for `git push origin --delete`; ticket session itself never runs this)
-
-  for any BLOCKED ticket:
-    surface the blocker + partial evidence verbatim
-    await user; do not auto-advance
+  #     wakes come from: (i) session_notify terminal-report injection (primary),
+  #                       (ii) poller scripts/dev-loop-poller.sh firing DEV_LOOP_WAKE,
+  #                       (iii) any user message — run dev-loop-watch.sh first.
+  # End the turn after batch kickoff; do not block.
 ```
 
-`auto_spawn_consent: true` means the loop never pauses for `ready to spawn next batch?` prompts; the only pause is at `READY_FOR_HUMAN_REVIEW`. `auto_spawn_consent: false` falls back to asking per batch (current `feature-worktree` behavior).
+#### 3a. Compose the kickoff message
+
+The message is a short pointer — truncation-proof by design. The ticket session reconstructs the full payload from the brief file + GitHub.
+
+```text
+execution_mode: github_issue_full
+issue: OWNER/REPO#<n> (<issue_url>)
+feature: feature:<slug> (base branch opencode/feat-<slug>)
+expected_branch: opencode/ticket-<n>-<slug>-<abbrev>
+worktree: <abs path>
+brief: <gitdir>/opencode-ticket-brief.json
+Load skill ticket-lifecycle and begin. The GitHub issue body (opencode-task-yaml) is the source of truth for stages[], acceptance, and test commands. Do not ask for a pasted brief; reconstruct anything missing per ticket-lifecycle Bootstrap.
+```
+
+Compose it once per ticket; pass it verbatim to `worktree_create` as `kickoff_message`. The plugin writes the brief file and injects the message via `session.promptAsync`.
+
+#### 3b. Resume behavior
+
+- After kicking the batch, **end the turn**. Wakes (in priority order):
+  1. **In-session `session_notify`** — when a ticket session posts its terminal report, the develop orchestrator receives an injected message and runs the PR-approval gate for that ticket.
+  2. **Poller `DEV_LOOP_WAKE`** — `scripts/dev-loop-poller.sh` (server-host cron) detects `ticket_report:` comment deltas and wakes the develop orchestrator.
+  3. **Any user message** — run `dev-loop-watch.sh` first, process deltas, then handle the message.
+- Wake contract: incoming message begins with `DEV_LOOP_WAKE: { repo, feature, reason }` → run `dev-loop-watch.sh`; if no active loop for that feature is in the lifecycle log, ignore (idempotent — "ignore if not yours").
+
+#### 3c. PR-approval gate
+
+For each `READY_FOR_HUMAN_REVIEW` (received via `session_notify` or by parsing the latest `ticket_report:` comment from `dev-loop-watch.sh`):
+
+```text
+notify user: "PR ready for review: <pr_url>"   # ONLY HUMAN GATE
+wait for user: "yes, happy with that ticket" (or user has already merged)
+```
+
+#### 3d. Merge + cleanup
+
+After user approval reply:
+
+1. **Merge the sub-PR** — delegated `developer` Task with **the exact worktree/repo directory and `cd`/`git -C` in the prompt** (fixes the inherited-cwd failures from the old task-tool dispatch path):
+
+   ```text
+   cd <feature worktree directory>
+   gh pr merge <pr_url> --squash --delete-branch=false
+   ```
+
+   On failure: surface `gh pr view --json mergeable` verbatim, pause the batch. On success: continue.
+
+2. **Fast-forward the feature branch** in the feature worktree (delegated `developer`, `cd <feature worktree dir>`):
+
+   ```bash
+   git fetch origin opencode/feat-<slug>
+   git merge --ff-only origin/opencode/feat-<slug>
+   ```
+
+3. **Delete the ticket worktree** — dispatch `worktree-manager` `delete { directory: <ticket worktree dir> }`.
+
+4. **Delete the remote ticket branch** — delegated `developer`: `git push origin --delete opencode/ticket-<n>-<slug>-<abbrev>` (developer is the only delegated actor for `git push origin --delete`; ticket session itself never runs this).
+
+#### 3e. Out-of-band merges (GitHub UI)
+
+If the user merges the sub-PR via GitHub UI instead of the gate: `dev-loop-watch.sh` detects the state change (PR state MERGED), the poller or user message wakes the develop orchestrator, which verifies via `gh pr view --json state`, then runs step 3d's cleanup.
 
 ### 4. State transitions inside the loop
 
-The bounded ticket Task owns `state:in-progress` (set before dispatch) and `state:ready-for-review` (set when the sub-PR opens). The develop orchestrator owns any subsequent state changes (`state:blocked` on `BLOCKED`, etc.). All transitions go through `issue-state-transition.sh <repo> <n> <state>` delegated to `developer`.
+The bounded ticket session owns `state:in-progress` (set during `ticket-lifecycle` §0 Bootstrap) and `state:ready-for-review` (set when the sub-PR opens, after `code_review_gate:` is posted). The develop orchestrator owns any subsequent state changes (`state:blocked` on `BLOCKED`, etc.). All transitions go through `issue-state-transition.sh <repo> <n> <state>` delegated to `developer`.
 
 ### 5. Failure handling
 
 | Failure | Where it surfaces | Response |
 |---|---|---|
 | `worktree-manager` returns `blocker_code` | develop orchestrator loop | Surface verbatim, stop, do not retry. |
+| `worktree-manager` returns `blocker_code: "KICKOFF_FAILED"` (advisory only) | develop orchestrator loop | Surface advisory in lifecycle log; brief file fallback stands. Retry via `worktree-manager` `kickoff` action, or the user opens the GUI session and types anything. **Do not pause the batch.** |
 | `dev-loop-batch.sh` exits 1 | develop orchestrator loop | All tickets done → exit loop, go to step 6. |
 | Ticket `BLOCKED: ENV_BLOCKED` after one repair | ticket session → develop orchestrator | Surface `recommended_env_fix`, pause batch. |
 | Ticket `BLOCKED: STABILIZATION_EXHAUSTED` (CI fail after 3 iterations) | ticket session | Surface verbatim, pause batch. |
@@ -120,7 +179,9 @@ The bounded ticket Task owns `state:in-progress` (set before dispatch) and `stat
 | Sub-PR merge fails (branch protection / conflict) | develop orchestrator | Surface `gh pr view --json mergeable`, pause batch. |
 | Remote-branch delete fails (protected / already gone) | develop orchestrator cleanup | Non-fatal: log, continue. Surface as advisory at feature close. |
 | User merges sub-PR themselves | develop orchestrator | `gh pr view --json state` confirms MERGED; proceed to worktree + remote-branch cleanup. |
-| User says "happy" but PR not yet merged | develop orchestrator | Orchestrator merges the sub-PR (delegated developer), then cleanup. |
+| User says "happy" but PR not yet merged | develop orchestrator | Orchestrator merges the sub-PR (delegated developer, with explicit `cd`/`git -C`), then cleanup. |
+| In-session `session_notify` delivery fails (develop_session_id stale) | ticket session → develop orchestrator | The `ticket_report:` comment is the mandatory durable channel; the poller will wake the develop orchestrator within one poll interval. |
+| Poller disabled / down | develop orchestrator | `dev-loop-watch.sh` is still agent-invocable; the user can manually trigger a wake. |
 
 ### 6. Hand off to feature-architect
 
@@ -158,15 +219,20 @@ After the feature-architect merges the feature PR, the develop orchestrator resu
 ## Hard rules for the develop orchestrator
 
 - Never call `worktree_*` tools directly — delegate to `worktree-manager`.
-- Never run `git push origin --delete` from the develop orchestrator session itself — delegate to a `developer` Task. This is the only branch-deleting actor.
+- Never dispatch ticket sessions via the `task` tool — the auto-started GUI session for the ticket worktree IS the ticket session. The `task` tool would inherit the `develop` cwd and `checkout-contract.sh --verify` would reject the subagent.
+- Never run `git push origin --delete` from the develop orchestrator session itself — delegate to a `developer` Task with explicit `cd`/`git -C`. This is the only branch-deleting actor.
 - Never load `orchestrate-verification` for ticket-mode work — ticket sessions self-dispatch `code-review` inside `ticket-lifecycle`.
 - Never modify a remote ticket branch (`opencode/ticket-...`) except to delete it after its sub-PR merges.
 - Children never create, switch, checkout, or rename branches (Hard Rule §82). The develop orchestrator is the only branch-switching actor.
 - The develop orchestrator never edits code or commits itself.
+- Wake messages that don't match an active loop in the lifecycle log are ignored (idempotent — "ignore if not yours").
+- After kicking a batch, **end the turn**. Do not poll. Wakes arrive via `session_notify` (in-session), the poller (out-of-band), or user messages.
 
 ## See also
 
-- `ticket-lifecycle` — the bounded full-ticket Task contract.
+- `ticket-lifecycle` — the ticket session contract (§0 Bootstrap is the single source of truth for how the ticket self-starts).
 - `architect-feature-signoff` — the post-merge feature audit + sign-off owner.
 - `feature-worktree` — worktree-creation JSON shapes + naming conventions still apply.
-- `agents/worktree-manager.md` — `create_ticket` now derives `<abbrev>` and echoes `auto_spawn`.
+- `agents/worktree-manager.md` — `create_ticket` now passes `kickoff_agent` + `kickoff_message`; `kickoff` action retries failed injections.
+- `skills/github-issue-run/lib/dev-loop-watch.sh` — agent-invocable per-issue watcher (consumes `ticket_report:` comments).
+- `scripts/dev-loop-poller.sh` — server-host cron poller that wakes the develop orchestrator via `DEV_LOOP_WAKE`.
