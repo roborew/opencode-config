@@ -309,7 +309,7 @@ export const WorktreePlugin = async (ctx) => {
     tool: {
 worktree_create: tool({
         description:
-          "Create an OpenCode worktree under OPENCODE_WORKTREES_DIR via the /experimental/worktree API. Branch is auto-prefixed opencode/<name>. After create, the worktree appears in the Desktop GUI and a session is auto-started. When `kickoff_message` is provided, the plugin writes a durable brief file into the worktree gitdir (NEVER in the working tree — never in `git status`) and injects a short pointer message into the auto-started GUI session via `session.promptAsync`. `kickoff_agent` switches the session's agent for the injected message (default `developer`).",
+          "Create an OpenCode worktree under OPENCODE_WORKTREES_DIR via the /experimental/worktree API. Branch is auto-prefixed opencode/<name>. After create, the worktree appears in the Desktop GUI and a session is auto-started. When `kickoff_message` is provided, the plugin writes a durable brief file into the worktree gitdir (NEVER in the working tree — never in `git status`) and injects a short pointer message into the auto-started GUI session via `session.promptAsync`. `kickoff_agent` switches the session's agent for the injected message (default `coder` — ticket sessions run as the `coder` primary agent loading `ticket-lifecycle`).",
         args: {
           name: tool.schema
             .string()
@@ -325,7 +325,7 @@ worktree_create: tool({
           kickoff_agent: tool.schema
             .string()
             .optional()
-            .describe("Agent for the kickoff message (default `developer`)."),
+            .describe("Agent for the kickoff message (default `coder`)."),
         },
         async execute({ name, kickoff_message, kickoff_agent }, context) {
           if (!v2) return unavailable("POST", { name });
@@ -368,7 +368,7 @@ worktree_create: tool({
               ? base.body.branch
               : `opencode/${name}`,
             worktree_directory: worktreeDir,
-            agent: kickoff_agent || "developer",
+            agent: kickoff_agent || "coder",
             develop_session_id: developSessionId,
             auto_spawn_consent: true,
             kickoff_message,
@@ -379,7 +379,7 @@ worktree_create: tool({
           let kickoffStatus = "no_session_after_poll";
           let promptResult = null;
           if (ticketSessionId) {
-            const agent = kickoff_agent || "developer";
+            const agent = kickoff_agent || "coder";
             promptResult = await callPromptAsync(v2, {
               sessionID: ticketSessionId,
               directory: projectDir,
@@ -397,7 +397,7 @@ worktree_create: tool({
             brief_file: briefFile,
             session_id: ticketSessionId,
             develop_session_id: developSessionId,
-            kickoff_agent: kickoff_agent || "developer",
+            kickoff_agent: kickoff_agent || "coder",
             kickoff: kickoffStatus,
             kickoff_error: promptResult && !promptResult.ok ? promptResult.error : null,
           });

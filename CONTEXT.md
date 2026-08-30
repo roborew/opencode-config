@@ -45,7 +45,7 @@ Implementation-repo planning that enriches fanout (or targeted) issues with Impl
 _Avoid_: Local issue plan, `.plan/issue.*`
 
 **Stage**:
-One TDD slice within an issue's `stages[]` array; orchestrate dispatches `developer`/`frontend-dev`/`ux-dev` per stage with `execution_mode: github_issue_stage`.
+One TDD slice within an issue's `stages[]` array; the **coder** session (per-ticket inner loop) dispatches `test-writer` (RED) → `developer`/`frontend-dev`/`ux-dev` (GREEN) → `code-review` (per-stage focused gate), with senior-dev escalation and provider fallback layered on top for failed children.
 _Avoid_: Step, phase file
 
 **GitHub-as-source-of-truth**:
@@ -90,7 +90,7 @@ _Avoid_: Assuming server Infisical populates app Compose; copying `.env.example`
 - A **Targeted change** skips the PRD and creates issues directly in one **Implementation repo**
 - A **Wayfinder map** lives in the **Spec repo** as a `wayfinder:map` issue and holds **Decision tickets** (planning, not execution). When the map's destination is a PRD, it feeds a **Spec feature** — chart map → resolve tickets → clear frontier → `to-prd` (skipping `grill-me`) → fanout → issue-expand → orchestrate. Decision tickets are **not** fanout tickets (planning vs execution).
 - **Issue-expand** runs in an **Implementation repo** before orchestrate picks up the queue
-- **Orchestrate** runs **Stages** sequentially until the issue is ready-for-review
+- **Orchestrate** runs the **outer loop** (feature worktree + batch kickoff of coder sessions + PR approval + merge/cleanup + handoff); **coder** sessions run the inner loop for each ticket (Stages → final-gate full-suite → sub-PR + stabilization → `ticket_report:`).
 - **Impl architect Mode F** runs Phase R → accept (`state:done`, open) → docs
 - **Feature-complete** (spec repo) closes child issues at merge, merges PRs, and closes the spec parent issue
 

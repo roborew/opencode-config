@@ -29,7 +29,7 @@ done
 LABEL="feature:${SLUG}"
 
 OC="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
-TRANSITION="${OC}/skills/github-issue-run/lib/issue-state-transition.sh"
+TRANSITION="${OC}/scripts/issue-state-transition.sh"
 
 if [[ ! -x "$TRANSITION" ]]; then
   echo "ERROR: missing issue-state-transition.sh at $TRANSITION" >&2

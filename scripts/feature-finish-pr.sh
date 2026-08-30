@@ -12,7 +12,7 @@ REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
 OC="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
-CONTRACT_SH="$OC/skills/github-issue-run/lib/checkout-contract.sh"
+CONTRACT_SH="$OC/scripts/checkout-contract.sh"
 if [[ -n "${OPENCODE_EXPECT_REPO_ROOT:-}" && -n "${OPENCODE_EXPECT_BRANCH:-}" ]]; then
   if [[ -f "$CONTRACT_SH" ]]; then
     bash "$CONTRACT_SH" --verify || {

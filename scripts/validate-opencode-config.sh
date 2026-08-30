@@ -75,8 +75,8 @@ if ! python3 -m unittest templates/spec-repo/bin/lib/test_existing_issue.py -q; 
   ERR=1
 fi
 
-echo "Checking checkout guardrails in orchestrate and execution agents..."
-GUARDRAIL_FILES="agents/orchestrate.md skills/orchestrate-execution/SKILL.md agents/developer.md agents/frontend-dev.md"
+echo "Checking checkout guardrails in orchestrate + coder + execution hosts..."
+GUARDRAIL_FILES="agents/orchestrate.md agents/coder.md skills/orchestrate/SKILL.md skills/ticket-lifecycle/SKILL.md agents/developer.md agents/frontend-dev.md"
 for needle in "Checkout identity gate" "CHECKOUT_CONTRACT_FAILED" "checkout-contract.sh"; do
   if ! grep -q "$needle" $GUARDRAIL_FILES 2>/dev/null; then
     echo "  MISSING guardrail reference: $needle"
@@ -96,13 +96,19 @@ if [[ -n "${GH_PROJECT:-}" ]] && command -v gh >/dev/null 2>&1; then
   fi
 fi
 
-if [[ ! -f skills/github-issue-run/lib/checkout-contract.sh ]]; then
-  echo "  MISSING: skills/github-issue-run/lib/checkout-contract.sh"
-  ERR=1
-fi
+echo "Checking moved lib scripts exist under scripts/..."
+for f in scripts/checkout-contract.sh scripts/issue-state-transition.sh scripts/dev-loop-batch.sh scripts/dev-loop-watch.sh scripts/pr-stabilize-watch.sh scripts/feature-finish-pr.sh scripts/dev-loop-poller.sh; do
+  if [[ ! -f "$f" ]]; then
+    echo "  MISSING: $f"
+    ERR=1
+  elif [[ ! -x "$f" ]]; then
+    echo "  NOT EXECUTABLE: $f"
+    ERR=1
+  fi
+done
 
 echo "Checking feature workflow contracts..."
-for f in agents/code-review.md skills/code-review/SKILL.md agents/test-writer.md skills/test-writer/SKILL.md skills/feature-worktree/SKILL.md; do
+for f in agents/code-review.md skills/code-review/SKILL.md agents/test-writer.md skills/test-writer/SKILL.md skills/orchestrate/SKILL.md; do
   if [[ ! -f "$f" ]]; then
     echo "  MISSING: $f"
     ERR=1
@@ -116,12 +122,12 @@ if grep -R -n '```opencode-task-json' bin/project/spec templates/spec-repo/bin t
   echo "  ERROR: JSON task fences remain in builders or validators"
   ERR=1
 fi
-if ! grep -q 'feature-worktree' agents/orchestrate.md; then
-  echo "  MISSING: feature-worktree orchestrate routing"
+if ! grep -q 'pr_stabilization' skills/orchestrate/SKILL.md; then
+  echo "  MISSING: pr_stabilization loop language in orchestrate"
   ERR=1
 fi
-if ! grep -q 'gh pr checks' skills/orchestrate-completion/SKILL.md || ! grep -q 'pr_stabilization' skills/orchestrate-completion/SKILL.md; then
-  echo "  MISSING: CI stabilization loop language in orchestrate-completion"
+if ! grep -q 'gh pr checks' skills/ticket-lifecycle/SKILL.md; then
+  echo "  MISSING: gh pr checks language in ticket-lifecycle"
   ERR=1
 fi
 if ! grep -q 'code-review' skills/docker-sandbox/SKILL.md || ! grep -q 'APPROVED' skills/docker-sandbox/SKILL.md || ! grep -q 'BLOCKED' skills/docker-sandbox/SKILL.md; then
@@ -210,10 +216,6 @@ if ! grep -q 'worktree-manager: allow' agents/orchestrate.md 2>/dev/null; then
   echo "  MISSING: worktree-manager in orchestrate task allow-list"
   ERR=1
 fi
-if grep -q 'git worktree add' skills/feature-worktree/SKILL.md 2>/dev/null; then
-  echo "  ERROR: feature-worktree SKILL still documents raw git worktree fallback"
-  ERR=1
-fi
 if ! grep -q 'recover' agents/worktree-manager.md 2>/dev/null; then
   echo "  MISSING: recover action in agents/worktree-manager.md"
   ERR=1
@@ -226,8 +228,8 @@ if ! grep -q 'rewrite-worktree-gitdirs.py' agents/worktree-manager.md 2>/dev/nul
   echo "  MISSING: sanctioned cleanup script reference in agents/worktree-manager.md"
   ERR=1
 fi
-if ! grep -q 'recover' skills/feature-worktree/SKILL.md 2>/dev/null; then
-  echo "  MISSING: recover action in skills/feature-worktree/SKILL.md"
+if ! grep -q 'recover' skills/orchestrate/SKILL.md 2>/dev/null; then
+  echo "  MISSING: recover action in skills/orchestrate/SKILL.md"
   ERR=1
 fi
 if ! grep -q 'do not recommend upgrading the Docker/base Node' scripts/preflight-runtime.sh 2>/dev/null; then
@@ -235,7 +237,7 @@ if ! grep -q 'do not recommend upgrading the Docker/base Node' scripts/preflight
   ERR=1
 fi
 
-echo "Checking ticket-session kickoff reliability wiring..."
+echo "Checking ticket-session kickoff reliability wiring (coder as host)..."
 for needle in 'session_notify:' 'session.promptAsync' 'opencode-ticket-brief.json' 'kickoff_message'; do
   if ! grep -q "$needle" plugins/worktree.js 2>/dev/null; then
     echo "  MISSING: $needle in plugins/worktree.js"
@@ -254,7 +256,7 @@ for needle in 'ticket_report:' 'Bootstrap' 'opencode-ticket-brief.json'; do
     ERR=1
   fi
 done
-for f in skills/github-issue-run/lib/dev-loop-watch.sh scripts/dev-loop-poller.sh; do
+for f in scripts/dev-loop-watch.sh scripts/dev-loop-poller.sh; do
   if [[ ! -f "$f" ]]; then
     echo "  MISSING: $f"
     ERR=1
@@ -263,14 +265,105 @@ for f in skills/github-issue-run/lib/dev-loop-watch.sh scripts/dev-loop-poller.s
     ERR=1
   fi
 done
+
+echo "Checking coder primary agent wiring..."
+if [[ ! -f agents/coder.md ]]; then
+  echo "  MISSING: agents/coder.md"
+  ERR=1
+fi
+if ! grep -q '"coder"' opencode.json 2>/dev/null; then
+  echo "  MISSING: coder agent entry in opencode.json"
+  ERR=1
+fi
+if ! grep -q 'session_notify: true' agents/coder.md 2>/dev/null; then
+  echo "  MISSING: session_notify in coder agent"
+  ERR=1
+fi
+if ! grep -q 'ticket-lifecycle: allow' agents/coder.md 2>/dev/null; then
+  echo "  MISSING: ticket-lifecycle allow in coder agent"
+  ERR=1
+fi
+if ! grep -q '"worktree-manager"' opencode.json 2>/dev/null; then
+  echo "  MISSING: worktree-manager agent entry in opencode.json"
+  ERR=1
+fi
+
+echo "Checking session_notify reverted from implementer agents..."
 for agent in developer.md frontend-dev.md ux-dev.md; do
-  if ! grep -q 'session_notify: true' "agents/$agent" 2>/dev/null; then
-    echo "  MISSING: session_notify in agents/$agent"
+  if grep -q '^[[:space:]]*session_notify:[[:space:]]*true' "agents/$agent" 2>/dev/null; then
+    echo "  ERROR: session_notify must not be set in agents/$agent (only coder holds it)"
     ERR=1
   fi
 done
-if ! grep -q '"worktree-manager"' opencode.json 2>/dev/null; then
-  echo "  MISSING: worktree-manager agent entry in opencode.json"
+
+echo "Checking dead skills removed + new host skills present..."
+for dead in orchestrate-execution orchestrate-verification orchestrate-recovery orchestrate-completion orchestrate-bootstrap orchestrate-develop-loop feature-worktree github-issue-run; do
+  if [[ -d "skills/$dead" ]]; then
+    echo "  ERROR: dead skill dir still present: skills/$dead"
+    ERR=1
+  fi
+done
+if [[ ! -f skills/orchestrate/SKILL.md ]]; then
+  echo "  MISSING: skills/orchestrate/SKILL.md"
+  ERR=1
+fi
+
+echo "Checking dead skill names absent from live config and docs..."
+if grep -R -n -E 'orchestrate-(execution|verification|recovery|completion|bootstrap|develop-loop)|`feature-worktree`|`github-issue-run`' agents skills rules docs README.md CONTEXT.md >/dev/null 2>&1; then
+  echo "  ERROR: references to removed skills must not appear in agents/, skills/, rules/, docs/, README.md, or CONTEXT.md"
+  ERR=1
+fi
+
+echo "Checking kickoff_agent default is coder..."
+if ! grep -q 'kickoff_agent || "coder"' plugins/worktree.js 2>/dev/null; then
+  echo "  ERROR: kickoff_agent default must be coder in plugins/worktree.js"
+  ERR=1
+fi
+
+echo "Checking ORCHESTRATE_DEVELOP_LOOP flag fully removed..."
+if grep -R -n --exclude-dir=.git --exclude-dir=.kilo --exclude=validate-opencode-config.sh 'ORCHESTRATE_DEVELOP_LOOP' . >/dev/null 2>&1; then
+  echo "  ERROR: ORCHESTRATE_DEVELOP_LOOP must not appear anywhere in the repo"
+  ERR=1
+fi
+
+echo "Checking old lib path skills/github-issue-run/lib removed from source tree..."
+# bin/ and templates/ are the deployed wrapper scripts that probe the old path with
+# `[[ -x ... ]] || [[ -f ... ]]` and silently no-op when the file is gone. They
+# stay byte-identical per the "Explicitly NOT touched" scope of the refactor.
+if grep -R -n --exclude-dir=.git --exclude-dir=.kilo --exclude-dir=bin --exclude-dir=templates --exclude=validate-opencode-config.sh 'skills/github-issue-run/lib' . >/dev/null 2>&1; then
+  echo "  ERROR: old lib path skills/github-issue-run/lib must not appear in the source tree"
+  ERR=1
+fi
+
+echo "Checking HANDOFF_TO_TICKET_SESSION marker removed..."
+if grep -R -n --exclude-dir=.git --exclude-dir=.kilo --exclude=validate-opencode-config.sh 'HANDOFF_TO_TICKET_SESSION' . >/dev/null 2>&1; then
+  echo "  ERROR: HANDOFF_TO_TICKET_SESSION must not appear anywhere"
+  ERR=1
+fi
+
+echo "Checking verification backend contract..."
+if ! grep -q 'docker-compose.test.yml' skills/ticket-lifecycle/SKILL.md 2>/dev/null; then
+  echo "  MISSING: docker-compose.test.yml backend in skills/ticket-lifecycle/SKILL.md"
+  ERR=1
+fi
+if ! grep -q 'ENV_BLOCKED' skills/ticket-lifecycle/SKILL.md 2>/dev/null; then
+  echo "  MISSING: ENV_BLOCKED contract in skills/ticket-lifecycle/SKILL.md"
+  ERR=1
+fi
+if ! grep -q 'all_stages: true' skills/code-review/SKILL.md 2>/dev/null; then
+  echo "  MISSING: final-gate full-suite (all_stages: true) language in skills/code-review/SKILL.md"
+  ERR=1
+fi
+if ! grep -q 'docker-compose.test.yml' skills/setup-skills/SKILL.md 2>/dev/null; then
+  echo "  MISSING: docker-compose.test.yml scaffold step in skills/setup-skills/SKILL.md"
+  ERR=1
+fi
+if ! grep -q 'compose_test_file' skills/setup-project/SKILL.md 2>/dev/null; then
+  echo "  MISSING: compose_test_file registry schema in skills/setup-project/SKILL.md"
+  ERR=1
+fi
+if ! grep -q 'docker-compose.test.yml' rules/testing.md 2>/dev/null; then
+  echo "  MISSING: compose-only-backend line in rules/testing.md"
   ERR=1
 fi
 

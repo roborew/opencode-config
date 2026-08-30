@@ -13,7 +13,7 @@ A primary agent (`orchestrate` or `architect`) dispatches a fallback subagent (`
 
 A fallback Task is the **last** retry path. Before invoking one, the primary must already have:
 
-1. Tried (and exhausted) the standard recovery contract per `orchestrate-recovery` / `orchestrate-execution` — including the one same-agent transient retry, the helper amendment (`scribe`), or the operator-confirmed senior-dev escalation, depending on the failure class.
+1. Tried (and exhausted) the standard recovery contract — including the one same-agent transient retry, the helper amendment (`scribe`), or the unattended senior-dev escalation (`coder` loop only; `orchestrate` and `architect` use operator-confirmed senior-dev escalation), depending on the failure class.
 2. Confirmed the failure is not a logic / contract / scope problem recoverable with helper alone.
 3. Decided **which** provider to try (`requested_provider` in context) **or** defaulted to the chain `kilo-fallback` → `openrouter-fallback`.
 
@@ -41,7 +41,7 @@ Optional but recommended:
 
 - `original_agent` MUST resolve to an **allowed child** (`developer`, `frontend-dev`, `ux-dev`, `code-review`, `scribe`, `worktree-env`, `preflight`, `vision`, `helper`, `senior-dev`, `review`, `strategist`, `debugger`, `refactor`, `document`, `architecture-auditor`).
 - Any value outside that list (including `orchestrate`, `architect`, `kilo-fallback`, `openrouter-fallback`, or anything unrecognized) → reject with `FALLBACK_CONTEXT_INVALID`.
-- `original_skill` MUST be supplied and refer to a `SKILL.md` that the discovery system can resolve. If it does not resolve, the fallback loads **`orchestrate-recovery`** for context only and reports `SKILL_UNAVAILABLE` — never infers behavior from the failed child's transcript.
+- `original_skill` MUST be supplied and refer to a `SKILL.md` that the discovery system can resolve. If it does not resolve, the fallback reports `SKILL_UNAVAILABLE` — never infers behavior from the failed child's transcript.
 
 ## Execution flow
 
@@ -116,7 +116,7 @@ When `provider_failure` is present the fallback **does not** emit the original r
 
 - A primary agent invokes a fallback **at most once per provider per bounded Task**. After both `kilo-fallback` and `openrouter-fallback` fail for the same Task, the primary halts with `FALLBACK_EXHAUSTED` to the user. The fallback itself never loops; it is the primary that owns attempt counting via `attempted_providers` per Task.
 - After a successful fallback, the primary resumes the normal workflow at the **next normal gate** (code-review, review gate, etc.). The fallback's completion is graded exactly like the original role's report — same `report_grade: PASS | NEEDS_RETRY | BLOCKED` rubric, fallback envelope is informational.
-- Manual paste of a fallback completion report follows the **manual handoff recovery** flow already documented in `orchestrate-recovery`.
+- Manual paste of a fallback completion report follows the **manual handoff recovery** flow documented in the parent primary agent's skill (`orchestrate` §7 failure handling, or `coder` via `ticket-lifecycle` §2.5).
 
 ## Completion
 

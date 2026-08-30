@@ -47,8 +47,7 @@ permission:
       "code-review": "allow",
       "cloudflare": "allow",
       "wrangler": "allow",
-      "workers-best-practices": "allow",
-      "orchestrate-recovery": "allow"
+      "workers-best-practices": "allow"
     }
   task:
     "*": "deny"

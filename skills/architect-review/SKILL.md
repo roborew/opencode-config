@@ -76,7 +76,7 @@ OC="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
 PRD: docs/prd/<slug>.md in spec sibling, or from PRD frontmatter parent_issue
 Impl repo: gh repo view when cwd is impl; or orchestrate handoff impl_repo
 Impl path: absolute path from handoff or cwd git root
-Issue scripts: $OC/skills/github-issue-run/lib/issue-state-transition.sh
+Issue scripts: $OC/scripts/issue-state-transition.sh
 Accept helper: $OC/skills/architect-review/lib/mode-f-accept-issues.sh (--repo OWNER/NAME when cwd is spec)
 Parent issue: parse parent_issue URL from docs/prd/<slug>.md frontmatter (for remediation sub-issues)
 ```

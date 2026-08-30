@@ -13,7 +13,7 @@ roleReminder: "Read-only planning. Architect completes grill-me before loading t
 
 Classify task type. For **features**, classify **Difficulty** (`easy` | `medium` | `hard`), investigate via `claude-context`, then: **easy** — synthesize without strategists; **medium** — synthesize without strategists when single-domain and investigation suffices, else decompose and spawn scoped `strategist`(s); **hard** — decompose, spawn one `strategist` per sub-problem, combine reports. Always include `Difficulty` in the artifact. Pass the plan to scribe (trust successful scribe writes per agent Hard Rules), prompt user to switch to `orchestrate`. For other plan types, invoke the corresponding specialist directly.
 
-Orchestrate reads `Difficulty` for post-implementation gates (see **`orchestrate-execution`** skill).
+Orchestrate reads `Difficulty` for post-implementation gates (the develop orchestrator dispatches per-difficulty feature-mode code-review; coder sessions handle per-stage gates; the feature-architect session runs the one-shot CodeRabbit gate inside `architect-feature-signoff`).
 
 ## Guiding Principles
 

@@ -8,7 +8,6 @@ tools:
   edit: true
   bash: true
   skill: true
-  session_notify: true
 permission:
   skill:
     { "ux-dev": "allow", "frontend-design": "allow", "docker-sandbox": "allow" }

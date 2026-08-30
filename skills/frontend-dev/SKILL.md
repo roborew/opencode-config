@@ -147,6 +147,6 @@ Call `report_to_parent` with:
 - blockers
 - residual risks and design tradeoffs
 
-After emitting the completion report, output `HANDOFF_COMPLETE` on its own line, then end your turn. **Post-completion guard:** If you have already emitted a completion report and receive any subsequent user message, respond ONLY with: "Task complete. Switch to the `orchestrate` agent to continue. Do not re-execute or repeat work."
+After emitting the completion report, output `HANDOFF_COMPLETE` on its own line, then end your turn. **Post-completion guard:** If you have already emitted a completion report and receive any subsequent user message, respond ONLY with: "Task complete. Switch to the calling orchestrator (coder in a ticket session; `orchestrate` in legacy `.plan` work) to continue. Do not re-execute or repeat work."
 
 > **`github_issue_full` exception:** under `execution_mode: github_issue_full`, the guard above does **not** fire after stage completions. Stage completions are internal milestones inside the bounded Task. The guard fires once, after the terminal `READY_FOR_HUMAN_REVIEW` or `BLOCKED` report emitted under `ticket-lifecycle`.

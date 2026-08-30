@@ -38,8 +38,10 @@ Orchestrate **one OpenCode session in `PROJECT-spec`** to configure the entire s
 
 Emit a **Setup status** table per repo:
 
-| Repo | In registry | issue-tracker | triage-labels | feature-context | child-feature.yml | opencode.md | CONTEXT.md |
-|------|-------------|---------------|---------------|-----------------|-------------------|-------------|--------------|
+| Repo | In registry | issue-tracker | triage-labels | feature-context | child-feature.yml | opencode.md | CONTEXT.md | compose-test |
+|------|-------------|---------------|---------------|-----------------|-------------------|-------------|--------------|---------------|
+
+`compose-test` = presence of `docker-compose.test.yml` (or `compose.test.yaml`) at the repo root. Coder sessions need this as the only sanctioned test backend; missing → flag for scaffold (scribe from `templates/project-stub/docker-compose.test.yml`).
 
 Flag orphans (local git dir not in registry) and registry entries without local clones.
 
@@ -48,7 +50,7 @@ Flag orphans (local git dir not in registry) and registry entries without local 
 One topic at a time (same substance as **`setup-skills`**):
 
 - Shared triage labels (`docs/agents/triage-labels.md` pattern for all repos).
-- Per repo: `application_role`, `capabilities`, `non_goals`, `agent_owner`, `default_test_commands`.
+- Per repo: `application_role`, `capabilities`, `non_goals`, `agent_owner`, `default_test_commands`, **`compose_test_file`** (path relative to repo root; required for orchestration).
 - Product vocabulary → spec `CONTEXT.md` / `LANGUAGE.md`.
 
 ## Phase C — Legacy audit (implementation repos)
@@ -77,7 +79,7 @@ For **each** sibling implementation repo, read-only scan then propose batch acti
 
 ## Phase D — Apply
 
-1. **scribe** — update spec `docs/agents/repos.md` with full registry schema (`repo`, `application_role`, `capabilities`, `non_goals`, `agent_owner`, optional `default_test_commands`).
+1. **scribe** — update spec `docs/agents/repos.md` with full registry schema (`repo`, `application_role`, `capabilities`, `non_goals`, `agent_owner`, optional `default_test_commands`, required `compose_test_file` — relative path to `docker-compose.test.yml` / `compose.test.yaml` at the repo root). Every impl repo must have a compose test file before orchestrate can run tickets against it; scaffold from `templates/project-stub/docker-compose.test.yml` when missing.
 2. **stack-bootstrap** — one Task per implementation repo (`load: full`, `local_path`, `spec_repo`, `operations: [copy_templates]`).
 3. Legacy archives — **stack-bootstrap** per confirmed move.
 4. **developer** (bash) — run from spec repo:

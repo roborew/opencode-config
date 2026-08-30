@@ -18,9 +18,9 @@ A prior attempt was made against `main` and missed the in-flight changes already
 
 - `agents/orchestrate.md` already allows `code-review` and `test-writer` (no `verifier`), and `worktree-env` is already in the `task:` allow-list. We add `worktree-manager: allow` to that same allow-list.
 - `agents/worktree-env.md` and `skills/worktree-env/SKILL.md` already exist (env file copy helper, unrelated to lifecycle).
-- `skills/feature-worktree/SKILL.md` exists and currently documents raw `worktree_create(branch, baseBranch)` calls with a `git worktree add` fallback. We **rewrite** it to delegate to `worktree-manager`.
+- `skills/orchestrate/SKILL.md` exists and currently documents raw `worktree_create(branch, baseBranch)` calls with a `git worktree add` fallback. We **rewrite** it to delegate to `worktree-manager`.
 - `docs/smoke/feature-worktree-fanout-validation.md` exists with 10 scenarios. We **amend** it with 10 more (API-driven fan-out).
-- `scripts/validate-opencode-config.sh` already requires `feature-worktree/SKILL.md`, `code-review`/`test-writer` agents and skills, and orchestrate routing. We extend it with asserts for the plugin and the new agent.
+- `scripts/validate-opencode-config.sh` already requires `orchestrate/SKILL.md`, `code-review`/`test-writer` agents and skills, and orchestrate routing. We extend it with asserts for the plugin and the new agent.
 
 ## New files
 
@@ -64,7 +64,7 @@ No other JSON changes. The plugin is loaded by the entrypoint script (copying `p
 
 Add `worktree-manager: allow` to the `task:` allow-list, immediately after `worktree-env: allow`. Preserve the existing 4-space indentation. No other frontmatter changes.
 
-### `skills/feature-worktree/SKILL.md`
+### `skills/orchestrate/SKILL.md`
 
 Rewrite so the skill is routing-only: it tells the orchestrator to dispatch `worktree-manager` Tasks with one of five actions. Removes the `git worktree add -b feature/<slug>` fallback block. Documents `feat-<slug>` / `ticket-<issue>-<slug>` naming and the resulting `opencode/<name>` branch shape.
 
@@ -80,7 +80,7 @@ Append a new `echo "Checking worktree-manager + worktree plugin wiring..."` bloc
 - `agents/worktree-manager.md` exists.
 - `opencode.json` contains `"worktree-manager"`.
 - `agents/orchestrate.md` contains `worktree-manager: allow`.
-- `skills/feature-worktree/SKILL.md` does **not** contain `git worktree add`.
+- `skills/orchestrate/SKILL.md` does **not** contain `git worktree add`.
 
 ## Validation (run locally before commit)
 

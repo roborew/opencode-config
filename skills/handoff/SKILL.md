@@ -24,6 +24,6 @@ Persist the handoff document using **bash** (preferred when your agent has `bash
 - Active artifact path(s): `.plan/<type>.<slug>.md` if any.
 - Pointers only — do **not** duplicate full plan bodies, CONTEXT.md, ADRs, or long transcripts. Reference paths and URLs.
 - Environment notes if relevant (branch, failing command, last error line).
-- Suggest which skills the next session should load (e.g. `grill-me`, `architect-plan`, `orchestrate-execution`, `debug-fix`).
+- Suggest which skills the next session should load (e.g. `grill-me`, `architect-plan`, `ticket-lifecycle`, `debug-fix`).
 
 If the user passed arguments (or the hint), treat them as what the next session should focus on and tailor the doc accordingly.

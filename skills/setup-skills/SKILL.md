@@ -10,6 +10,7 @@ Scaffold the configuration that **`grill-me`**, **`to-tickets`**, **`debug-fix`*
 - **Ticket tracker** — where GitHub tickets live (GitHub is required for this configuration)
 - **Triage labels** — strings for agent-ready vs human-needed work
 - **Domain docs** — single `CONTEXT.md` + `docs/adr/` vs multi-context `CONTEXT-MAP.md`
+- **Verification backend** — `docker-compose.test.yml` at repo root (or scaffolded via scribe from `templates/project-stub/docker-compose.test.yml`); test-suite-sufficient, not full stack; this is the only sanctioned test backend (no host-local suite setup)
 
 This is a **prompt-driven** skill: explore the repo, present findings, confirm with the user, then persist via **`scribe`** (Task `scribe` with `target_path` + full `content`). Do not invent remote URLs; read `git remote -v` when relevant.
 
@@ -20,6 +21,7 @@ This is a **prompt-driven** skill: explore the repo, present findings, confirm w
 - `git remote -v` — GitHub? GitLab? none?
 - Root `README.md`, `AGENTS.md`, `CLAUDE.md` — is there already an `## Agent skills` block?
 - `CONTEXT.md`, `CONTEXT-MAP.md`, `docs/adr/`, `docs/agents/`
+- `docker-compose.test.yml` (or `compose.test.yaml`) at repo root — present? covers the test suite?
 
 ### 2. Present and confirm (one topic at a time)
 
@@ -37,6 +39,8 @@ This is a **prompt-driven** skill: explore the repo, present findings, confirm w
 
 **C — Domain layout.** **Single-context** — one `CONTEXT.md` at repo root + `docs/adr/`. **Multi-context** — `CONTEXT-MAP.md` at root pointing to per-context `CONTEXT.md` and optional per-context `docs/adr/`.
 
+**D — Verification backend.** Every project that orchestrate will run tickets against must have a `docker-compose.test.yml` (or `compose.test.yaml`) at the repo root. It must be **test-suite-sufficient, not full stack** — a minimal compose file that runs the project's test command in a container. Coder sessions use this as the only sanctioned test backend (RED/GREEN/final-gate runs go through `sandbox exec` on opencode-server, or direct `docker compose -f <file>` on local dev — `skills/docker-sandbox/SKILL.md` invocation matrix). If the file is missing, scaffold it from `templates/project-stub/docker-compose.test.yml` via `scribe`. Record the default compose test invocation in the scaffolded agent docs.
+
 ### 3. Draft for user edit
 
 Show drafts of:
@@ -44,15 +48,17 @@ Show drafts of:
 1. `docs/agents/issue-tracker.md`
 2. `docs/agents/triage-labels.md`
 3. `docs/agents/domain.md`
-4. A short `## Agent skills` markdown block (for `AGENTS.md` **or** `README.md`)
+4. `docs/agents/verification-backend.md` (or appended to `domain.md`) recording the `docker-compose.test.yml` path + canonical `docker compose -f <file> run --rm <test-service>` invocation
+5. A short `## Agent skills` markdown block (for `AGENTS.md` **or** `README.md`)
 
 ### 4. Write via scribe
 
-Invoke **`scribe`** three times (or one batched sequence per parent rules) with:
+Invoke **`scribe`** four times (or one batched sequence per parent rules) with:
 
 - `target_path: docs/agents/issue-tracker.md`
 - `target_path: docs/agents/triage-labels.md`
 - `target_path: docs/agents/domain.md`
+- `target_path: <docker-compose.test.yml | compose.test.yaml>` (only when missing; copy from `templates/project-stub/docker-compose.test.yml` and adjust to the project's stack)
 
 Then either:
 
@@ -140,4 +146,8 @@ See `docs/agents/triage-labels.md`.
 ### Domain docs
 
 See `docs/agents/domain.md`.
+
+### Verification backend
+
+Coder sessions run the test suite through `docker-compose.test.yml` (test-suite-sufficient, not full stack) via `sandbox exec` on opencode-server or direct `docker compose -f <compose_test_file>` on local dev. No host-local test runners — the file is required for orchestration. See `docs/agents/verification-backend.md` (or `docs/agents/domain.md`).
 ```

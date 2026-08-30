@@ -9,7 +9,7 @@ NUM="${2:?issue number}"
 NEW="${3:?new state label e.g. state:in-progress}"
 
 OC="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
-CONTRACT_SH="$OC/skills/github-issue-run/lib/checkout-contract.sh"
+CONTRACT_SH="$OC/scripts/checkout-contract.sh"
 
 if [[ "$NEW" == "state:in-progress" && -n "${OPENCODE_EXPECT_REPO_ROOT:-}" && -n "${OPENCODE_EXPECT_BRANCH:-}" ]]; then
   if [[ -x "$CONTRACT_SH" ]] || [[ -f "$CONTRACT_SH" ]]; then

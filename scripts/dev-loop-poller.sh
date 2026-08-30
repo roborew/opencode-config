@@ -33,7 +33,7 @@ done
 : "${OPENCODE_SERVER_PASSWORD:?OPENCODE_SERVER_PASSWORD required}"
 PORT="${OPENCODE_SERVER_PORT:-4098}"
 OC="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
-WATCH_SH="$OC/skills/github-issue-run/lib/dev-loop-watch.sh"
+WATCH_SH="$OC/scripts/dev-loop-watch.sh"
 STATE_DIR="${DEV_LOOP_STATE_DIR:-$HOME/.local/state/opencode/dev-loop}"
 mkdir -p "$STATE_DIR"
 

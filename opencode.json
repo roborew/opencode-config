@@ -314,6 +314,10 @@
       "model": "kilo/minimax/minimax-m3",
       "steps": 50
     },
+    "coder": {
+      "model": "kilo/minimax/minimax-m3",
+      "steps": 60
+    },
     "plan": {
       "model": "opencode-go/qwen3.7-plus",
       "steps": 20

@@ -8,7 +8,6 @@ tools:
   edit: true
   bash: true
   skill: true
-  session_notify: true
 permission:
   skill:
     {
