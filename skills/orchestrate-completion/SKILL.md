@@ -1,9 +1,11 @@
 ---
 name: orchestrate-completion
-description: "Queue-exhaustion completion: one-shot CodeRabbit, difficulty gates, PR stabilization, and implementation-architect handoff. Not for per-stage verification or issue claiming."
+description: "[LEGACY — superseded by `architect-feature-signoff` on the develop-loop path] Queue-exhaustion completion: one-shot CodeRabbit, difficulty gates, PR stabilization, and implementation-architect handoff."
 modelTier: "fast"
-roleReminder: "Load only after the queue reports exhausted and every ticket has code-review approval."
+roleReminder: "[LEGACY] Load only when `ORCHESTRATE_DEVELOP_LOOP=0` forces the legacy path. On the default develop-loop path, the develop orchestrator hands off to `architect-feature-signoff` instead."
 ---
+
+> **LEGACY.** This skill is retained for `ORCHESTRATE_DEVELOP_LOOP=0` (one release window). On the default path (`ORCHESTRATE_DEVELOP_LOOP` unset or `1`), the develop orchestrator **does not load this skill** — it hands off to the **feature-architect session** running `architect-feature-signoff` once all tickets are merged into `opencode/feat-<slug>`. The new skill owns the same CodeRabbit + stabilization + handoff responsibilities and adds the `state:done` accept and merge-gate confirmation.
 
 ## Queue Exhaustion
 

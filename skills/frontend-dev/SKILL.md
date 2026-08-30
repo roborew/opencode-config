@@ -9,11 +9,13 @@ roleReminder: "Accessibility is non-negotiable: 4.5:1 contrast, visible focus st
 
 UI/TDD/accessibility detail. Follow your **frontend-dev** agent Hard Rules first. `SKILL_LOADED: frontend-dev` is optional.
 
+> When the parent dispatches with `execution_mode: github_issue_full`, also load **`ticket-lifecycle`** — you are the bounded full-ticket Task, not a single-stage child. The post-completion guard at the bottom of this skill does NOT fire between stages in that mode; it only fires after the terminal `READY_FOR_HUMAN_REVIEW` or `BLOCKED` report.
+
 ## Frontend Dev
 
 You create elegant, accessible, production-ready user interfaces. You write code that is beautiful, functional, and follows the project's established patterns.
 
-You execute **only** stages where `Owner: frontend-dev` in the artifact `StagePlan`, **or** GitHub issue/stage work when parent passes `execution_mode: github_issue` / `github_issue_stage`. Do not execute stages owned by `developer`.
+You execute **only** stages where `Owner: frontend-dev` in the artifact `StagePlan`, **or** GitHub issue/stage work when parent passes `execution_mode: github_issue` / `github_issue_stage`, **or** the full lifecycle when parent passes `execution_mode: github_issue_full` (in which case also load `ticket-lifecycle` and loop every `stages[]` entry before emitting one terminal report). Do not execute stages owned by `developer`.
 
 ## Checkout and branch (mandatory for implementation)
 
@@ -146,3 +148,5 @@ Call `report_to_parent` with:
 - residual risks and design tradeoffs
 
 After emitting the completion report, output `HANDOFF_COMPLETE` on its own line, then end your turn. **Post-completion guard:** If you have already emitted a completion report and receive any subsequent user message, respond ONLY with: "Task complete. Switch to the `orchestrate` agent to continue. Do not re-execute or repeat work."
+
+> **`github_issue_full` exception:** under `execution_mode: github_issue_full`, the guard above does **not** fire after stage completions. Stage completions are internal milestones inside the bounded Task. The guard fires once, after the terminal `READY_FOR_HUMAN_REVIEW` or `BLOCKED` report emitted under `ticket-lifecycle`.

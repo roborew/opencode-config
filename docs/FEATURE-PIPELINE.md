@@ -9,18 +9,30 @@ User overview (diagram + how-to): [../README.md#feature-flow-prd--sign-off](../R
 | Stage | Repo | Select | Your choice | Your job | This stage owns |
 |-------|------|--------|-------------|----------|-----------------|
 | Plan / PRD | **spec** (`*-spec`) | **architect** → `hi` | **1. Product feature / PRD — …** | Answer grill; **approve** `docs/prd/<slug>.md`; **approve** issue plans | Planning + per-work-repo handoffs only — not code, not PR polish |
-| Build | **each work repo** | **orchestrate** (new session) | Paste handoff / `feature:<slug>` | Wait until the feature PR exists | Implements the queue; opens/updates the feature PR |
-| Review / accept / docs | **same work repo** | **architect** (new session) → `hi` | **4. Review / sign-off — Mode F …** then **R.** / **1.** / **2.** | Drive review; when happy: **Phase 1** (`state:done`, tickets stay open) then **Phase 2** docs | **All PR readiness and ticket acceptance.** Work-repo architect is where you sign off the work before spec |
+| Build | **each work repo** | **orchestrate** on `develop` (new session) | Paste handoff / `feature:<slug>` | Wait until the feature PR exists | Develop orchestrator owns `opencode/feat-<slug>` + per-ticket worktrees; each ticket session runs a bounded full-ticket Task end-to-end and self-stabilizes its sub-PR |
+| Review / accept / docs / merge | **same work repo, feature worktree** | **architect** (new session) → `hi` | **4. Review / sign-off — Mode F …** then **R.** / **1.** / **2.** | Drive review; when happy: **Phase 1** (`state:done`, tickets stay open) then **Phase 2** docs; **merge gate** with human confirmation | **All PR readiness, ticket acceptance, and feature-PR merge.** Work-repo architect is where you sign off the work before spec |
 | Remediation loop | **same work repo** | **orchestrate** ↔ **architect** | After **R**, if changes needed: **orchestrate** again → then architect → **4** → **R** again | Stay in the work repo until you are happy | Loop until Merge-ready — **do not go to spec yet** |
 | Final close | **spec** | **architect** → `hi` | **3. Feature complete — …** | Only after **every** work repo finished Mode F; choose human vs agent **merge gate** | **Merge + close only:** close tickets already `state:done`, merge PRs, close PRD. Spec does **not** re-do review or PR prep |
 
 Shape:
 
 ```text
-SPEC (start)          WORK REPO (loop until happy)              SPEC (finish)
-architect / 1    →    orchestrate ⇄ architect / 4 (R→1→2)   →   architect / 3
-PRD + handoffs        build → review → (fix → review)*          merge + close
+SPEC (start)          WORK REPO develop (build → review → fix → review)   SPEC (finish)
+architect / 1    →    develop orchestrator (develop branch)               architect / 3
+                     └─→ bounded full-ticket Task per ticket (auto)
+                          (sub-PRs self-stabilize inside the Task)
+                     └─→ sub-PRs merge into opencode/feat-<slug>
+                     →  architect / 4 (in feature worktree)
+                        Phase R → Phase 1 (state:done) → Phase 2 docs → merge gate
+PRD + handoffs        build → review → (fix → review)*                  merge + close
 ```
+
+### Develop-loop details
+
+- The **develop orchestrator** is the *only* persistent session in the impl repo. It lives in the `develop` branch, owns all `worktree-manager` calls and remote-branch deletes, and dispatches one bounded full-ticket Task per ticket with `execution_mode: github_issue_full`.
+- **Ticket sessions** (developer/frontend-dev/ux-dev) own the full lifecycle: silent preflight → every `stages[]` entry → sub-PR open → PR stabilization (CI + comments, max 3 iterations) → one terminal `READY_FOR_HUMAN_REVIEW` or `BLOCKED`. The develop orchestrator never loads `orchestrate-verification` for ticket work.
+- The develop orchestrator merges each sub-PR after human approval, deletes the ticket worktree + remote ticket branch, and re-batches until `dev-loop-batch.sh` exits 1. Then it hands off to **architect / 4** inside the feature worktree (`architect-feature-signoff`) for full audit + CodeRabbit + accept + merge.
+- The single human gate is **PR review** (one notification per sub-PR; one merge gate at the feature level).
 
 ### Hard reminders
 
@@ -32,8 +44,8 @@ PRD + handoffs        build → review → (fix → review)*          merge + cl
 ### Session boundaries (recommended)
 
 - **Planning:** `cd` into **spec** → **architect** → `hi` → **1. Product feature / PRD …** (one session through handoffs). Example: `cd ~/code/myapp/myapp-spec`.
-- **Build:** `cd` into each **work repo** → **new** session → **orchestrate** → paste `feature:<slug>` (parallel OK when handoff says so). Example: `cd ~/code/myapp/myapp-web`.
-- **Review loop (stay in work repo):** **new** session → **architect** → `hi` → **4. Review / sign-off — Mode F …** → **R. Phase R …**. If changes needed → **orchestrate** again → back to architect **4** → **R**. When happy → **1. Phase 1 …** then **2. Phase 2 …**.
+- **Build:** `cd` into each **work repo** → **new** session → **orchestrate** on the **`develop` branch** → paste `feature:<slug>` (parallel OK when handoff says so). The develop orchestrator creates `opencode/feat-<slug>` and dispatches bounded full-ticket Tasks. Example: `cd ~/code/myapp/myapp-web`.
+- **Review loop (stay in work repo, feature worktree):** **new** session → **architect** → `hi` → **4. Review / sign-off — Mode F …** → **R. Phase R …** (run inside `opencode/feat-<slug>`, the feature worktree). If changes needed → **orchestrate** again → back to architect **4** → **R**. When happy → **1. Phase 1 …** then **2. Phase 2 …** then **merge gate**.
 - **Complete:** back in **spec** → **architect** → `hi` → **3. Feature complete …** only after every work repo finished Mode F.
 
 Same-session handoff is optional (`/compact` after a short table HANDOFF block); use a new session if the provider errors on tool history.
@@ -57,7 +69,7 @@ Same-session handoff is optional (`/compact` after a short table HANDOFF block);
 | **1. Phase 1 — accept issues…** | Accept only when Phase R is Merge-ready | Tickets `state:done` (**stay open**) |
 | **2. Phase 2 — docs…** | Confirm doc scope when asked | Docs on the feature PR; PR merge-ready in this repo |
 
-Skill detail: [skills/architect-review/SKILL.md](../skills/architect-review/SKILL.md).
+Skill detail: [skills/orchestrate-develop-loop/SKILL.md](../skills/orchestrate-develop-loop/SKILL.md) (develop orchestrator) and [skills/architect-feature-signoff/SKILL.md](../skills/architect-feature-signoff/SKILL.md) (feature-architect in `opencode/feat-<slug>`).
 
 #### Feature complete — merge gate (spec repo only)
 
@@ -119,6 +131,9 @@ Central in `OPENCODE_CONFIG_DIR` — invoke via **`opencode-run`** (never copied
 ## See also
 
 - [RUNBOOK.md](RUNBOOK.md)
+- [skills/orchestrate-develop-loop/SKILL.md](../skills/orchestrate-develop-loop/SKILL.md)
+- [skills/ticket-lifecycle/SKILL.md](../skills/ticket-lifecycle/SKILL.md)
+- [skills/architect-feature-signoff/SKILL.md](../skills/architect-feature-signoff/SKILL.md)
 - [skills/issue-expand/SKILL.md](../skills/issue-expand/SKILL.md)
 - [skills/setup-project/SKILL.md](../skills/setup-project/SKILL.md)
 - [adr/0006-close-at-merge-and-phase-r.md](adr/0006-close-at-merge-and-phase-r.md)

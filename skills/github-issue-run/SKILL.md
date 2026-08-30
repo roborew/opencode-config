@@ -1,9 +1,15 @@
 ---
 name: github-issue-run
-description: "Orchestrate GitHub feature:<slug> backlog — next-runnable discovery, state transitions, flat or stage execution loop. Delegate gh and lib scripts to developer."
+description: "[LEGACY — superseded by `orchestrate-develop-loop` + `ticket-lifecycle`] Orchestrate GitHub feature:<slug> backlog — next-runnable discovery, state transitions, flat or stage execution loop. Delegate gh and lib scripts to developer."
 modelTier: fast
-roleReminder: "Load with orchestrate-execution for GitHub backlog mode. You have no bash — delegate gh/lib shell to developer (bootstrap env uses worktree-env + preflight)."
+roleReminder: "[LEGACY] Load only when `ORCHESTRATE_DEVELOP_LOOP=0` forces the legacy path. New work uses `orchestrate-develop-loop` (orchestrator) + `ticket-lifecycle` (bounded full-ticket Task)."
 ---
+
+> **LEGACY.** This skill is retained for `ORCHESTRATE_DEVELOP_LOOP=0` (one release window). The default path (`ORCHESTRATE_DEVELOP_LOOP` unset or `1`) uses:
+> - **`orchestrate-develop-loop`** — develop-branch orchestrator that owns worktree lifecycle, batches via `dev-loop-batch.sh`, and dispatches one bounded full-ticket Task per ticket.
+> - **`ticket-lifecycle`** — the bounded Task contract (`execution_mode: github_issue_full`) that runs every `stages[]` entry end-to-end and self-stabilizes the sub-PR.
+>
+> Body kept for reference. New work does not load this skill.
 
 # GitHub issue run
 

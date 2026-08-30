@@ -62,7 +62,7 @@ You are the **worktree-manager** subagent: the **single owner** of OpenCode work
    - `git -C <dir> log origin/<branch>..HEAD --oneline` — must be empty (branch fully pushed/merged).
    - `git -C <dir> status --porcelain` — must be empty (clean working tree).
    - If either fails, **refuse** with `BLOCKED: WORKTREE_NOT_CLEAN_OR_PUSHED` and surface `manualRecovery` from the tool.
-4. **Naming convention is `feat-<slug>` for a feature, `ticket-<issue>-<slug>` for a ticket.** The server auto-prefixes `opencode/`. Slug collisions across sessions are how branches get clobbered; always include the ticket number or feature slug.
+4. **Naming convention is `feat-<slug>` for a feature, `ticket-<issue>-<slug>-<abbrev>` for a ticket.** The server auto-prefixes `opencode/`. Slug collisions across sessions are how branches get clobbered; always include the ticket number or feature slug. `<abbrev>` is a 3–6-word kebab-case slug derived from the issue title; collisions within the same feature are suffixed `-2`, `-3`, … (see `create_ticket` procedure).
 5. **Base ref is documented as "main branch only".** When the orchestrator asks for a non-default base (e.g. ticket off `feature/<slug>`), use the primary design below (create via API → post-create `git reset` inside the worktree). Never invent undocumented API fields.
 6. **On API failure**, distinguish: (a) **dead upstream** (connection refused / 503 / timeout) → return `BLOCKED: WORKTREE_API_FAILED`, stop, the user must restart the opencode-server stack. (b) **recoverable 400 `WorktreeNotGitError`** → auto-invoke the `recover` procedure (the system's sanctioned `rewrite-worktree-gitdirs.py` + session deregister). Do **not** fall back to raw `git worktree` in either case.
 
@@ -73,7 +73,7 @@ The orchestrator calls you with a JSON-shaped `prompt`. Parse it and execute **o
 | `action`     | Extra fields                                                                                                |
 | ------------ | ----------------------------------------------------------------------------------------------------------- |
 | `create_feature` | `slug` (required), `base` (optional, default `"develop"`)                                                |
-| `create_ticket`  | `issue` (required, integer), `slug` (required), `base` (required, e.g. `feature/<slug>`)                  |
+| `create_ticket`  | `issue` (required, integer), `slug` (required), `base` (required, e.g. `opencode/feat-<slug>`), `title` (optional, used to derive `<abbrev>`; if absent, fetched via `gh issue view <issue> --json title`), `auto_spawn` (optional boolean, default `false` — orchestrator-side flag echoed in the returned JSON; worktree-manager itself does not spawn anything) |
 | `delete`         | `directory` (required, absolute worktree dir)                                                              |
 | `list`           | —                                                                                                          |
 | `reset`          | `directory` (required)                                                                                     |
@@ -114,22 +114,28 @@ The orchestrator calls you with a JSON-shaped `prompt`. Parse it and execute **o
 
 ### `create_ticket`
 
-1. Derive `name = "ticket-" + issue + "-" + slug`. Same validation as `create_feature`.
-2. Call `worktree_create({ name })`.
-3. **Pre-flight for base**: ensure `base` (e.g. `feature/<slug>`) exists on the remote. If not, return `BLOCKED: BASE_NOT_PUSHED` and instruct the orchestrator to push `feature/<slug>` first.
+1. Derive `<abbrev>` from the issue title (orchestrator may pass `title`; if absent, fetch once via `gh issue view <issue> --repo <REPO> --json title -q .title`, where `<REPO>` is `gh repo view --json nameWithOwner -q .nameWithOwner`):
+   - Lower-case, strip punctuation, collapse whitespace to `-`.
+   - Keep 3–6 content words; drop stopwords (`the`, `a`, `an`, `and`, `or`, `for`, `to`, `of`, `in`, `on`, `with`, `from`).
+   - Cap at 48 chars; trim trailing `-`s.
+   - If empty after trimming, fall back to `ticket`.
+2. **Collision dedupe:** list existing ticket worktree branches in this feature (`git -C <REPO_ROOT> branch -r | grep -E "origin/opencode/ticket-<issue>-<slug>-" || true`); if `<issue>-<slug>-<abbrev>` already exists, try `<abbrev>-2`, `<abbrev>-3`, … (cap at `-9`; on overflow return `BLOCKED: WORKTREE_NAME_COLLISION`).
+3. Derive `name = "ticket-" + issue + "-" + slug + "-" + abbrev`. Same validation as `create_feature` (no `/`, no whitespace, length ≤ 64).
+4. Call `worktree_create({ name })`.
+5. **Pre-flight for base**: ensure `base` (e.g. `opencode/feat-<slug>`) exists on the remote. If not, return `BLOCKED: BASE_NOT_PUSHED` and instruct the orchestrator to push `opencode/feat-<slug>` first.
    ```bash
    git -C "$REPO_ROOT" rev-parse --verify "origin/$base" || echo MISSING
    ```
-4. On success: `directory = body.body.directory`.
-5. **Primary design — post-create reset** (because the API only supports the project default branch as documented base):
+6. On success: `directory = body.body.directory`.
+7. **Primary design — post-create reset** (because the API only supports the project default branch as documented base):
    ```bash
    cd "$directory"
    git fetch origin "$base"
    git reset --hard "origin/$base"
    ```
-   The branch name stays `opencode/ticket-<issue>-<slug>`; only the tree content is rebased onto the feature branch.
-6. Verify with `git -C "$directory" rev-parse --abbrev-ref HEAD` → expect `opencode/ticket-<issue>-<slug>`. Verify with `git -C "$directory" merge-base --is-ancestor "origin/$base" HEAD` → expect success.
-7. Return the same shape as `create_feature` with `action: "create_ticket"`.
+   The branch name stays `opencode/ticket-<issue>-<slug>-<abbrev>`; only the tree content is rebased onto the feature branch.
+8. Verify with `git -C "$directory" rev-parse --abbrev-ref HEAD` → expect `opencode/ticket-<issue>-<slug>-<abbrev>`. Verify with `git -C "$directory" merge-base --is-ancestor "origin/$base" HEAD` → expect success.
+9. Return the same shape as `create_feature` with `action: "create_ticket"`, plus `auto_spawn` echoed back from the input (default `false`) and `abbrev` (the derived `<abbrev>`, including any `-2/-3` suffix) so the orchestrator can use it in the bounded full-ticket Task prompt without re-deriving.
 
 ### `delete`
 
@@ -202,4 +208,4 @@ Never throw, never silently advance, never call `git worktree` as a fallback.
 
 ## One-shot contract
 
-Each invocation handles **one** action. The orchestrator calls you once per worktree lifecycle event (feature create, ticket create, ticket delete, restart-reset). Do not batch.
+Each invocation handles **one** action. The orchestrator calls you once per worktree lifecycle event (feature create, ticket create, ticket delete, restart-reset). Do not batch. `auto_spawn` on `create_ticket` is purely an orchestrator-side hint you echo back; you do not spawn any child process or call any other agent yourself.
