@@ -1,17 +1,17 @@
 ---
 name: orchestrate
-description: Develop-branch outer-loop coordinator — bootstrap + work selection, feature worktree + push, batch kickoff of coder sessions per ticket, PR approval gate, merge + worktree/remote-branch cleanup, re-batch, feature-architect handoff, sandbox lane.
+description: Develop-branch outer-loop coordinator — bootstrap + work selection, feature worktree + push, batch kickoff of coder sessions per ticket, PR approval gate, merge + worktree/remote-branch cleanup, re-batch, feature coder kickoff + final gates + feature merge.
 modelTier: "fast"
 roleReminder: "Loaded by the `orchestrate` primary agent on the develop branch. The orchestrator never executes tickets — coder sessions do. Wake contract: in-session `session_notify` (primary), `DEV_LOOP_WAKE` from the poller, any user message → run `dev-loop-watch.sh` first."
 ---
 
-> Hard Rules live in `agents/orchestrate.md`; this skill owns the **per-impl-repo develop-loop** body. The orchestrator owns outer-loop coordination only: bootstrap, work selection, feature worktree, batch kickoff, PR approval gate, merge + cleanup, re-batch, handoff. Ticket execution lives in `coder` sessions loading `ticket-lifecycle`.
+> Hard Rules live in `agents/orchestrate.md`; this skill owns the **per-impl-repo develop-loop** body. The orchestrator owns outer-loop coordination only: bootstrap, work selection, feature worktree, batch kickoff, PR approval gate, merge + cleanup, re-batch, feature coder kickoff, final gates, feature merge. Ticket execution lives in `coder` sessions loading `ticket-lifecycle`; feature-mode sign-off lives in `coder` sessions loading `feature-review`.
 >
 > **You have no bash tool.** Every shell invocation in this skill — `scripts/checkout-contract.sh`, `opencode-run impl orchestrate-readiness-check`, `scripts/dev-loop-batch.sh`, `scripts/dev-loop-watch.sh`, `gh pr view` — is dispatched as a `developer` Task with `load: minimal` and the exact command to run. You also have no `worktree_*` tools: worktree lifecycle goes through `worktree-manager`. Never conclude "I can't run X because I have no bash" — delegate it to a `developer` Task.
 
 ## Scope
 
-Run the **develop** branch as the single persistent orchestration session for one `(feature:<slug>, impl-repo)` pair. From `develop`, create the feature worktree, then **for each runnable ticket, create a ticket worktree + kick the auto-started GUI session** with a short pointer message (the coder session loads `ticket-lifecycle`, reads the brief file the plugin wrote into the worktree gitdir, and reconstructs the rest from GitHub). The develop loop only reacts to terminal ticket reports (`READY_FOR_HUMAN_REVIEW` | `BLOCKED`) — posted as `ticket_report:` comments on the issue and best-effort injected back via `session_notify`. When all tickets merge into the feature branch, hand off to `architect-feature-signoff`.
+Run the **develop** branch as the single persistent orchestration session for one `(feature:<slug>, impl-repo)` pair. From `develop`, create the feature worktree, then **for each runnable ticket, create a ticket worktree + kick the auto-started GUI session** with a short pointer message (the coder session loads `ticket-lifecycle`, reads the brief file the plugin wrote into the worktree gitdir, and reconstructs the rest from GitHub). The develop loop only reacts to terminal ticket reports (`READY_FOR_HUMAN_REVIEW` | `BLOCKED`) — posted as `ticket_report:` comments on the issue and best-effort injected back via `session_notify`. When all tickets merge into the feature branch, kick the **feature coder** (same `coder` agent, loading `feature-review`) for the final verification + feature PR + `feature_report:`.
 
 The develop loop does **not** dispatch ticket subagents via the `task` tool. Subagents inherit the parent's cwd (`develop`), so they would land on the wrong branch and `checkout-contract.sh --verify` would correctly reject them (`SubtaskPartInput` in the installed SDK has no `directory` field). The auto-started GUI session for the ticket worktree IS the coder session — it has the correct cwd by construction.
 
@@ -31,26 +31,24 @@ Runs automatically on every fresh session, before the work-selection menu. Never
    bash <OC>/scripts/checkout-contract.sh
    ```
 
-   Require `status: ok`, repo root, branch, worktree status, main checkout root, protected-branch status, head SHA, and branch policy. Capture `is_linked_worktree` and `branch_policy` — §1 uses them to pick the menu. Expected: branch `develop` in the main checkout (→ Menu A) or a feature/ticket worktree branch (→ Menu B). On mismatch, surface `CHECKOUT_CONTRACT_FAILED` verbatim and stop — do not present the menu and do not offer improvised alternatives.
+   Require `status: ok`, repo root, branch, worktree status, main checkout root, protected-branch status, head SHA, and branch policy. Capture `is_linked_worktree` and `branch_policy` — §1 uses them to pick the menu. Expected: branch `develop` in the main checkout (→ Menu A) or a linked worktree branch (→ §1 worktree routing). On mismatch, surface `CHECKOUT_CONTRACT_FAILED` verbatim and stop — do not present the menu and do not offer improvised alternatives.
 
-2. **Preflight is coder-owned.** On `develop` / `main` / `master`, record `preflight_skipped_on_protected_branch: true` — no prompt, no dispatch. Inside a worktree, environment verification belongs to the coder session (`ticket-lifecycle` §0 runs it silently). The orchestrator never dispatches `preflight` or `worktree-env`.
+2. **Claude Context readiness.** If the `claude-context` MCP tools are available, check indexing status for the workspace path; if unavailable or indexing fails, record `MCP_FALLBACK` (discovery-heavy children enforce their own readiness gate).
 
-3. **Claude Context readiness.** If the `claude-context` MCP tools are available, check indexing status for the workspace path; if unavailable or indexing fails, record `MCP_FALLBACK` (discovery-heavy children enforce their own readiness gate).
-
-4. Present the work-selection menu (§1) — task-oriented options only. Never surface lifecycle states, skill names, or routing rows as user-facing options.
+3. Present the work-selection menu (§1) — task-oriented options only. Never surface lifecycle states, skill names, or routing rows as user-facing options.
 
 ## §1 Work-selection menu (branch-aware)
 
 ### Menu A — on a protected branch (`develop` / `main` / `master`, `is_linked_worktree: false`)
 
-The user is starting fresh with no feature worktree yet. Sandbox is not offered here (there is no feature branch to build yet).
+The user is starting fresh with no feature worktree yet.
 
 ```text
 What do you want to do?
 
 (1) Start a new feature — give me the `feature:<slug>` and I'll create the feature worktree, then run every ticket end-to-end to a ready-for-review PR. (recommended)
 (2) Resume a feature — reattach to a feature or ticket worktree from a previous session and continue its queue.
-(3) Remediation loop — re-check PR feedback / CI after you pushed fixes (routes to architect option 4 → R).
+(3) Remediation loop — re-check PR feedback / CI after you pushed fixes.
 (4) Something else (debug, refactor, doc review) — describe the task; I'll usually route you to `architect`.
 ```
 
@@ -58,23 +56,23 @@ For `(1)`, capture the kebab-case slug, dispatch a `developer` Task (`load: mini
 
 For `(2)`, Task `worktree-manager` `list` to discover existing worktrees; if one matches a `feature:<slug>`, capture that slug and continue. If no worktrees exist, tell the user and fall back to `(1)`.
 
-### Menu B — inside a feature or ticket worktree (`is_linked_worktree: true`)
+### Worktree routing (when `is_linked_worktree: true`)
+
+When the orchestrator's checkout is itself inside a worktree, present routing as a notice (not a menu):
 
 ```text
-What do you want to do?
-
-(1) Build / refresh this worktree in Sysbox sandbox — compose build/test + optional review URL.
-(2) Remediation loop — re-check PR feedback / CI after you pushed fixes (routes to architect option 4 → R).
-(3) Something else (debug, refactor, doc review) — describe the task; I'll usually route you to `architect`.
+You are inside a worktree. Routing:
+- ticket worktree (opencode/ticket-<n>-<slug>-<abbrev>): switch this session's agent to `coder` and say `begin` — the coder session loads `ticket-lifecycle` and owns the ticket inner loop.
+- feature worktree (opencode/feat-<slug>): the feature coder session owns this — load `feature-review` and run the final verification + feature PR loop. The orchestrator kicks you here from `develop` after every ticket merges.
+- design questions / planning / spec edits: route to `architect`.
+- remediation / PR-feedback re-check: say `remediation` and the orchestrator re-runs the final gates / re-kicks the feature coder.
 ```
 
-**Note:** A ticket worktree belongs to its coder session — to run the ticket, switch this session's agent to `coder` and say `begin`. The orchestrator here owns sandbox + remediation routing only.
-
-For `(1)` (Menu B only), load `orchestrate-sandbox`; do not enter the GitHub queue. For `(2)` (either menu), stop with the implementation architect Phase R handoff. For `(3)` (either menu), route to architect unless the message supplies an explicit queue or sandbox request.
+For Menu A `(3)` (remediation), stop with the same remediation wording — the develop orchestrator re-runs the final gates, re-kicks the feature coder, and surfaces the new `feature_report:` to the user. For Menu A `(4)`, route to architect unless the message supplies an explicit queue request.
 
 ## §2 Environment state
 
-Track `preflight_skipped_on_protected_branch`, `sandbox_status`, `auto_spawn_consent` (set on first prompt), and `MCP_FALLBACK`. Do not create an artifact for these values. Environment verification itself is coder-owned (`ticket-lifecycle` §0).
+Track `auto_spawn_consent` (set on first prompt) and `MCP_FALLBACK`. Do not create an artifact for these values. Environment verification itself is coder-owned (`ticket-lifecycle` §0 and `feature-review` §0).
 
 ## §3 Readiness + one-shot consent
 
@@ -220,7 +218,7 @@ The coder session owns `state:in-progress` (set during `ticket-lifecycle` §0 Bo
 | `scripts/dev-loop-batch.sh` exits 1 | develop orchestrator loop | All tickets done → exit loop, go to §8. |
 | Ticket `BLOCKED: ENV_BLOCKED` after one repair | coder session → develop orchestrator | Surface `recommended_env_fix`, pause batch. |
 | Ticket `BLOCKED: STABILIZATION_EXHAUSTED` (CI fail after 3 iterations) | coder session | Surface verbatim, pause batch. |
-| Ticket `BLOCKED: CROSS_TICKET_REVIEW` | coder session | Hand off to `architect-feature-signoff` immediately (skip §8). |
+| Ticket `BLOCKED: CROSS_TICKET_REVIEW` | coder session | Surface verbatim, route to the feature coder's remediation flow (`feature-review` §8) — pause the batch until the feature coder creates `remediation:` issues and the orchestrator re-batches. |
 | Ticket `BLOCKED: FALLBACK_EXHAUSTED` | coder session | Surface verbatim, pause batch. |
 | Sub-PR merge fails (branch protection / conflict) | develop orchestrator | Surface `gh pr view --json mergeable`, pause batch. |
 | Remote-branch delete fails (protected / already gone) | develop orchestrator cleanup | Non-fatal: log, continue. Surface as advisory at feature close. |
@@ -229,38 +227,74 @@ The coder session owns `state:in-progress` (set during `ticket-lifecycle` §0 Bo
 | In-session `session_notify` delivery fails (develop_session_id stale) | coder session → develop orchestrator | The `ticket_report:` comment is the mandatory durable channel; the poller will wake the develop orchestrator within one poll interval. |
 | Poller disabled / down | develop orchestrator | `scripts/dev-loop-watch.sh` is still agent-invocable; the user can manually trigger a wake. |
 
-## §8 Hand off to feature-architect
+## §8 Feature verification + final gates + merge
 
-When `scripts/dev-loop-batch.sh` exits 1 and there are no `BLOCKED` tickets, **all** tickets have been merged into `opencode/feat-<slug>`. The develop orchestrator emits exactly:
+After `scripts/dev-loop-batch.sh` exits 1 and there are no `BLOCKED` tickets, every ticket has merged into `opencode/feat-<slug>`. **Kick the feature coder** (same `coder` agent, loading `feature-review`) in the feature worktree via `worktree-manager` `kickoff`:
 
 ```text
-HANDOFF_TO_FEATURE_ARCHITECT: {
-  "feature": "feature:<slug>",
-  "feature_worktree_directory": "<abs path>",
-  "feature_branch": "opencode/feat-<slug>",
-  "next_agent": "architect",
-  "next_skill": "architect-feature-signoff",
-  "next_session_workdir": "<feature worktree dir>",
-  "summary_table": [
-    { "ticket": <n>, "title": <t>, "pr_url": <u>, "merged_at": <iso> }
-  ],
-  "implementation_repo": "<OWNER/REPO>",
-  "impl_repo_path": "<abs path>"
+worktree-manager kickoff {
+  directory: <feature worktree directory>,
+  agent: coder,
+  message: <pointer: feature slug, feat branch, "Load skill feature-review and begin">
 }
 ```
 
-and pauses. The user (or the spec session) starts the **feature-architect session** inside the feature worktree, where `architect-feature-signoff` takes over: full audit, feature-mode code-review, one-shot CodeRabbit (medium/hard), `pr_stabilization`, `scripts/feature-finish-pr.sh`, accept (`state:done`), merge with user confirmation, Phase R remediation if acceptance is unmet.
+End the turn after kicking. Do not poll. The feature coder owns the full verification loop: full-suite `code-review`, one-shot CodeRabbit (medium/hard), difficulty gates, docs, `state:done`, feature PR, bounded stabilization. It posts one `feature_report:` comment on the PRD parent + best-effort `session_notify` back here.
+
+### §8a. On `feature_report:` wake
+
+When the feature coder wakes you (via `session_notify` or poller or user message), run the **final gates** (each via delegated `developer` Task with `load: minimal` — the orchestrator itself has no bash):
+
+| Gate | Check |
+|---|---|
+| Per-ticket `code_review_gate:` | every ticket's last `code_review_gate:` comment shows `all_stages: true` and `verdict: APPROVED` + `verified` label |
+| Feature report status | `READY_FOR_HUMAN_REVIEW` (not `BLOCKED`) |
+| Full-suite evidence | compose test invocation + pass line in the report |
+| CodeRabbit verdict | `PASS` or `SKIPPED` (medium/hard ⇒ `PASS`; easy ⇒ `SKIPPED`) |
+| Docs paths | changelog + requested guides/architecture exist on the merged branch |
+| Tickets `state:done` | every `feature:<slug>` issue in the impl repo carries `state:done` |
+| `gh pr checks <pr_url>` | green (or all required checks pass) |
+| Branch policy | `opencode/feat-<slug>` is the only branch the feature PR targets; no stray commits |
+
+### §8b. Human gate
+
+On every gate passing, print exactly:
+
+```text
+Feature <slug> ready for final review: <pr_url>
+
+I will merge the feature PR after "all reviewed" — say "all reviewed" to merge (squash, --delete-branch=false).
+```
+
+Then wait for the user's "all reviewed" message. Do not auto-merge.
+
+### §8c. Merge the feature PR
+
+On "all reviewed", dispatch a `developer` Task (`load: minimal`) with explicit `cd <feature worktree dir>` (and `git -C`):
+
+```bash
+gh pr merge <pr_url> --squash --delete-branch=false
+```
+
+On failure: surface `gh pr view --json mergeable` verbatim, pause. On success: continue.
+
+### §8d. Hand off
+
+After the feature PR merges, proceed to §9 close-loop resume, then emit one of:
+
+- `feature:<slug> complete in <OWNER/REPO>; ready for spec feature-complete`, or
+- `feature:<slug> complete in <OWNER/REPO>; ready for next feature` (loop continues).
 
 ## §9 Close-loop resume
 
-After the feature-architect merges the feature PR, the develop orchestrator resumes:
+When the feature PR merges, the develop orchestrator resumes:
 
 1. Delegated `developer`: `git push origin --delete opencode/feat-<slug>`.
 2. Dispatch `worktree-manager` `delete { directory: <feature worktree dir> }`.
 3. Delegated `developer` (in main checkout): `git fetch && git pull --ff-only origin develop`.
 4. Emit one of:
-   - `feature:<slug> complete; ready for spec close` (no more features queued), or
-   - `feature:<slug> complete; ready for next feature` (loop continues).
+   - `feature:<slug> complete in <OWNER/REPO>; ready for spec feature-complete` (no more features queued), or
+   - `feature:<slug> complete in <OWNER/REPO>; ready for next feature` (loop continues).
 
 ## §10 Worktree conventions
 
@@ -274,10 +308,10 @@ Restart / recovery for stuck worktrees (post `opencode-server` restart, stale st
 
 | Marker | Emitted by | Consumed by |
 |---|---|---|
-| `HANDOFF_TO_FEATURE_ARCHITECT` | develop orchestrator when the last ticket merges into `opencode/feat-<slug>` | architect agent in `opencode/feat-<slug>` (`architect-feature-signoff`) |
-| `READY_FOR_HUMAN_REVIEW` | coder session when sub-PR is green and comment-clean | develop orchestrator surfaces to user (single human gate per PR) |
-| `BLOCKED` | coder session on preflight-after-repair, CI-exhaustion, fallback-exhaustion, or cross-ticket review | develop orchestrator surfaces verbatim and pauses the batch |
-| `ticket_report:` (issue comment) | coder session on terminal report | develop orchestrator's `scripts/dev-loop-watch.sh` + `scripts/dev-loop-poller.sh` — durable wake channel and out-of-band merge detector |
+| `feature_report:` (issue comment on PRD parent) | feature coder on terminal report | develop orchestrator parses + runs final gates (per-ticket `code_review_gate:` `all_stages: true` + `verified`; feature report APPROVED + full-suite evidence + CodeRabbit PASS + docs paths; all tickets `state:done`; `gh pr checks` green) |
+| `READY_FOR_HUMAN_REVIEW` | coder session when sub-PR is green and comment-clean (ticket mode) | develop orchestrator surfaces to user (single human gate per PR) |
+| `BLOCKED` | coder session on environment-after-repair, CI-exhaustion, fallback-exhaustion, or cross-ticket review | develop orchestrator surfaces verbatim and pauses the batch |
+| `ticket_report:` (issue comment) | coder session on terminal report (ticket mode) | develop orchestrator's `scripts/dev-loop-watch.sh` + `scripts/dev-loop-poller.sh` — durable wake channel and out-of-band merge detector |
 | `DEV_LOOP_WAKE: { repo, feature, reason }` | poller (`scripts/dev-loop-poller.sh`) when `ticket_report:` delta detected | develop orchestrator; ignored if no active loop for that feature |
 
 There is no ticket-dispatch marker — the coder session is the auto-started GUI session for the worktree, not a `task`-tool dispatch. The `session_notify` tool injects report-back messages into an existing session via `POST /session/{id}/prompt_async`; it does not dispatch a new subagent.
@@ -297,11 +331,10 @@ There is no ticket-dispatch marker — the coder session is the auto-started GUI
 
 - `agents/orchestrate.md` — outer-loop host posture.
 - `agents/coder.md` + `skills/ticket-lifecycle/SKILL.md` — the ticket session.
-- `architect-feature-signoff` — the post-merge feature audit + sign-off owner.
+- `skills/feature-review/SKILL.md` — the feature coder's verification + sign-off loop (same `coder` agent, different skill).
 - `agents/worktree-manager.md` — `create_ticket` passes `kickoff_agent: "coder"` + `kickoff_message`; `kickoff` action retries failed injections.
 - `scripts/dev-loop-batch.sh` — DAG-respecting batch discovery.
 - `scripts/dev-loop-watch.sh` — agent-invocable per-issue watcher (consumes `ticket_report:` comments).
 - `scripts/issue-state-transition.sh`, `scripts/checkout-contract.sh`, `scripts/pr-stabilize-watch.sh`, `scripts/feature-finish-pr.sh` — shared lib scripts.
 - `scripts/dev-loop-poller.sh` — server-host cron poller that wakes the develop orchestrator via `DEV_LOOP_WAKE`.
 - `plugins/worktree.js` — `worktree_create` (kickoff params) and `session_notify`.
-- `skills/orchestrate-sandbox/SKILL.md` — sandbox lane (Menu B option 1).

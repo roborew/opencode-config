@@ -1,6 +1,6 @@
 ---
 name: setup-project
-description: Spec-repo-only stack bootstrap — discover siblings, interview, legacy .plan/docs audit, configure all implementation repos via stack-bootstrap and scribe. Replaces per-repo setup-skills for vertical stacks.
+description: Spec-repo-only stack bootstrap — discover siblings, interview, legacy docs audit, configure all implementation repos via stack-bootstrap and scribe. Replaces per-repo setup-skills for vertical stacks.
 modelTier: smart
 roleReminder: "Run only in PROJECT-spec (docs/prd/ or spec layout). Never ask the user to cd into each implementation repo."
 ---
@@ -61,27 +61,14 @@ For **each** sibling implementation repo, read-only scan then propose batch acti
 
 | Location | Action |
 |----------|--------|
-| `.plan/feature.*.md` (not `*.completed.md`) | See migration table |
-| `.plan/debug.*`, `refactor.*`, `review.*`, `design.*` | Keep if active; else archive |
 | `docs/agents/` | Merge toward template set; duplicates → `docs/_archive/legacy/` |
 | `CONTEXT.md` vs spec | Impl = repo gotchas only; product glossary stays in **spec** `CONTEXT.md` |
-
-### Migration rules
-
-| Situation | Action |
-|-----------|--------|
-| `.plan/feature.<slug>.md`, no open `feature:<slug>` issues in that repo | **stack-bootstrap** `archive_legacy_plan` → `.plan/_archive/legacy/<slug>.md` |
-| `.plan/feature.<slug>.md`, open `feature:<slug>` issues | Tell user to run **`issue-expand`** then archive; offer to archive after expand |
-| Obsolete `docs/agents/*` | **stack-bootstrap** move to `docs/_archive/legacy/` or **scribe** merge |
-| Conflicting product terms in impl `CONTEXT.md` | **scribe** trims impl file; documents split in `docs/agents/domain.md` |
-
-**Non-destructive:** archive, never delete. Summarize: "Archived N plans, updated M repos, K need your input."
 
 ## Phase D — Apply
 
 1. **scribe** — update spec `docs/agents/repos.md` with full registry schema (`repo`, `application_role`, `capabilities`, `non_goals`, `agent_owner`, optional `default_test_commands`, required `compose_test_file` — relative path to `docker-compose.test.yml` / `compose.test.yaml` at the repo root). Every impl repo must have a compose test file before orchestrate can run tickets against it; scaffold from `templates/project-stub/docker-compose.test.yml` when missing.
 2. **stack-bootstrap** — one Task per implementation repo (`load: full`, `local_path`, `spec_repo`, `operations: [copy_templates]`).
-3. Legacy archives — **stack-bootstrap** per confirmed move.
+3. Legacy `docs/agents/*` archives — **stack-bootstrap** per confirmed move.
 4. **developer** (bash) — run from spec repo:
 
    ```bash

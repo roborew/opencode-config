@@ -10,7 +10,7 @@ Usage:
 
 Creates one targeted/ad-hoc GitHub issue with duplicate guards.
 Use opencode-run spec fanout for PRD child issues and opencode-run spec publish-prd-issue for PRD parents.
-Remediation tickets from impl Architect Phase R may use --parent-issue to link as PRD sub-issues.
+`remediation:` tickets from the feature coder may use --parent-issue to link as PRD sub-issues.
 Use --body-file - to read the issue body from stdin.
 USAGE
 }

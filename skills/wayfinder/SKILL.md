@@ -188,5 +188,5 @@ If the destination is a **locked decision** or an **in-place change**, declare t
 6. **Refer by name.** Names in narration and `## Decisions so far`; ids/URLs ride inside the name, never stand in for it.
 7. **Claim first.** Assign before any work; never start work on an unassigned ticket.
 8. **Update the map on close.** Resolution comment, close, then `--update` the map. The map and the frontier must always agree.
-9. **No local `.plan/wayfinder.*` artifacts.** GitHub is the source of truth (per `CONTEXT.md`).
+9. **GitHub is the source of truth.** Map + tickets live as issues. Linked assets live as files (`tmp/wayfinder/*.md` scratch, `.research/*.md`, `.prototype/<slug>/`) linked from the ticket, never pasted. Do not write local plan artifacts.
 10. **`grill-me` once per grilling ticket.** It already embeds domain-modeling. Do not call `grill-me` twice.

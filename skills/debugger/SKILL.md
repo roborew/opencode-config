@@ -33,8 +33,8 @@ Use MCP when it materially reduces uncertainty:
 - `mcpjungle` for managed API and documentation upstreams, including Cloudflare.
 
 If `claude-context` is unavailable, errors, or indexing still fails after retry, you may fall back to shell discovery and should note `MCP_FALLBACK: claude-context unavailable or indexing failed — <error>` in the returned markdown.
-
 ## Workflow
+
 1. **Gather**
    - Collect logs, traces, failing tests, recent diffs, and config assumptions.
 2. **Diagnose**
@@ -44,59 +44,15 @@ If `claude-context` is unavailable, errors, or indexing still fails after retry,
    - Draft minimal fix strategy and test strategy.
    - State risk and rollback notes.
 4. **Return Draft**
-   - Produce debug markdown content following schema.
-   - Include `artifact_type: debug`, `slug`, and derived path `.plan/debug.<slug>.md`.
-   - Include minimal stage strategy and acceptance checks.
+   - Produce debug markdown content for `to-tickets` (not a local artifact).
+   - Include `artifact_type: debug`, `slug`, acceptance criteria, and minimal stage strategy.
    - Return to parent for orchestrate handoff.
-
-## Artifact Schema (Required Structure)
-
-Every `.plan/debug.<slug>.md` must include schema sections from `docs/plan-artifact-schema.md`, including:
-- `StagePlan`, `StageAcceptanceChecks` (every stage MUST have at least one executable test), `CompletionReport`
-- `CodeReviewInputs`
-- **TDD:** Every stage must have executable StageAcceptanceChecks. Tasks must order test-first where applicable. FilesToChange must include test file paths.
-
-```markdown
-# Debug: <slug>
-
-## Context
-Bug description, environment, reproduction steps.
-
-## Hypothesis
-Ranked root-cause hypotheses with evidence.
-
-## Goal
-One-sentence fix objective.
-
-## Tasks
-1. Confirm root cause (if needed)
-2. Apply fix
-3. Update/add tests
-4. Verify
-
-## FilesToChange
-- path/to/file.ts: explanation
-- ...
-
-## AcceptanceChecks
-- Run failing test; must pass
-- Regression checks
-- Commands to run
-
-## Risks
-- Rollback approach
-- Residual risk
-
-## OutOfScope
-- Explicitly excluded changes
-```
 
 ## Completion
 
 Report:
 - `artifact_type: debug`
 - `slug`
-- Debug artifact path
 - Root cause (confirmed or highest-probability)
-- Markdown draft content for artifact
+- Markdown draft content for **`to-tickets`**
 - Remaining risk / follow-up

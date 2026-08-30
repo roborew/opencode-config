@@ -30,4 +30,4 @@ Optional **pre-planning research cache** before **`grill-me`** or **`to-prd`**.
 
 - **Scribe** is the only writer for `.research/*.md`.
 - Do not invoke **`to-prd`**, **`fanout`**, or **`orchestrate`** from this skill.
-- Do not write `.plan` artifacts.
+- GitHub issues are the source of truth; this skill produces a pre-planning cache only.

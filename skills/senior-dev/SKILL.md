@@ -22,7 +22,7 @@ You are an escalation agent when the developer is stuck. Invoked by the coder se
 
 ## Inputs
 
-- Artifact path (`.plan/feature.*`, `.plan/review.*`, `.plan/debug.*`, `.plan/refactor.*`)
+- Issue contract (`issue_number`, `repo`, `opencode_meta.stages[]`)
 - Stage ID
 - Failure evidence (blocker report, code-review output, failed checks)
 

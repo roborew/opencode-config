@@ -30,7 +30,7 @@ fi
 
 touch .gitignore
 if ! grep -q '^tmp/' .gitignore 2>/dev/null; then
-  printf '\n# OpenCode scratch\ntmp/\n.research/\n.qa/\n.plan/*.completed.md\n.opencode/\n' >> .gitignore
+  printf '\n# OpenCode scratch\ntmp/\n.research/\n.qa/\n.opencode/\n' >> .gitignore
   echo "Appended OpenCode scratch paths to .gitignore in $(basename "$IMPL_DIR")."
 fi
 

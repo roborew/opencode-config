@@ -125,4 +125,4 @@ User works in **spec** repo (`feature-upgrade` or edit PRD). Re-run **issue-expa
 ## Boundaries
 
 - Do not invoke **orchestrate** from this skill.
-- Do not invoke **scribe** to write `.plan/feature.*` or `.plan/issue.*` on this path.
+- Do not invoke **scribe** to write `.plan` artifacts.

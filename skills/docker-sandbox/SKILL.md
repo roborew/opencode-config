@@ -1,29 +1,17 @@
 ---
 name: docker-sandbox
-description: "Sysbox sibling sandboxes via opencode-server sandbox CLI: self-contained Compose build/test and deterministic local web previews. Load when stages need Docker Compose or a web preview."
+description: "Sysbox sibling sandboxes via opencode-server sandbox CLI: self-contained Compose build/test backend for ticket + feature coder loops. Load when stages need Docker Compose."
 modelTier: "fast"
-roleReminder: "Probe + env gate first. sandbox preview derives the route hostname from one sandbox ID and waits for the requested app port before exposure. Follow project-specific runtime contracts. Never manually combine Compose up and sandbox expose. Host cloudflared only — never cloudflared-in-compose. No .env.example."
+roleReminder: "Probe + env gate first. Lifecycle-aware destroy: code-review destroys after APPROVED, keeps alive on BLOCKED. Host cloudflared only — never cloudflared-in-compose. No .env.example."
 ---
 
 ## Skill reference (optional load)
 
-Load when a stage needs Docker Compose build/test and/or optional web review expose. Follow agent Hard Rules first. `SKILL_LOADED: docker-sandbox` is optional.
+Load when a stage needs Docker Compose build/test. Follow agent Hard Rules first. `SKILL_LOADED: docker-sandbox` is optional.
 
 **Not** Cloudflare Workers Sandbox (`skills/cloudflare/references/sandbox/` — Durable Object / `@cloudflare/sandbox`). This skill is only the opencode-server Sysbox sibling CLI (`sandbox probe|create|exec|…`).
 
-Orchestrate does not load this skill; it passes `sandbox: preferred|required` and load instructions to `developer` / `frontend-dev` / `code-review`. Menu **(2)** / `execution_mode: sandbox_feature_build` is the parallel build-refresh path (no issue queue).
-
-## Division of responsibility (do not invent new skills)
-
-| Concern | Who owns it | Agent action |
-|---------|-------------|--------------|
-| Install host cloudflared (one tunnel) | Human / host ops (opencode-server docs/sandbox.md) | Never install cloudflared; never create a tunnel |
-| Localhost publish for a sandbox | `sandbox expose` / `unexpose` CLI | Call CLI only — returns `host_port` + hint `origin` (scheme may be `http://`; **do not** copy that scheme into the tunnel) |
-| Tunnel public hostname `{slug}.{apex}` → origin | `cloudflare-api` via MCPJungle | Upsert/delete on the **existing** host tunnel — **always HTTPS + No TLS Verify ON** (see below) |
-| DNS for `{slug}.{apex}` | `cloudflare-api` via MCPJungle (+ `cloudflare` skill if needed) | Upsert/delete CNAME → tunnel target when `OPENCODE_SANDBOX_REVIEW_DNS=on` |
-| App Infisical / `.env` | Setup paste + worktree-env | Gate only; never invent secrets |
-
-Host tunnel is a prerequisite; this skill orchestrates sibling lifecycle + optional tunnel hostname + DNS. Do not invent a tunnel-create skill.
+Loaded by `developer` / `frontend-dev` / `code-review` children dispatched from the **ticket coder** (`ticket-lifecycle` §0.3) and the **feature coder** (`feature-review` §0.3). The orchestrator never loads this skill — it passes `sandbox: preferred|required` and load instructions to its children.
 
 ## Host contract
 
@@ -43,23 +31,14 @@ Names: sibling `opencode-sandbox-<slug>`, publish helper `opencode-sandbox-route
    - If Infisical used: non-empty key *names* `INFISICAL_PROJECT_ID`, `INFISICAL_DOMAIN`|`INFISICAL_API_URL`, and `INFISICAL_TOKEN` **or** `CLIENT_ID`+`CLIENT_SECRET` (+ `INFISICAL_ENV` if used).
    - Never `.env.example` / invent values. Fix: `./scripts/setup.sh projects …` create+paste, then worktree-env if linked.
 3. Prefer documented compose (`docker-compose.test.yml`, `compose.test.yaml`, README). Ask once if ambiguous; never invent a stack.
-4. **Self-contained compose required for live/review stacks:** use the app’s documented listener and private service topology. Do not add cloudflared to app Compose.
-5. **Lifecycle-aware destroy.** Per-ticket TDD loop: developer creates the sandbox and keeps it alive after GREEN (does not destroy); code-review reuses via `sandbox status --id <sandbox_id>` and destroys after `APPROVED` or `ENV_BLOCKED`, keeps alive on `BLOCKED` for developer retry. Sandbox feature build mode (menu 2): developer creates and destroys per the existing finally rule. `destroy` unexposes first.
+4. **Self-contained compose required for live/review stacks:** use the app's documented listener and private service topology. Do not add cloudflared to app Compose.
+5. **Lifecycle-aware destroy.** Per-ticket TDD loop: developer creates the sandbox and keeps it alive after GREEN (does not destroy); code-review reuses via `sandbox status --id <sandbox_id>` and destroys after `APPROVED` or `ENV_BLOCKED`, keeps alive on `BLOCKED` for developer retry. Feature coder loop (`feature-review`): same reuse/destroy contract — `code-review` destroys after `APPROVED`/`ENV_BLOCKED`, keeps alive on `BLOCKED`. `destroy` unexposes first.
 6. Never mount host `docker.sock` into nested app compose; never GPU/CUDA sandboxes.
-7. **Expose only when asked.** Hostname = `{slug}.{apex}` (not `reviews.*`). The app must bind the requested `--port` in the sibling before exposure.
-8. **Preview atomically:** use `sandbox preview`, never a manual combination of Compose up and `sandbox expose`. It derives `<slug>.<apex>` and waits for the requested port before creating the Traefik route. Project instructions own any app-specific environment variables and host/tenant behavior.
-9. **Verify before reporting success:** request a meaningful route through the derived hostname; verify no unexpected redirect host and that primary assets load. Treat 403, 502, port-readiness timeout, or an unexpected redirect as a failed preview. Diagnose the project’s documented host/runtime contract; never invent domain or tenant records.
-10. Server Infisical ≠ app Infisical.
+7. Server Infisical ≠ app Infisical.
 
 ## ID hygiene
 
 Slug from branch/feature (DNS-label sanitize). One sandbox per worktree session. The sandbox persists across developer → code-review within the same ticket session. code-review is the destroyer on `APPROVED`/`ENV_BLOCKED`; developer keeps it alive on completion.
-
-## App apex discovery
-
-1. `opencode.md` / registry: `review_domain` or `apex_domain`
-2. Else README domain
-3. Else ask once; suggest scribe add `review_domain` later
 
 ## Happy path — run
 
@@ -69,7 +48,6 @@ sandbox probe
 sandbox create --id <slug> --worktree "$(git rev-parse --show-toplevel)"
 sandbox exec --id <slug> -- docker compose -f docker-compose.test.yml build
 sandbox exec --id <slug> -- docker compose -f docker-compose.test.yml run --rm test
-# … or compose up -d for a live app before expose
 # developer keeps the sandbox alive after GREEN; code-review reuses it via
 # sandbox status --id <slug> and destroys after APPROVED or ENV_BLOCKED
 ```
@@ -90,23 +68,6 @@ docker compose -f docker-compose.test.yml run --rm test
 - **Volume-mount contract:** the compose file must volume-mount the project source so uncommitted edits are tested without a rebuild.
 - Never ad-hoc `docker run --runtime=sysbox-runc`; never mount host `docker.sock` into nested app compose.
 - If neither `sandbox` nor `docker` is available, report `sandbox: unavailable` (or `docker: unavailable`) and treat as `BLOCKED` when the stage requires compose/Docker.
-
-## Deterministic local preview
-
-After `sandbox create`, use the app’s documented apex, compose file, and listener port:
-
-```bash
-sandbox preview --id <slug> --app-apex <apex> --compose-file <compose-file> --port <port>
-# URL=https://<slug>.<apex>
-```
-
-The sandbox ID is the single source of truth for the route hostname. `preview` rejects a supplied hostname that differs from `<id>.<app-apex>`, waits for the requested port in the sibling, and creates the Traefik adapter itself.
-
-When public DNS is not configured, use the project’s local hostname setup or an HTTPS request resolved to `127.0.0.1` to verify the route. On teardown, run `sandbox destroy --id <slug>`.
-
-## Other app review URLs
-
-Use an app’s documented `sandbox expose` procedure only when it requires a non-preview flow. Never create a tunnel or add cloudflared to app Compose.
 
 ## Evidence
 

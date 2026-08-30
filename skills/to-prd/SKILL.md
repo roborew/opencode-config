@@ -7,7 +7,7 @@ roleReminder: "Run after grill-me when the feature is understood. Task scribe fo
 
 # To PRD
 
-Publish a **human-reviewable PRD** before vertical slicing. This closes the gap where local `.plan` artifacts are not the product record.
+Publish a **human-reviewable PRD** before vertical slicing. The PRD lives in GitHub (`docs/prd/<slug>.md` + PRD issue) — issue bodies are the source of truth for execution; the PRD is the planning record.
 
 ## Preconditions
 
@@ -35,7 +35,7 @@ Publish a **human-reviewable PRD** before vertical slicing. This closes the gap 
 
 ## Hard rules
 
-- **Do not** invoke `fanout`, `orchestrate`, or write `.plan` artifacts from this skill.
+- **Do not** invoke `fanout` or `orchestrate` from this skill.
 - **Scribe** is the only writer for `docs/prd/*.md` and `docs/agents/repos.md`.
 - **Do not** infer repo responsibilities from names or folder layout; use `docs/agents/repos.md`.
 - If `docs/prd/` is missing, scribe creates the directory by writing the file path.

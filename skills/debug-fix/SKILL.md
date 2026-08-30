@@ -128,7 +128,7 @@ Required before declaring done:
 
 ## GitHub issue path (architect front door)
 
-When the parent is **architect** on a debug/targeted-change path, **do not** write `.plan/debug.*`. Instead:
+When the parent is **architect** on a debug/targeted-change path, do not write a local plan artifact. Instead:
 
 1. Complete diagnosis through Phase 6 (root cause + proposed fix + regression test plan).
 2. Return structured slice content to architect for **`to-tickets`** — one or more GitHub tickets with acceptance criteria and test commands.

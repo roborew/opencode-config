@@ -35,20 +35,20 @@ flowchart TB
   subgraph workLoop ["2. Work repo — LOOP until you are happy"]
     direction TB
     W1["Select orchestrate\nPaste feature:slug\nDone when: feature PR exists"]
-    W2["Select architect → hi → 4. Review / sign-off\nChoose R. Phase R"]
+    W2["Orchestrator kicks the feature coder\n(feature-review) in the feature worktree"]
     W3{"Changes needed?"}
-    W4["Select orchestrate again\nDo the remediation work\nThen back to architect R"]
-    W5["Choose 1. Phase 1 — accept\nTickets → state:done stay open\nYour sign-off of the work"]
-    W6["Choose 2. Phase 2 — docs\nPR left merge-ready in this repo"]
+    W4["Select orchestrate again\nDo the remediation work\nOrchestrator re-kicks feature-review"]
+    W5["Orchestrator merges the feature PR after\n'all reviewed' on the dev orchestrator"]
+    W6["Spec feature-complete closes the feature"]
     W1 --> W2 --> W3
     W3 -->|yes| W4 --> W2
     W3 -->|no — happy| W5 --> W6
   end
 
   subgraph specEnd ["3. Spec — architect → hi → 3. Feature complete"]
-    E1["Only after every work repo finished Mode F"]
-    E2["Your job: choose merge gate"]
-    E3["Closes done tickets + merges PRs + closes PRD\nNo PR prep here"]
+    E1["Only after every work repo finished feature-review"]
+    E2["Verify-only: confirm state:done + verified + MERGED"]
+    E3["Closes done tickets + PRD\nNo PR prep here"]
   end
 
   S1 --> S2 --> W1
@@ -67,11 +67,11 @@ PRD + handoffs        build → review → (fix → review)*          merge + cl
 |-------|------|--------|-------------|----------|-----------------|
 | Plan / PRD | **spec** | **architect** → `hi` | **1. Product feature / PRD — …** | Answer grill; **approve PRD**; **approve** issue plans | Planning + handoffs only — not code, not PR polish |
 | Build | **work repo** | **orchestrate** | Paste `feature:<slug>` / handoff | Wait for the feature PR | The orchestrator assigns; one **coder** session per ticket worktree produces the code. Each ticket's auto-started GUI session is the coder session, self-bootstraps from `<gitdir>/opencode-ticket-brief.json` and GitHub, returns exactly one `ticket_report:` comment per ticket. |
-| Review / accept / docs | **same work repo** | **architect** → `hi` | **4. Review / sign-off — Mode F …** then **R** / **1** / **2** | Drive review; when happy: accept then docs | **All PR readiness and ticket acceptance** before spec |
-| Remediation loop | **same work repo** | **orchestrate** ↔ **architect** | After **R**, if changes needed: **orchestrate** → then **4** → **R** again | Stay until happy — **do not go to spec yet** | Work-repo loop only |
-| Final close | **spec** | **architect** → `hi` | **3. Feature complete — …** | After every work repo finished Mode F; choose merge gate | Merge PRs; **close** `state:done` tickets; close PRD. No PR prep |
+| Review / docs / PR | **same work repo, feature worktree** | **coder** (kicked by orchestrator) → loads `feature-review` | (no menu — kicks the loop automatically) | Verify + sign off + docs + feature PR | All PR readiness and ticket acceptance; orchestrator merges after "all reviewed" |
+| Remediation loop | **same work repo** | **orchestrate** ↔ feature-review re-kick | After BLOCKED: FEATURE_REMEDIATION, fixes re-run | Stay until you are happy — **do not go to spec yet** | Work-repo loop only |
+| Final close | **spec** | **architect** → `hi` | **3. Feature complete — …** | After every work repo merged; verify-only close | Verify `state:done` + `verified` + MERGED; close done tickets + PRD |
 
-Detail (labels, gates, Mode F phases): [docs/FEATURE-PIPELINE.md](docs/FEATURE-PIPELINE.md). If the stack is not bootstrapped yet, continue with [Prerequisites](#prerequisites) below.
+Detail (labels, gates): [docs/FEATURE-PIPELINE.md](docs/FEATURE-PIPELINE.md). If the stack is not bootstrapped yet, continue with [Prerequisites](#prerequisites) below.
 
 ---
 
@@ -222,7 +222,6 @@ What **setup-project** does from that one session:
 1. Confirms sibling repos against `docs/agents/repos.md`
 2. Interviews you (triage labels, `application_role`, capabilities, product vocabulary)
 3. Delegates **stack-bootstrap** into each implementation repo for you (templates, `docs/agents/*`) — you do not `cd` into siblings
-4. Optionally archives legacy `.plan/feature.*` after you confirm
 
 Registry rows may show **INCOMPLETE** / `NEXT:` until this step finishes — normal right after shell bootstrap alone.
 
@@ -293,9 +292,9 @@ For a repo that later joins a stack, run [Existing repositories](#existing-repos
 2. Re-run from parent: `setup-project` (links the new repo, updates registry).
 3. In **spec only**: **architect → option 8** to register `application_role`, capabilities, and run **stack-bootstrap** on the new repo.
 
-### Legacy `.plan/` and old `docs/agents/`
+### Legacy `docs/agents/`
 
-During **setup-project**, architect scans implementation repos for `.plan/feature.*` and duplicate agent docs. Confirmed items are **archived** (not deleted) under `.plan/_archive/legacy/` or `docs/_archive/legacy/`. Open `feature:<slug>` issues should use **issue-expand** before archiving the matching plan file.
+During **setup-project**, architect scans implementation repos for duplicate agent docs. Confirmed items are **archived** (not deleted) under `docs/_archive/legacy/`. Open `feature:<slug>` issues should use **issue-expand** before any legacy doc cleanup.
 
 ### Upgrade OpenCode templates later
 
@@ -315,7 +314,7 @@ tmp/
 .research/
 .prototype/
 .qa/
-.plan/*.completed.md
+.opencode/
 ```
 
 ---
@@ -329,13 +328,11 @@ See **[Feature flow (PRD → sign-off)](#feature-flow-prd--sign-off)** for the f
 | Plan | **spec** | **architect** → `hi` → **1. Product feature / PRD …** | Approve PRD and issue plans; copy handoffs |
 | Build | **each work repo** | **orchestrate** (new session) | Paste `feature:<slug>` / handoff; wait for PR. Tickets are auto-kicked: each ticket worktree's GUI session is the **coder** primary agent (loading `ticket-lifecycle`), self-bootstraps from `<gitdir>/opencode-ticket-brief.json` and GitHub, returns exactly one `ticket_report:` comment per ticket. |
 | Review loop | **same work repo** | **architect** → `hi` → **4. Review / sign-off …** → **R** ↔ **orchestrate** until happy → **1** → **2** | Accept (`state:done`); docs; leave PR merge-ready |
-| Close | **spec** | **architect** → `hi` → **3. Feature complete …** | Merge gate after every work repo finished Mode F |
+| Close | **spec** | **architect** → `hi` → **3. Feature complete …** | Verify-only close after every work repo's feature PR merged |
 
 The develop orchestrator wakes on every ticket's terminal report via `session_notify` (in-session message injection into the develop orchestrator's session) and via the optional `scripts/dev-loop-poller.sh` (server-host cron, ~2-min interval) for out-of-band GitHub-UI merges. See **[docs/RUNBOOK.md](docs/RUNBOOK.md)** for the poller timer setup.
 
 Optional same-session path after a short HANDOFF block: `/compact` then switch agent. If the provider errors on tool history, use `/new` instead.
-
-**Legacy path:** work-repo architect targeted change → orchestrate → architect Mode B (local `.plan` archive). Prefer the GitHub / Mode F path above.
 
 **Single-repo (no PRD stack):** [Single repository](#single-repository) — `to-issues` → **orchestrate** (no spec fanout).
 
@@ -370,7 +367,7 @@ Optional same-session path after a short HANDOFF block: `/compact` then switch a
 
 ## Custom pipeline (summary)
 
-- **`architect`** — planning; invokes `scribe` for docs artifacts; never executes code. Also runs the final feature audit + sign-off (Mode F / Phase R).
+- **`architect`** — planning; invokes `scribe` for docs artifacts; never executes code. The feature coder owns the post-merge sign-off loop; architect routes post-PR feedback to the impl `orchestrate` session.
 - **`orchestrate`** — outer-loop execution coordinator on `develop`; creates the feature worktree, kicks one **coder** session per ticket (via `worktree-manager` + `session_notify`), gates PR approval, merges + cleans up, and hands off to the feature-architect when all tickets land. Never writes files directly.
 - **`coder`** — primary agent hosted inside each ticket worktree (auto-started GUI session). Loads `ticket-lifecycle`, owns every stage (test-writer RED → owner GREEN → per-stage code-review), runs the **final `all_stages: true` full-suite gate** via the compose test backend, escalates to senior-dev unattended, falls back failed children to kilo/openrouter, returns exactly one terminal `ticket_report:` to the orchestrator. Never writes files directly — delegates everything.
 - **`scribe`** — only writer for plans, `docs/changelog|guides|architecture|adr|agents`, `CONTEXT.md`, `CONTEXT-MAP.md`, root `README`, optional `AGENTS.md`, `.env.example` (per allow list in [agents/scribe.md](agents/scribe.md)).

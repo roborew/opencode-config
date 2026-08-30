@@ -5,9 +5,29 @@ description: Break a plan, spec, or PRD into independently-grabbable GitHub tick
 
 # To Issues
 
-Break work into independently-grabbable **GitHub tickets** using **vertical slices** (tracer bullets). Primary path for **targeted changes**, debug fixes, and refactor slices — replaces local `.plan` artifacts in GitHub-first workflows.
+Break work into independently-grabbable **GitHub tickets** using **vertical slices** (tracer bullets). Primary path for **targeted changes**, debug fixes, refactor slices, and **Prototype Design** flows.
 
 **Architect delegation:** publish via `bin/publish-targeted-issue` (bash). Never `gh issue create`. File drafts → Task **scribe** first if a body file must exist on disk.
+
+## Prototype Design
+
+When the user asks for "prototype design" / "design prototype", or selects Prototype Design (impl menu option 6 in legacy terms — load `to-tickets` directly here):
+
+1. **Prompt for design intake** (required before invoking `designer`). Collect, with confirmation when ambiguous:
+   - Site purpose and audience
+   - Desired feel (e.g., minimal, bold, playful, corporate)
+   - Color scheme and palette
+   - Prototype output mode: Vanilla HTML5 only (framework-agnostic)
+   - Icon set (e.g., Lucide, Heroicons)
+   - Required sections (e.g., hero, feature grid, pricing table)
+   - Accessibility expectations (WCAG AA minimum)
+   - Reference asset paths: prompt the user to upload or provide paths to reference images/files
+2. **Invoke `designer`** subagent with the collected intake and any reference paths. `designer` returns a read-only design brief; no code.
+3. **Embed the brief** in the GitHub issue's `## Implementation plan`; set `design_delivery: prototype-required` in the issue body's `opencode-task-yaml`.
+4. **Add ordered issue stages** in `opencode-task-yaml` `stages[]`:
+   - `ux-prototype` owned by `ux-dev`
+   - `react-implementation` owned by `frontend-dev` with `depends_on: [ux-prototype]`
+5. **Emit the execution handoff** to a new `orchestrate` session in the impl repo. Orchestrate dispatches `ux-dev` to build `.prototype/<slug>/`, then `frontend-dev` implements the approved design in React.
 
 ## Preconditions
 
@@ -57,16 +77,17 @@ Publish in **dependency order** (blockers first) so "Blocked by" can cite real i
 - Do **not** call raw `gh issue create`; architect permissions deny it to preserve PRD/fanout guardrails.
 - Use `opencode-run spec fanout` for PRD child issues and `opencode-run spec publish-prd-issue` for PRD parent issues.
 
-**Mode F Phase R remediation (impl architect):**
+**`remediation:` issues (feature coder):**
 
-When publishing PR feedback remediations from **architect-review** Phase R:
+When publishing remediation tickets for unmet acceptance or cross-ticket findings surfaced by the feature coder's `feature-review` loop:
 
 - Create issues in the **impl** repo (`--repo owner/name`).
 - Link as **sub-issues** of the Spec PRD parent: `--parent-issue <url from docs/prd/<slug>.md frontmatter>`.
 - Title prefix: `remediation: <short title>`.
 - Labels: `feature:<slug>`, `prd-task`, `state:ready-for-agent`, `category:chore` (or appropriate category).
 - `task_id`: `remediation-<slug>-<n>` in issue body yaml.
-- After publish, emit orchestrate remediation handoff (see **architect-review** Phase R6).
+- Body must embed `opencode-task-yaml` with `stages[]` (same shape as the original ticket) and acceptance criteria.
+- After publish, the feature coder returns `BLOCKED: FEATURE_REMEDIATION` with the issue numbers; the develop orchestrator re-batches them through the normal ticket pipeline.
 
 ```bash
 bin/publish-targeted-issue \

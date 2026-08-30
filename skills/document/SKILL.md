@@ -15,7 +15,7 @@ You are a documentation content generator. You produce structured markdown for c
 
 ## Execution modes
 
-### `github_feature_signoff` (Mode F)
+### `github_feature_signoff` (feature-coder difficulty gate)
 
 Parent provides:
 
@@ -29,12 +29,7 @@ Parent provides:
 
 1. **Changelog is mandatory** — always return `docs/changelog/<YYYY-MM-DD>-<slug>.md` with full body (use today's date unless parent specifies).
 2. **Optional docs** — return guide/architecture/README/`.env.example` sections **only** when listed in `doc_scope`.
-3. Derive content from PRD (when provided), issue bodies (`opencode-task-yaml` acceptance), completion context, and PR summary — not from a `.plan` file unless `artifact_path` is also supplied.
-
-### Default (Mode B / `.plan`)
-
-- `artifact_path`: `.plan/<type>.<slug>.md`
-- Read `DocumentationOutputs`, `Context`, `Goal`, `StagePlan`, completion reports from the artifact.
+3. Derive content from PRD (when provided), issue bodies (`opencode-task-yaml` acceptance), completion context, and PR summary.
 
 ## Hard Rules (all modes)
 
@@ -46,8 +41,7 @@ Parent provides:
 
 | Mode | Inputs |
 |------|--------|
-| `.plan` / Mode B | `artifact_path`, `artifact_type`, `slug`, completion context |
-| `github_feature_signoff` | `feature_slug`, `doc_scope`, `issue_rollup`, `completion_context`; optional `prd_path`, `artifact_path`, `pr_url` |
+| `github_feature_signoff` | `feature_slug`, `doc_scope`, `issue_rollup`, `completion_context`; optional `prd_path`, `pr_url` |
 
 ## Output Contract
 

@@ -21,8 +21,6 @@ for f in agents/*.md; do
     ERR=1
   fi
 done
-
-echo "Checking skills referenced in agents exist..."
 if ! python3 - <<'PY'
 from pathlib import Path
 import re
@@ -122,8 +120,8 @@ if grep -R -n '```opencode-task-json' bin/project/spec templates/spec-repo/bin t
   echo "  ERROR: JSON task fences remain in builders or validators"
   ERR=1
 fi
-if ! grep -q 'pr_stabilization' skills/orchestrate/SKILL.md; then
-  echo "  MISSING: pr_stabilization loop language in orchestrate"
+if ! grep -q 'stabilization' skills/orchestrate/SKILL.md || ! grep -q 'stabilization' skills/feature-review/SKILL.md; then
+  echo "  MISSING: stabilization loop language in orchestrate or feature-review"
   ERR=1
 fi
 if ! grep -q 'gh pr checks' skills/ticket-lifecycle/SKILL.md; then
@@ -289,7 +287,7 @@ if ! grep -q '"worktree-manager"' opencode.json 2>/dev/null; then
 fi
 
 echo "Checking orchestrate bootstrap delegation (bash-less host)..."
-for needle in 'You have no bash tool' '## §0 Bootstrap' 'Task developer load: minimal' 'scripts/checkout-contract.sh' 'preflight_skipped_on_protected_branch'; do
+for needle in 'You have no bash tool' '## §0 Bootstrap' 'Task developer load: minimal' 'scripts/checkout-contract.sh'; do
   if ! grep -q "$needle" skills/orchestrate/SKILL.md 2>/dev/null; then
     echo "  MISSING: $needle in skills/orchestrate/SKILL.md"
     ERR=1
@@ -297,6 +295,14 @@ for needle in 'You have no bash tool' '## §0 Bootstrap' 'Task developer load: m
 done
 if ! grep -q 'You have no bash tool' agents/coder.md 2>/dev/null; then
   echo "  MISSING: no-bash banner in agents/coder.md"
+  ERR=1
+fi
+if grep -q 'preflight_skipped_on_protected_branch' skills/orchestrate/SKILL.md agents/orchestrate.md 2>/dev/null; then
+  echo "  ERROR: preflight_skipped_on_protected_branch needle must be removed from orchestrate"
+  ERR=1
+fi
+if grep -E 'preflight|worktree-env' agents/orchestrate.md skills/orchestrate/SKILL.md >/dev/null 2>&1; then
+  echo "  ERROR: preflight/worktree-env must not appear in agents/orchestrate.md or skills/orchestrate/SKILL.md"
   ERR=1
 fi
 if grep -q 'Run preflight now' agents/orchestrate.md docs/RUNBOOK.md 2>/dev/null; then
@@ -313,7 +319,7 @@ for agent in developer.md frontend-dev.md ux-dev.md; do
 done
 
 echo "Checking dead skills removed + new host skills present..."
-for dead in orchestrate-execution orchestrate-verification orchestrate-recovery orchestrate-completion orchestrate-bootstrap orchestrate-develop-loop feature-worktree github-issue-run; do
+for dead in orchestrate-execution orchestrate-verification orchestrate-recovery orchestrate-completion orchestrate-bootstrap orchestrate-develop-loop feature-worktree github-issue-run orchestrate-sandbox architect-feature-signoff architect-review architect-plan helper; do
   if [[ -d "skills/$dead" ]]; then
     echo "  ERROR: dead skill dir still present: skills/$dead"
     ERR=1
@@ -323,9 +329,64 @@ if [[ ! -f skills/orchestrate/SKILL.md ]]; then
   echo "  MISSING: skills/orchestrate/SKILL.md"
   ERR=1
 fi
+if [[ ! -f skills/feature-review/SKILL.md ]]; then
+  echo "  MISSING: skills/feature-review/SKILL.md"
+  ERR=1
+fi
+
+echo "Checking dead agents and docs removed..."
+for dead in agents/helper.md docs/plan-artifact-schema.md; do
+  if [[ -f "$dead" ]]; then
+    echo "  ERROR: dead file still present: $dead"
+    ERR=1
+  fi
+done
+
+echo "Checking dead-name sweeps (repo-wide, excluding ADR history and the validator itself)..."
+DEAD_NAME_EXCLUDES=( --exclude-dir=.git --exclude-dir=.kilo --exclude-dir=adr --exclude-dir=smoke --exclude=validate-opencode-config.sh )
+for needle in orchestrate-sandbox architect-feature-signoff sandbox_feature_build HANDOFF_TO_FEATURE_ARCHITECT mode-f-accept-issues merge-feature-prs architect-plan architect-review archive_plan plan-artifact-schema; do
+  if grep -R -n "${DEAD_NAME_EXCLUDES[@]}" -F "$needle" . >/dev/null 2>&1; then
+    echo "  ERROR: dead name '$needle' must not appear in the source tree"
+    ERR=1
+  fi
+done
+if grep -R -n "${DEAD_NAME_EXCLUDES[@]}" -E '\.plan/|\.plan"' . >/dev/null 2>&1; then
+  echo "  ERROR: .plan/ paths must not appear in the source tree"
+  ERR=1
+fi
+if grep -R -n "${DEAD_NAME_EXCLUDES[@]}" -E 'Mode F|Mode B|Phase R' . >/dev/null 2>&1; then
+  echo "  ERROR: Mode F / Mode B / Phase R must not appear in the source tree (outside ADR history)"
+  ERR=1
+fi
+
+echo "Checking feature-review wiring..."
+for needle in 'feature_report:' 'feature-finish-pr.sh' 'state:done' 'remediation:'; do
+  if ! grep -q "$needle" skills/feature-review/SKILL.md 2>/dev/null; then
+    echo "  MISSING: $needle in skills/feature-review/SKILL.md"
+    ERR=1
+  fi
+done
+for needle in 'feature-review: allow' 'review: allow' 'document: allow' 'scribe: allow'; do
+  if ! grep -q "$needle" agents/coder.md 2>/dev/null; then
+    echo "  MISSING: $needle in agents/coder.md"
+    ERR=1
+  fi
+done
+if ! grep -q 'feature-review' agents/orchestrate.md 2>/dev/null; then
+  echo "  MISSING: feature-review reference in agents/orchestrate.md"
+  ERR=1
+fi
+if ! grep -q 'feature-review' skills/orchestrate/SKILL.md 2>/dev/null; then
+  echo "  MISSING: feature-review reference in skills/orchestrate/SKILL.md"
+  ERR=1
+fi
+if ! grep -q 'close-feature-issues' skills/feature-complete/SKILL.md 2>/dev/null; then
+  echo "  MISSING: close-feature-issues reference in skills/feature-complete/SKILL.md"
+  ERR=1
+fi
 
 echo "Checking dead skill names absent from live config and docs..."
-if grep -R -n -E 'orchestrate-(execution|verification|recovery|completion|bootstrap|develop-loop)|`feature-worktree`|`github-issue-run`' agents skills rules docs README.md CONTEXT.md >/dev/null 2>&1; then
+if grep -R -n --exclude-dir=.git --exclude-dir=.kilo --exclude-dir=adr --exclude-dir=smoke --exclude=validate-opencode-config.sh -E 'orchestrate-(execution|verification|recovery|completion|bootstrap|develop-loop|orchestrate-sandbox)|`feature-worktree`|`github-issue-run`|architect-(feature-signoff|review|plan)' agents skills rules docs README.md CONTEXT.md >/dev/null 2>&1; then
   echo "  ERROR: references to removed skills must not appear in agents/, skills/, rules/, docs/, README.md, or CONTEXT.md"
   ERR=1
 fi

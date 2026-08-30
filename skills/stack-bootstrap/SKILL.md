@@ -1,6 +1,6 @@
 ---
 name: stack-bootstrap
-description: Install OpenCode templates into one implementation repo path; optional legacy .plan/docs archive moves. Invoked only from setup-project via architect.
+description: Install OpenCode templates into one implementation repo path; legacy docs archive moves. Invoked only from setup-project via architect.
 ---
 
 # Stack bootstrap
@@ -11,7 +11,7 @@ The architect Task prompt must include:
 
 - `local_path`: absolute path to **one** implementation git repo
 - `spec_repo`: `owner/APP-spec` for `issue-tracker.md` substitution
-- `operations`: list of `copy_templates` | `archive_legacy_plan` | `run_check`
+- `operations`: list of `copy_templates` | `archive_legacy_docs` | `run_check`
 
 ## copy_templates
 
@@ -35,23 +35,22 @@ Ensure `.gitignore` contains:
 tmp/
 .research/
 .qa/
-.plan/*.completed.md
 .opencode/
 ```
 
-## archive_legacy_plan
+## archive_legacy_docs
 
-When parent provides `source` and `dest` both under `local_path/.plan/`:
+When parent provides `source` and `dest` both under `local_path/docs/`:
 
 ```bash
 mkdir -p "$(dirname "$dest")"
 mv "$source" "$dest"
 ```
 
-Create `local_path/.plan/_archive/legacy/README.md` once:
+Create `local_path/docs/_archive/legacy/README.md` once:
 
 ```markdown
-# Legacy plans
+# Legacy docs
 
 Archived during setup-project when work moved to GitHub issue-backed execution.
 ```

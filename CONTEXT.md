@@ -6,11 +6,10 @@ Shared vocabulary for spec-driven, GitHub-issue-backed delivery using the OpenCo
 
 **Spec feature**:
 A multi-repo product change planned in the spec repo (PRD → fanout → child issues in implementation repos).
-_Avoid_: Big feature, epic file, `.plan/feature.*`
+_Avoid_: Big feature, epic file, local plan artifact
 
 **Targeted change**:
-A smaller, single-repo change planned directly in one implementation repo (issues created via `to-issues`, no PRD).
-_Avoid_: Legacy plan, local feature file, ad-hoc `.plan`
+A smaller, single-repo change planned directly in one implementation repo (issues created via `to-tickets`, no PRD).
 
 **Wayfinder map**:
 A strategic planning index issue (`wayfinder:map` label) in the spec repo that holds decision tickets for a foggy / multi-session idea. Upstream of a Spec feature when the destination is a PRD.
@@ -42,22 +41,18 @@ _Avoid_: Issue export, ticket dump
 
 **Issue-expand**:
 Implementation-repo planning that enriches fanout (or targeted) issues with Implementation planning sections and TDD `stages[]` in `opencode-task-yaml`.
-_Avoid_: Local issue plan, `.plan/issue.*`
+_Avoid_: Local issue plan, local planning file
 
 **Stage**:
-One TDD slice within an issue's `stages[]` array; the **coder** session (per-ticket inner loop) dispatches `test-writer` (RED) → `developer`/`frontend-dev`/`ux-dev` (GREEN) → `code-review` (per-stage focused gate), with senior-dev escalation and provider fallback layered on top for failed children.
+One TDD slice within an issue's `stages[]` array; the **coder** session (per-ticket inner loop) dispatches `test-writer` (RED) → `developer`/`frontend-dev`/`ux-dev` (GREEN) → `code-review` (per-stage focused gate), with senior-dev escalation and provider fallback layered on top for failed children. The **feature coder** session (per-feature worktree, loading `feature-review`) dispatches the same implementer Tasks for the full-suite `code-review` gate.
 _Avoid_: Step, phase file
 
 **GitHub-as-source-of-truth**:
-Every planned unit of work exists as a GitHub issue before implementation; commits reference issues (`Refs:`). Issues close at Spec merge via **feature-complete**. No local `.plan/` work files in any repo.
+Every planned unit of work exists as a GitHub issue before implementation; commits reference issues (`Refs:`). Issues close at Spec merge via **feature-complete**. No local plan-artifact work files in any repo.
 _Avoid_: Plan file, local backlog
 
-**Phase R**:
-Impl architect Mode F step that triages post-PR feedback (hosted review comments, CI failures, incomplete tickets, user feedback) and publishes remediation sub-issues before acceptance. Re-enter via **impl architect option 4 → R** after orchestrate remediation push.
-_Avoid_: Post-merge review only, spec sign-off
-
-**Remediation ticket**:
-A `remediation:` prefixed GitHub issue in an impl repo, linked as a PRD sub-issue, created during Phase R for orchestrate to execute.
+**Remediation flow**:
+When the feature coder surfaces unmet acceptance or cross-ticket findings in `feature-review` §8, it publishes `remediation:` GitHub issues in the impl repo (linked as PRD sub-issues), then returns `BLOCKED: FEATURE_REMEDIATION`. The develop orchestrator re-batches them through the normal ticket pipeline.
 _Avoid_: Ad-hoc fix list, review sidecar only
 
 **Merge gate**:
@@ -73,12 +68,8 @@ Optional semantic code index via `mcp.claude-context` in `opencode.json`. Speeds
 _Avoid_: Running host and server `claude-context` together
 
 **Sandbox (Sysbox sibling)**:
-Optional opencode-server feature: ephemeral Sysbox sibling containers via the `sandbox` CLI for self-contained compose build/test (app + Caddy) and optional review publish. Gated by `OPENCODE_SANDBOX_ENABLED`; typically off on Mac. Agents use only the CLI — never invent host `docker.sock` or ad-hoc `sysbox-runc`. Preflight only probes; create/exec/expose/destroy live in skill `docker-sandbox`. **Orchestrate does not load that skill** — it instructs `developer` / `frontend-dev` / `code-review` Tasks to load it when compose/Docker/review URL applies, and menu **(2)** runs **Sandbox feature build mode** (build/refresh current branch without the issue queue). Unrelated to Cloudflare Workers Sandbox under `skills/cloudflare/references/sandbox/`.
+Optional opencode-server feature: ephemeral Sysbox sibling containers via the `sandbox` CLI for self-contained compose build/test (verification-only). Gated by `OPENCODE_SANDBOX_ENABLED`; typically off on Mac. Agents use only the CLI — never invent host `docker.sock` or ad-hoc `sysbox-runc`. Preflight only probes; create/exec/destroy live in skill `docker-sandbox`. **Orchestrate does not load that skill** — it instructs `developer` / `frontend-dev` / `code-review` Tasks to load it when compose/Docker applies. The preview lane (`sandbox expose` + tunnel/DNS, review URLs) was dropped — sandbox is verification-only. Unrelated to Cloudflare Workers Sandbox under `skills/cloudflare/references/sandbox/`.
 _Avoid_: Mounting host Docker socket into app compose; GPU/CUDA in sandbox; forcing Sysbox on Desktop; cloudflared in app compose; expecting orchestrate to run `sandbox` CLI itself
-
-**Review hostname**:
-Public feature review URL pattern `{feature-slug}.{apex}` (e.g. `blockshed.blockshared.com`), where apex comes from repo `review_domain` / `apex_domain` (or README). Nested Caddy is published to `127.0.0.1:<hostPort>` via `sandbox expose`; host cloudflared serves a public hostname on the **existing** tunnel; agents may create/update **tunnel public hostname + DNS**. Tunnel public hostname must use **service type HTTPS**, URL `https://127.0.0.1:<hostPort>`, and **No TLS Verify ON** — never HTTP service type (browsers need HTTPS). Orchestrate asks **“Publish review URL?”** once before instructing expose.
-_Avoid_: Global `reviews.*` suffix; `cloudflared tunnel create`; HTTP tunnel service type for review hostnames
 
 **App vs server Infisical**:
 OpenCode **server** Infisical injects secrets into the OpenCode process only. **App** Infisical for sandbox Compose comes from the mounted repo `.env` (setup create + paste). Sibling must reach Infisical over the network.
@@ -90,9 +81,9 @@ _Avoid_: Assuming server Infisical populates app Compose; copying `.env.example`
 - A **Targeted change** skips the PRD and creates issues directly in one **Implementation repo**
 - A **Wayfinder map** lives in the **Spec repo** as a `wayfinder:map` issue and holds **Decision tickets** (planning, not execution). When the map's destination is a PRD, it feeds a **Spec feature** — chart map → resolve tickets → clear frontier → `to-prd` (skipping `grill-me`) → fanout → issue-expand → orchestrate. Decision tickets are **not** fanout tickets (planning vs execution).
 - **Issue-expand** runs in an **Implementation repo** before orchestrate picks up the queue
-- **Orchestrate** runs the **outer loop** (feature worktree + batch kickoff of coder sessions + PR approval + merge/cleanup + handoff); **coder** sessions run the inner loop for each ticket (Stages → final-gate full-suite → sub-PR + stabilization → `ticket_report:`).
-- **Impl architect Mode F** runs Phase R → accept (`state:done`, open) → docs
-- **Feature-complete** (spec repo) closes child issues at merge, merges PRs, and closes the spec parent issue
+- **Orchestrate** runs the **outer loop** (feature worktree + batch kickoff of coder sessions + PR approval + merge/cleanup); **coder** sessions run the inner loop for each ticket (Stages → final-gate full-suite → sub-PR + stabilization → `ticket_report:`). When every ticket merges into `opencode/feat-<slug>`, the orchestrator kicks the **feature coder** in the feature worktree (same `coder` agent, loading `feature-review`) — it owns the final verification (full-suite `code-review`, one-shot CodeRabbit on medium/hard, difficulty gates, docs, `state:done`, feature PR, bounded stabilization, `feature_report:`). The orchestrator enforces the final gates and merges the feature PR on "all reviewed".
+- **Architect** is design & constraints only: planning (spec → PRD → fanout), impl-repo planning front door (`to-tickets`, `audit`, `setup-skills`, `explore`, `debug`/`refactor` planning), and post-PR feedback routing to the impl `orchestrate` session. **All sign-off duty removed** — the feature coder owns the post-merge sign-off loop and the develop orchestrator merges the feature PR.
+- **Feature-complete** (spec repo) is a verify-only ceremony: confirm every `feature:<slug>` issue is `state:done` + `verified` and the impl feature PRs are **MERGED** (merged by the impl orchestrator on "all reviewed"), then close child issues + PRD parent + delivery record.
 
 ## Example dialogue
 

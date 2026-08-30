@@ -351,11 +351,6 @@
       "model": "opencode/gemini-3-flash",
       "steps": 5
     },
-    "helper": {
-      "mode": "subagent",
-      "model": "opencode/deepseek-v4-flash",
-      "steps": 15
-    },
     "debugger": {
       "mode": "subagent",
       "model": "opencode-go/deepseek-v4-pro",

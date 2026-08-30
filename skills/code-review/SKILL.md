@@ -17,10 +17,12 @@ Per-stage review (the coder dispatches this between stages and after the final s
 
 Either way: RED/GREEN/final-gate evidence is the compose-backend test-run output, not verbal claims. `compose_test_file: none` → `BLOCKED: ENV_BLOCKED` + `recommended_env_fix: add docker-compose.test.yml from templates/project-stub/`. Never host-local test runners.
 
-CodeRabbit remains a one-shot feature-sign-off gate inside `architect-feature-signoff`; it never runs per-ticket.
+CodeRabbit never runs per-ticket.
 
 ## Feature mode
 
-Run the documented Docker/Sysbox full regression, integration, and e2e checks. Delegate security review to `security-reviewer` when authentication, secrets, input, network, database, filesystem, or other security-sensitive paths are touched. CodeRabbit is optional and may run once at the feature gate or on explicit user request.
+Dispatched by the **feature coder** in the feature worktree (`feature-review` §1): one feature-mode review of the full diff vs `develop`, with rolled-up acceptance criteria from every ticket; runs the full regression, integration, and e2e suite via the compose backend. Delegate security review to `security-reviewer` when authentication, secrets, input, network, database, filesystem, or other security-sensitive paths are touched. Destroy the sandbox after `APPROVED` or `ENV_BLOCKED`; keep alive on `BLOCKED` for developer retry.
+
+CodeRabbit is the one-shot gate inside the feature coder's `feature-review` loop (medium/hard only) — never per-ticket and never per-stage.
 
 Return `APPROVED` only when all criteria have non-missing evidence, security is resolved, and no blocking findings remain. Return `NEEDS_CHANGES` or `BLOCKED` otherwise.
