@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+# Wayfinder decision-ticket CRUD (wayfinder skill).
+#
+# Usage (via opencode-run):
+#   opencode-run spec wayfinder-ticket --create --map <issue> --type <research|prototype|grilling|task> \
+#     --title <t> --body-file <path> [--blocked-by <n>...] [--assignee <user>]
+#   opencode-run spec wayfinder-ticket --link <issue> --blocked-by <n>...
+#   opencode-run spec wayfinder-ticket --claim <issue> --assignee <user>
+#   opencode-run spec wayfinder-ticket --comment <issue> --body-file <path>
+#   opencode-run spec wayfinder-ticket --close <issue>
+#
+# Tickets are GitHub child issues of the map (label: wayfinder:<type>).
+# Blocking is best-effort via the GraphQL `updateIssue` blocked relationship;
+# the script always also appends a `Blocked by: #N` line to the body so the
+# frontier stays legible even when the native edge cannot be set.
+# Architect bash denys raw `gh issue create`/`edit`/`close`/`comment`; this script
+# is the approved wrapper. Use Task `developer load: minimal` with the same flags
+# if the wrapper is unavailable.
+set -euo pipefail
+
+usage() {
+  cat <<EOF
+Usage: opencode-run spec wayfinder-ticket <mode> [flags]
+
+Modes:
+  --create --map <map-issue> --type <type> --title <t> --body-file <path>
+            [--blocked-by <n>...] [--assignee <user>]
+        Create a child ticket of <map-issue> (label: wayfinder:<type>). Use --blocked-by
+        repeatedly to wire multiple blockers; the second-pass --link can wire later
+        once newly-created tickets have numbers.
+  --link <issue> --blocked-by <n>...
+        Wire/refresh blocking edges on an existing ticket. Used after --create
+        when fog graduates and a fresh ticket needs to reference existing ones.
+  --claim <issue> --assignee <user>
+        Assign the ticket (the assignee is the claim).
+  --comment <issue> --body-file <path>
+        Post a resolution comment (record the decision here).
+  --close <issue>
+        Close the ticket.
+
+Types: research | prototype | grilling | task
+
+Exit codes:
+  0  success
+  2  missing/invalid input
+  8  missing opencode tooling
+EOF
+  exit "${1:-0}"
+}
+
+require_arg() {
+  local flag="$1" value="${2:-}"
+  [[ -n "$value" ]] || { echo "ERROR: $flag requires a value" >&2; usage 1; }
+}
+
+valid_type() {
+  case "$1" in
+    research|prototype|grilling|task) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Resolve a ticket number to its URL (in current spec repo). Echoes URL.
+ticket_url() {
+  local num="$1"
+  gh issue view "$num" --repo "$REPO" --json url -q .url
+}
+
+# Append `Blocked by: #N` lines to a body file (idempotent).
+append_blocked_by() {
+  local body_file="$1"; shift
+  local existing
+  existing=$(cat "$body_file")
+  for n in "$@"; do
+    if ! grep -qE "^Blocked by:.*#${n}\b" <<<"$existing"; then
+      printf '\nBlocked by: #%s\n' "$n" >> "$body_file"
+      existing=$(cat "$body_file")
+    fi
+  done
+}
+
+# Wire native blocking via GraphQL updateIssue.blockedBy (best-effort, idempotent).
+# Args: ticket_num blocked_nums...
+wire_native_blocking() {
+  local ticket_num="$1"; shift
+  [[ $# -gt 0 ]] || return 0
+  local ticket_id blocker_ids=() n id err
+  ticket_id=$(github_project_issue_node_id "$(ticket_url "$ticket_num")")
+  [[ -n "$ticket_id" ]] || return 0
+  for n in "$@"; do
+    id=$(github_project_issue_node_id "$(ticket_url "$n")")
+    [[ -n "$id" ]] && blocker_ids+=("$id")
+  done
+  [[ ${#blocker_ids[@]} -gt 0 ]] || return 0
+  local ids_csv
+  ids_csv=$(printf '%s\n' "${blocker_ids[@]}" | paste -sd',' -)
+  if ! err=$(gh api graphql \
+      -f query='mutation($issueId:ID!,$blockerIds:[ID!]!){updateIssue(input:{id:$issueId,blockedByIds:$blockerIds}){issue{id}}}' \
+      -F issueId="$ticket_id" \
+      -F blockerIds="$ids_csv" 2>&1); then
+    if ! echo "$err" | grep -qiE 'already|exists|duplicate|not.*support|not.*authoriz'; then
+      echo "WARN: failed to set native blocking on #${ticket_num}: $err" >&2
+    fi
+  fi
+  return 0
+}
+
+MODE=""
+MAP_ISSUE=""
+ISSUE=""
+TYPE=""
+TITLE=""
+BODY_FILE=""
+ASSIGNEE=""
+BLOCKED=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --create) MODE="create"; shift ;;
+    --link) MODE="link"; ISSUE="${2:?issue required for --link}"; shift 2 ;;
+    --claim) MODE="claim"; ISSUE="${2:?issue required for --claim}"; shift 2 ;;
+    --comment) MODE="comment"; ISSUE="${2:?issue required for --comment}"; shift 2 ;;
+    --close) MODE="close"; ISSUE="${2:?issue required for --close}"; shift 2 ;;
+    --map) MAP_ISSUE="${2:?map issue required}"; shift 2 ;;
+    --type) TYPE="${2:?type required}"; shift 2 ;;
+    --title) TITLE="${2:?title required}"; shift 2 ;;
+    --body-file) BODY_FILE="${2:?body file required}"; shift 2 ;;
+    --assignee) ASSIGNEE="${2:?assignee required}"; shift 2 ;;
+    --blocked-by) require_arg --blocked-by "${2:-}"; BLOCKED+=("$2"); shift 2 ;;
+    -h|--help) usage 0 ;;
+    *) echo "unknown arg: $1" >&2; usage 1 ;;
+  esac
+done
+
+[[ -n "$MODE" ]] || { echo "ERROR: --create/--link/--claim/--comment/--close required" >&2; usage 1; }
+
+# shellcheck source=../lib/repo-context.sh disable=SC1091
+source "$(cd "$(dirname "$0")/../lib" && pwd)/repo-context.sh"
+opencode_project_init spec
+# shellcheck source=lib/github_project.sh
+source "${BIN_DIR}/lib/github_project.sh"
+
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+
+case "$MODE" in
+  create)
+    require_arg --map "$MAP_ISSUE"
+    require_arg --type "$TYPE"
+    valid_type "$TYPE" || { echo "ERROR: --type must be research|prototype|grilling|task" >&2; exit 2; }
+    require_arg --title "$TITLE"
+    require_arg --body-file "$BODY_FILE"
+    [[ -f "$BODY_FILE" ]] || { echo "ERROR: missing body file: $BODY_FILE" >&2; exit 2; }
+    gh label create "wayfinder:${TYPE}" --repo "$REPO" 2>/dev/null || true
+
+    MAP_URL=$(ticket_url "$MAP_ISSUE")
+    [[ -n "$MAP_URL" ]] || { echo "ERROR: cannot resolve map #${MAP_ISSUE}" >&2; exit 3; }
+
+    WORK="$(mktemp -t wayfinder-ticket.XXXXXX.md)"
+    cp "$BODY_FILE" "$WORK"
+    append_blocked_by "$WORK" "${BLOCKED[@]+"${BLOCKED[@]}"}"
+
+    CREATE_ARGS=( --repo "$REPO" --title "$TITLE" --body-file "$WORK" --label "wayfinder:${TYPE}" --parent "$MAP_ISSUE" )
+    if [[ -n "$ASSIGNEE" ]]; then
+      CREATE_ARGS+=( --assignee "$ASSIGNEE" )
+    fi
+    URL=$(gh issue create "${CREATE_ARGS[@]}" | tail -1)
+    rm -f "$WORK"
+
+    github_project_add_issue "$URL"
+
+    NEW_NUM="${URL##*/}"
+    if [[ ${#BLOCKED[@]} -gt 0 ]]; then
+      wire_native_blocking "$NEW_NUM" "${BLOCKED[@]}"
+    fi
+    echo "Created wayfinder:${TYPE} ticket on ${REPO}: ${URL}"
+    ;;
+  link)
+    require_arg --blocked-by "${BLOCKED[0]:-}"
+    [[ ${#BLOCKED[@]} -gt 0 ]] || { echo "ERROR: --link requires at least one --blocked-by" >&2; exit 2; }
+    [[ -n "$ISSUE" ]] || { echo "ERROR: --link requires <issue>" >&2; exit 2; }
+    wire_native_blocking "$ISSUE" "${BLOCKED[@]}"
+    WORK="$(mktemp -t wayfinder-link.XXXXXX.md)"
+    gh issue view "$ISSUE" --repo "$REPO" --json body -q .body > "$WORK"
+    append_blocked_by "$WORK" "${BLOCKED[@]}"
+    gh issue edit "$ISSUE" --repo "$REPO" --body-file "$WORK" >/dev/null
+    rm -f "$WORK"
+    echo "Linked #${ISSUE} to blocked-by: ${BLOCKED[*]} on ${REPO}"
+    ;;
+  claim)
+    require_arg --assignee "$ASSIGNEE"
+    gh issue edit "$ISSUE" --repo "$REPO" --add-assignee "$ASSIGNEE" >/dev/null
+    echo "Claimed #${ISSUE} by ${ASSIGNEE} on ${REPO}"
+    ;;
+  comment)
+    require_arg --body-file "$BODY_FILE"
+    [[ -f "$BODY_FILE" ]] || { echo "ERROR: missing body file: $BODY_FILE" >&2; exit 2; }
+    gh issue comment "$ISSUE" --repo "$REPO" --body-file "$BODY_FILE"
+    echo "Commented on #${ISSUE} on ${REPO}"
+    ;;
+  close)
+    gh issue close "$ISSUE" --repo "$REPO" >/dev/null
+    echo "Closed #${ISSUE} on ${REPO}"
+    ;;
+esac

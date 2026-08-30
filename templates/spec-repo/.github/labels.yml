@@ -54,3 +54,20 @@
 - name: prd-task
   color: 1d76db
   description: Cross-repo PRD child ticket; auto-add to org project board
+
+# Wayfinder (strategic planning — upstream of grill-me / to-prd)
+- name: wayfinder:map
+  color: 8a2be2
+  description: Strategic planning map issue; index of decision tickets for a foggy idea
+- name: wayfinder:research
+  color: c5def5
+  description: AFK research decision ticket — surface facts a decision waits on
+- name: wayfinder:prototype
+  color: e99695
+  description: HITL prototype decision ticket — raise fidelity of the discussion
+- name: wayfinder:grilling
+  color: d4c5f9
+  description: HITL grilling decision ticket — calls grill-me (embeds domain-modeling)
+- name: wayfinder:task
+  color: cfd3d7
+  description: Manual work that unblocks a decision; not impl execution

@@ -313,6 +313,7 @@ Add to each application repo:
 # OpenCode agent scratch
 tmp/
 .research/
+.prototype/
 .qa/
 .plan/*.completed.md
 ```
@@ -381,6 +382,8 @@ Global **`instructions`** pull in [rules/](rules/). Global **`permission`** in `
 **`grill-me`** (architect Mode A) embeds the [grill-with-docs](https://github.com/mattpocock/skills/tree/main/skills/engineering/grill-with-docs) flow: domain glossary + ADRs persisted via `scribe`.
 
 **`improve-codebase-architecture`** (architect impl option 7) adapts Matt Pocock's [improve-codebase-architecture](https://github.com/mattpocock/skills/tree/main/skills/engineering/improve-codebase-architecture) as a periodic codebase audit: HTML architecture report, optional security pass, and optional `feature:<audit-slug>` remediation tickets via `to-issues` for `orchestrate`.
+
+**`wayfinder`** (architect spec option 9) adapts Matt Pocock's [wayfinder](https://github.com/mattpocock/skills/tree/main/skills/engineering/wayfinder) as strategic multi-session planning for foggy / big ideas: one `wayfinder:map` GitHub issue in the spec repo with `wayfinder:<type>` decision-ticket children (`research` | `prototype` | `grilling` | `task`), resolved one per session until the destination is clear. Upstream of `grill-me` → `to-prd` → fanout — when the map clears, hand off to `to-prd` (skipping `grill-me`, since tickets already grilled the design tree). Companion: **`prototype`** (Matt's [prototype](https://github.com/mattpocock/skills/tree/main/skills/engineering/prototype)) — throwaway artifacts that raise discussion fidelity, linked from the ticket, never pasted.
 
 **CodeRabbit** (`skills/code-review`, from [coderabbitai/skills](https://github.com/coderabbitai/skills)): orchestrate runs **one** **CodeRabbit gate** via `review` after **all** stages/issues pass final code-review (`medium`/`hard`) — before difficulty gates and architect handoff (GitHub: after the full `feature:<slug>` queue, not per issue). Requires CodeRabbit CLI + auth.
 

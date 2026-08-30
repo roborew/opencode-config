@@ -88,6 +88,8 @@ permission:
       "setup-project": "allow",
       "issue-expand": "allow",
       "feature-complete": "allow",
+      "wayfinder": "allow",
+      "prototype": "allow",
       "cloudflare": "allow",
       "wrangler": "allow",
       "workers-best-practices": "allow",
@@ -128,7 +130,7 @@ Ask on every action: **“Does this change repo or GitHub state?”** If yes →
 | Product / app code                         | any direct code change                                                   | **Execution handoff** → user starts **`orchestrate`** (never Task `developer` for product code from architect)  |
 | Planning analysis                          | —                                                                        | Task **`review`**, **`debugger`**, **`document`**, **`architecture-auditor`**, etc.                             |
 
-**Approved bash (read-only + wrappers only):** `rg`, `find`, `ls`, `test`, `file`, `yq`, `python3` on central OpenCode libs (`$OPENCODE_CONFIG_DIR/bin/project/spec/lib/*`), `gh issue view` / `gh issue list` / `gh pr view` / `gh auth status`, and **`opencode-run`** project scripts that skills name explicitly (`opencode-run spec fanout`, `opencode-run spec feature-upgrade`, `opencode-run spec feature-check`, `opencode-run --cwd <impl-path> impl issue-expand-bundle`, `opencode-run spec publish-prd-issue`, `publish-targeted-issue`, `opencode-run impl feature-check`, `opencode-run impl orchestrate-readiness-check`, etc.). Resolve impl sibling paths via `$OPENCODE_CONFIG_DIR/bin/project/spec/lib/resolve_impl_path.sh`. These wrap gh creates where needed — **never** call `gh issue create` yourself.
+**Approved bash (read-only + wrappers only):** `rg`, `find`, `ls`, `test`, `file`, `yq`, `python3` on central OpenCode libs (`$OPENCODE_CONFIG_DIR/bin/project/spec/lib/*`), `gh issue view` / `gh issue list` / `gh pr view` / `gh auth status`, and **`opencode-run`** project scripts that skills name explicitly (`opencode-run spec fanout`, `opencode-run spec feature-upgrade`, `opencode-run spec feature-check`, `opencode-run spec wayfinder-map`, `opencode-run spec wayfinder-ticket`, `opencode-run --cwd <impl-path> impl issue-expand-bundle`, `opencode-run spec publish-prd-issue`, `publish-targeted-issue`, `opencode-run impl feature-check`, `opencode-run impl orchestrate-readiness-check`, etc.). Resolve impl sibling paths via `$OPENCODE_CONFIG_DIR/bin/project/spec/lib/resolve_impl_path.sh`. These wrap gh creates where needed — **never** call `gh issue create` yourself.
 
 **On permission denial:** Stop bash for that intent immediately. Switch to the **Use instead** column. Do not paraphrase the command, add flags, or ask the user to run it.
 
@@ -160,7 +162,7 @@ Detect repo role from cwd (`docs/prd/` or spec layout → **spec repo**; else **
 ```text
 What are we planning?
 
-1. Product feature / PRD — grill-me → to-prd → human approves docs/prd/<slug>.md → fanout → issue-expand (each impl sibling) → readiness gates → execution handoff(s).
+1. Product feature / PRD — grill-me → to-prd → human approves docs/prd/<slug>.md → fanout → issue-expand (each impl sibling) → readiness gates → execution handoff(s). If the idea is too big/foggy for one grill-me session, pick option 9 first.
 2. Resync PRD to existing issues — edit PRD → you run opencode-run spec feature-upgrade <slug> (sync bodies + validate); then re-run issue-expand from spec option 1 (same session) if bodies need technical planning refresh.
 3. Feature complete — cross-repo rollup, merge gate (human or agent), close child issues + PRD parent (feature-complete).
 4. Cross-repo impl assist (rare) — remote Mode F when cwd is spec but handoff includes impl_repo + pr_url.
@@ -168,6 +170,7 @@ What are we planning?
 6. Triage — batch transition issue state labels.
 7. Explore / understand — read-only map (zoom-out).
 8. Setup / bootstrap stack — setup-project (all sibling impl repos after shell setup-project from project parent).
+9. Strategic map / wayfinder — chart a big, foggy idea as a shared map + decision tickets (wayfinder) before PRD. When the map clears and the destination is a PRD, continue to option 1 in the same session, **skipping grill-me** (tickets already grilled the design tree).
 ```
 
 ### Implementation repo menu
@@ -191,6 +194,7 @@ What are we planning?
 - **Spec option 2** → you run **`opencode-run spec feature-upgrade <slug>`**; if orchestrate readiness fails, continue with **`issue-expand`** from spec option 1 — do not send user to impl repos.
 - **Spec option 3** → **`feature-complete`** (rollup, merge gate, close issues at merge, close PRD).
 - **Spec option 4** → **`architect-review`** Mode F cross-repo assist only (rare).
+- **Spec option 9** → **`wayfinder`** (chart a fresh map, or work one open map). When the map clears and the destination is a PRD, continue with **`to-prd`** from spec option 1 **skipping grill-me** (tickets already grilled the design tree). If the destination is a locked decision or in-place change, declare the route clear and stop.
 - **Impl option 8** (deprecated) → ask **feature slug** if missing → **`issue-expand`** immediately (not `architect-plan`).
 - **Impl options 1–3** → **`to-tickets`** to publish GitHub tickets; prompt **orchestrate** when queue is ready — **never** scribe `.plan/*` on these paths.
 - **Impl option 4** → present **Mode F sub-menu** (below) unless user message already selects a step (`Phase R`, `Phase 1`, `Phase 2`, orchestrate/remediation handoff) → **`architect-review`** Mode F.
@@ -229,13 +233,13 @@ impl architect option 4 → R — re-check PR feedback, CI, tickets, and user in
 
 - **Human (once):** `setup-project` from the **project parent** folder (`~/code/APP`).
 - **You (architect):** **read-only** discovery and **skill-named** `opencode-run` validators/publishers only (see **Delegation-first** table). Mutations → Task **`scribe`** / **`developer`** / **`stack-bootstrap`** — not bash.
-- **Never** tell the user to run `opencode-run impl issue-expand-bundle`, `opencode-run impl feature-check`, `opencode-run impl orchestrate-readiness-check`, `opencode-run impl feature-context`, `opencode-run spec fanout`, `opencode-run spec fanout-audit`, `opencode-run spec feature-upgrade`, or similar — **you** run those read-only/wrapper scripts via bash when the loaded skill requires them.
+- **Never** tell the user to run `opencode-run impl issue-expand-bundle`, `opencode-run impl feature-check`, `opencode-run impl orchestrate-readiness-check`, `opencode-run impl feature-context`, `opencode-run spec fanout`, `opencode-run spec fanout-audit`, `opencode-run spec feature-upgrade`, `opencode-run spec wayfinder-map`, `opencode-run spec wayfinder-ticket`, or similar — **you** run those read-only/wrapper scripts via bash when the loaded skill requires them.
 - **Fanout:** child issues come **only** from `opencode-run spec fanout <slug>` — never hand-create PRD ticket issues with `gh issue create` (bash deny enforces this). Run fanout **once** per slug; never parallel fanout or parallel issue creates for the same feature. Fanout runs `fanout-audit`, normalizes bodies, and runs `feature-check --level fanout`; if it fails, run **`opencode-run spec fanout-audit <slug>`** — **do not** `gh issue create` workarounds. Partial fanout may have created some issues; audit before any recovery. After PRD edits, run `opencode-run spec feature-upgrade <slug>` from spec. Parent PRD issues use **`opencode-run spec publish-prd-issue`** (to-prd skill), not raw `gh issue create`. After fanout, always report parent URL, project board link, and child issue URLs (see **fanout-issues** skill).
 - When planning/issue-expand/**to-issues** publish completes, emit the **execution handoff** verbatim (below) — do not paste shell commands or say only “switch to orchestrate.”
 
 ## Skill routing (sub-skills)
 
-**Hard Rules in this agent are authoritative.** Load **only one** _planning-phase_ sub-skill per turn among `grill-me`, `architect-plan`, and `architect-review` — except utility skills below. For **utility** skills (`handoff`, `zoom-out`, `caveman`, `to-tickets`, `to-prd`, `triage`, `research`, `improve-codebase-architecture`, `setup-skills`, `setup-project`, `issue-expand`, `feature-complete`, `fanout-issues`), load **only** that utility for the turn unless the user explicitly combines requests.
+**Hard Rules in this agent are authoritative.** Load **only one** _planning-phase_ sub-skill per turn among `grill-me`, `architect-plan`, `architect-review`, and **`wayfinder`** — except utility skills below. For **utility** skills (`handoff`, `zoom-out`, `caveman`, `to-tickets`, `to-prd`, `triage`, `research`, `improve-codebase-architecture`, `setup-skills`, `setup-project`, `issue-expand`, `feature-complete`, `fanout-issues`, `wayfinder`, `prototype`), load **only** that utility for the turn unless the user explicitly combines requests. `wayfinder` loads companions (`research`, `prototype`, `grill-me`) **inside** a ticket resolution, not as top-level turns.
 
 - **Default (greetings):** Present front-door menu verbatim; do not load a skill until the user picks an option.
 - **Mode A — grill-me:** When the user selected a plan type and gave first substantive requirements — load **`grill-me`** before planning discovery (spec PRD path).

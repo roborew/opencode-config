@@ -12,6 +12,22 @@ _Avoid_: Big feature, epic file, `.plan/feature.*`
 A smaller, single-repo change planned directly in one implementation repo (issues created via `to-issues`, no PRD).
 _Avoid_: Legacy plan, local feature file, ad-hoc `.plan`
 
+**Wayfinder map**:
+A strategic planning index issue (`wayfinder:map` label) in the spec repo that holds decision tickets for a foggy / multi-session idea. Upstream of a Spec feature when the destination is a PRD.
+_Avoid_: Local map file, planning folder, "raw idea doc"
+
+**Decision ticket**:
+A child issue of a wayfinder map labelled `wayfinder:<type>` (`research` | `prototype` | `grilling` | `task`). Resolved by a decision, not a build slice. Impl execution never lives here.
+_Avoid_: Fanout ticket (those are execution, not planning)
+
+**Fog of war** (wayfinder term):
+In-scope questions on a wayfinder map that are not yet sharp enough to ticket. Lives in the map's `## Not yet specified`. Graduates into tickets as the frontier advances.
+_Avoid_: Unknown unknown, hidden backlog
+
+**Frontier** (wayfinder term):
+The set of open, unblocked, unassigned children of a wayfinder map — the edge of the known on a wayfinder effort.
+_Avoid_: Ready-to-do list, work queue
+
 **Spec repo**:
 The `APP-spec` sibling repository holding PRDs, registry (`docs/agents/repos.md`), and product glossary (`CONTEXT.md`, `LANGUAGE.md`).
 _Avoid_: Docs repo, planning folder
@@ -72,6 +88,7 @@ _Avoid_: Assuming server Infisical populates app Compose; copying `.env.example`
 
 - A **Spec feature** lives in the **Spec repo** as a PRD and produces **Fanout** child issues in one or more **Implementation repos**
 - A **Targeted change** skips the PRD and creates issues directly in one **Implementation repo**
+- A **Wayfinder map** lives in the **Spec repo** as a `wayfinder:map` issue and holds **Decision tickets** (planning, not execution). When the map's destination is a PRD, it feeds a **Spec feature** — chart map → resolve tickets → clear frontier → `to-prd` (skipping `grill-me`) → fanout → issue-expand → orchestrate. Decision tickets are **not** fanout tickets (planning vs execution).
 - **Issue-expand** runs in an **Implementation repo** before orchestrate picks up the queue
 - **Orchestrate** runs **Stages** sequentially until the issue is ready-for-review
 - **Impl architect Mode F** runs Phase R → accept (`state:done`, open) → docs
@@ -88,4 +105,5 @@ _Avoid_: Assuming server Infisical populates app Compose; copying `.env.example`
 ## Flagged ambiguities
 
 - "Feature" alone may mean a GitHub label (`feature:<slug>`), a **Spec feature**, or a **Targeted change** — use the qualified terms above.
+- "Decision ticket" / "wayfinder ticket" is **planning** (a question whose resolution is a decision), distinct from a **fanout ticket** / **PRD child issue** (which is **execution** — a build slice). Don't confuse the two; a wayfinder map can clear without ever producing a fanout ticket (e.g. destination = locked decision or in-place change).
 - "Legacy" in older docs meant local `.plan` files; that path is removed. Use **Targeted change** for small single-repo work instead.

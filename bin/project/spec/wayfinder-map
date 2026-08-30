@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# Wayfinder map issue CRUD (wayfinder skill).
+#
+# Usage (via opencode-run):
+#   opencode-run spec wayfinder-map --create --slug <slug> --body-file <path>
+#   opencode-run spec wayfinder-map --update <issue> --body-file <path>
+#
+# The map is a single GitHub issue in the spec repo, labelled `wayfinder:map`.
+# It is NOT a PRD — it is an index of decision tickets. Only `wayfinder:map` is applied.
+# Architect bash denys raw `gh issue create`/`edit`; this script is the approved wrapper.
+set -euo pipefail
+
+usage() {
+  cat <<EOF
+Usage: opencode-run spec wayfinder-map <mode> [flags]
+
+Modes:
+  --create [--slug <slug>] --body-file <path>
+        Create the map issue (label: wayfinder:map). slug is optional metadata for the title.
+  --update <issue> --body-file <path>
+        Rewrite the map body (idempotent).
+
+Flags:
+  --slug <slug>        Optional kebab slug for title (used by --create).
+  --body-file <path>   Path to the map body markdown (scribe-written; non-canonical scratch).
+  -h, --help           Show this help.
+
+Exit codes:
+  0  success
+  2  missing/invalid input
+  8  missing opencode tooling
+EOF
+  exit "${1:-0}"
+}
+
+MODE=""
+SLUG=""
+ISSUE=""
+BODY_FILE=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --create) MODE="create"; shift ;;
+    --update) MODE="update"; ISSUE="${2:?issue number required for --update}"; shift 2 ;;
+    --slug) SLUG="${2:?slug required}"; shift 2 ;;
+    --body-file) BODY_FILE="${2:?body file required}"; shift 2 ;;
+    -h|--help) usage 0 ;;
+    *) echo "unknown arg: $1" >&2; usage 1 ;;
+  esac
+done
+
+[[ -n "$MODE" ]] || { echo "ERROR: --create or --update required" >&2; usage 1; }
+[[ -n "$BODY_FILE" ]] || { echo "ERROR: --body-file required" >&2; usage 1; }
+[[ -f "$BODY_FILE" ]] || { echo "ERROR: missing body file: $BODY_FILE" >&2; exit 2; }
+
+# shellcheck source=../lib/repo-context.sh disable=SC1091
+source "$(cd "$(dirname "$0")/../lib" && pwd)/repo-context.sh"
+opencode_project_init spec
+# shellcheck source=lib/github_project.sh
+source "${BIN_DIR}/lib/github_project.sh"
+
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+gh label create "wayfinder:map" --repo "$REPO" 2>/dev/null || true
+
+case "$MODE" in
+  create)
+    TITLE="[wayfinder] map"
+    if [[ -n "$SLUG" ]]; then
+      TITLE="${TITLE}: ${SLUG}"
+    fi
+    URL=$(gh issue create \
+      --repo "$REPO" \
+      --title "$TITLE" \
+      --body-file "$BODY_FILE" \
+      --label "wayfinder:map" \
+      | tail -1)
+    github_project_add_issue "$URL"
+    echo "Created wayfinder map on ${REPO}: ${URL}"
+    ;;
+  update)
+    [[ -n "$ISSUE" ]] || { echo "ERROR: --update requires <issue>" >&2; exit 2; }
+    gh issue edit "$ISSUE" --repo "$REPO" --body-file "$BODY_FILE" >/dev/null
+    echo "Updated wayfinder map #${ISSUE} on ${REPO}"
+    ;;
+esac

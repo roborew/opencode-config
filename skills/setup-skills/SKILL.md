@@ -5,7 +5,7 @@ description: Scaffold per-repo agent context — GitHub ticket tracker, triage l
 
 # Setup skills (per-repo)
 
-Scaffold the configuration that **`grill-me`**, **`to-tickets`**, **`debug-fix`**, and **`zoom-out`** assume:
+Scaffold the configuration that **`grill-me`**, **`to-tickets`**, **`debug-fix`**, **`wayfinder`**, and **`zoom-out`** assume:
 
 - **Ticket tracker** — where GitHub tickets live (GitHub is required for this configuration)
 - **Triage labels** — strings for agent-ready vs human-needed work
@@ -76,6 +76,16 @@ Issues for this repository are tracked on **GitHub**.
 
 - **CLI:** `gh issue create`, `gh issue view`, `gh issue list`
 - **Remote:** (fill from `git remote get-url origin`)
+
+## Wayfinding operations (spec repo only)
+
+Strategic planning for foggy / multi-session ideas runs through **`wayfinder`**:
+
+- **Map** = a single GitHub issue labelled `wayfinder:map` (canonical artifact, lives in the spec repo).
+- **Decision tickets** = child issues of the map, each labelled `wayfinder:<type>` (`research` | `prototype` | `grilling` | `task`).
+- **Frontier** = open, unblocked, unassigned children. Query: `gh issue list --search "is:open is:issue parent:<map-issue> no:assignee" --label wayfinder:<type>`.
+- **Blocking** uses GitHub's native dependency relationship when the API supports it; the `wayfinder-ticket` script always also writes a `Blocked by: #N` line in the ticket body for fallback visibility.
+- **Create / update / link / claim / comment / close** go through `opencode-run spec wayfinder-map` and `opencode-run spec wayfinder-ticket` (architect bash denys raw `gh issue create`/`edit`/`close`/`comment`). Linked assets (`tmp/wayfinder/*.md`, `.research/<slug>.md`, `.prototype/<slug>/`) are linked from the ticket, never pasted.
 
 Non-GitHub workflows belong in this file as plain-English steps for agents.
 ```
