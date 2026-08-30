@@ -25,6 +25,7 @@ Phase 4 of the feature pipeline: turn spec fanout tickets into **developer-revie
 - **Never** treat existing production code as "ticket done" — map each requirement to tests or an explicit gap.
 - If bundle fails, read `tmp/issue-expand-bundle.md` and fix/sync — do not ask the user to run the same commands.
 - **Never** use `2>/dev/null`, `>`, or `>>` in bash (architect deny rules). Run opencode-run bare.
+- **Never drop the `**Blocked by:**` line (or `## Blocked by` section) when rewriting a body** — carry it over verbatim. It is the dev-loop DAG contract: `scripts/dev-loop-batch.sh` gates ticket waves on it (YAML `depends_on` is only a fallback). If it is missing from an existing body, restore it first via `opencode-run spec sync-fanout-bodies <slug>` before editing.
 - **Human approval** required before each `gh issue edit` (Task **developer** with explicit `repo: owner/name`).
 
 ## Multi-repo loop (spec repo)
@@ -114,6 +115,7 @@ Do not list shell commands. Do not say only “switch to orchestrate.”
 | Section | Owner | Content |
 |---------|-------|---------|
 | User stories covered | spec | PRD mapping |
+| Blocked by | spec (fanout) | `**Blocked by:** #n, #m` or `(none)` — preserved verbatim, never rewritten by expand |
 | Requirements | spec | Product outcomes |
 | Implementation plan | **you** | Context, Current state, Stage plan, Tests |
 | opencode-task-yaml | **you** | `task_id`, `owner`, `depends_on`, `stages[]`, `acceptance`, `test_commands`, `commit_message` |

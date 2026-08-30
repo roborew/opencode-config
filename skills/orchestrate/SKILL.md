@@ -112,6 +112,10 @@ while true:
   # Entries never carry bodies or opencode-task-yaml (relay-safe by design). Coder sessions
   # reconstruct ticket context from GitHub (§5a); worktree-manager derives <abbrev> from the
   # title itself. Passing entry.url into the §5a kickoff message provides the issue_url.
+  # Dependencies: a ticket runs only when every `Blocked by:` dep is satisfied — dep issue
+  # CLOSED, dep labeled `state:done`, or the dep's sub-PR merged into opencode/feat-<slug>
+  # (close-at-merge keeps ticket issues OPEN mid-loop, so the merged sub-PR is the in-loop
+  # signal). Waves advance automatically as sub-PRs merge; independents run in parallel.
   # Exit codes: 1 + empty stdout → nothing runnable; 2 → gh/API failure — surface stderr
   # verbatim and stop. NEVER treat exit 2 as "all tickets done".
 
