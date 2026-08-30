@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
-# Emit a JSON array of all currently runnable OpenCode child issues for feature:<slug>
-# in one call (DAG-respecting). Returns every open issue carrying both
-# `feature:<slug>` AND `state:ready-for-agent` whose `Blocked by:` dependencies are
-# all CLOSED. Output shape: `[{number, title, body, opencode_meta, repo}, ...]`.
-# Exit 1 with empty output when there is nothing runnable.
+# Emit a compact JSON array of all currently runnable OpenCode child issues for feature:<slug>
+# in a single gh API call (DAG-respecting). A ticket is runnable when it is OPEN, carries both
+# `feature:<slug>` AND `state:ready-for-agent`, and every `Blocked by:` dependency is CLOSED.
+#
+# Output shape: [{number, title, url, repo}, ...] — one compact line, sorted by number.
+# Deliberately relay-safe: entries NEVER carry issue bodies or opencode-task-yaml meta.
+# The developer Task that runs this script relays stdout verbatim; bodies are fetched only to
+# parse `Blocked by:` and are never emitted. Coder sessions reconstruct full ticket context
+# from GitHub (ticket-lifecycle §0) and worktree-manager derives <abbrev> from the title itself.
+#
+# Exit codes: 0 = runnable batch on stdout; 1 = nothing runnable (batch loop done);
+#             2 = gh/API failure — surface verbatim, never treat as "all done".
 # Usage: dev-loop-batch.sh <feature_slug_without_prefix> [--repo OWNER/REPO]
 set -euo pipefail
 SLUG="${1:?feature slug required}"
@@ -23,72 +30,77 @@ while [[ $# -gt 0 ]]; do
 done
 [[ -n "$REPO" ]] || REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 FEAT="feature:${SLUG}"
-OC="${OPENCODE_CONFIG:-$HOME/.config/opencode}"
-PARSE_META="${OC}/templates/spec-repo/bin/lib/extract_task_meta.py"
 
-is_blocked_open() {
-  local body="$1"
-  local block_section deps
-  block_section=$(printf '%s' "$body" | awk '/^## Blocked by$/{found=1; next} found && /^## /{exit} found{print}' || true)
-  if [[ -z "$block_section" ]]; then
-    local line
-    line=$(printf '%s' "$body" | grep '^\*\*Blocked by:\*\*' | head -1 || true)
-    block_section="$line"
-  fi
-  [[ -n "$block_section" ]] || return 1
-  if printf '%s' "$block_section" | grep -qiE '\bnone\b|\(none\)'; then
-    return 1
-  fi
-  deps=$(printf '%s' "$block_section" | grep -oE '#[0-9]+' | tr -d '#' || true)
-  [[ -n "$deps" ]] || return 1
-  local d st
-  while IFS= read -r d; do
-    [[ -z "$d" ]] && continue
-    st=$(gh issue view "$d" --repo "$REPO" --json state -q .state 2>/dev/null || echo OPEN)
-    if [[ "$st" != "CLOSED" ]]; then
-      return 0
-    fi
-  done <<< "$(printf '%s\n' $deps)"
-  return 1
-}
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
+ISSUES_FILE="$WORK/issues.json"
+CANDS_FILE="$WORK/candidates.ndjson"
+STATES_FILE="$WORK/states.json"
 
-extract_meta() {
-  local body="$1" title="$2"
-  if [[ -f "$PARSE_META" ]]; then
-    local out
-    out=$(printf '%s' "$body" | python3 "$PARSE_META" --title "$title" --feature-slug "$SLUG" 2>/dev/null || true)
-    [[ -n "$out" ]] || out=null
-    echo "$out"
-  else
-    printf '%s' "$body" | sed -n '/```opencode-task-yaml/,/```/p' | sed '1d;$d' | jq -c . 2>/dev/null || echo null
-  fi
-}
-
-STUBS_FILE=$(mktemp)
-trap 'rm -f "$STUBS_FILE"' EXIT
-gh issue list --repo "$REPO" -L 200 --label "$FEAT" --label state:ready-for-agent --state open \
-  --json number,title 2>/dev/null | jq -c 'sort_by(.number) | .[]' >"$STUBS_FILE" || true
-
-if [[ ! -s "$STUBS_FILE" ]]; then
-  exit 1
+# One gh call: OPEN and CLOSED feature issues. Closed siblings resolve `Blocked by:` deps
+# locally (fanout deps are same-feature tickets). -L caps the combined result; 200 covers
+# any realistic fanout.
+if ! gh issue list --repo "$REPO" -L 200 --state all --label "$FEAT" \
+  --json number,title,url,state,labels,body >"$ISSUES_FILE" 2>"$WORK/gh.err"; then
+  echo "dev-loop-batch: gh issue list failed for ${REPO} label ${FEAT}" >&2
+  cat "$WORK/gh.err" >&2
+  exit 2
 fi
 
+# number -> state map for local dep resolution.
+jq -c 'map({key: (.number | tostring), value: .state}) | from_entries' "$ISSUES_FILE" >"$STATES_FILE"
+
+# Candidates: OPEN + state:ready-for-agent, sorted by number.
+jq -c 'sort_by(.number)
+  | .[]
+  | select(.state == "OPEN")
+  | select(any(.labels[]?; .name == "state:ready-for-agent"))
+  | {number, title, url, body}' "$ISSUES_FILE" >"$CANDS_FILE" || true
+
+blocked_by_section() {
+  local body="$1" section
+  section=$(printf '%s' "$body" | awk '/^## Blocked by$/{found=1; next} found && /^## /{exit} found{print}' || true)
+  if [[ -z "$section" ]]; then
+    section=$(printf '%s' "$body" | grep '^\*\*Blocked by:\*\*' | head -1 || true)
+  fi
+  printf '%s' "$section"
+}
+
+# 0 = every dependency CLOSED (or no dependencies); 1 = at least one dep not CLOSED.
+all_deps_closed() {
+  local body="$1" section deps d st
+  section=$(blocked_by_section "$body")
+  [[ -n "$section" ]] || return 0
+  if printf '%s' "$section" | grep -qiE '\bnone\b|\(none\)'; then
+    return 0
+  fi
+  deps=$(printf '%s' "$section" | grep -oE '#[0-9]+' | tr -d '#' || true)
+  [[ -n "$deps" ]] || return 0
+  for d in $deps; do
+    st=$(jq -r --arg k "$d" '.[$k] // ""' "$STATES_FILE")
+    if [[ -z "$st" ]]; then
+      # Not in this feature's issue set (rare: cross-feature ref) — single fallback lookup.
+      st=$(gh issue view "$d" --repo "$REPO" --json state -q .state 2>/dev/null || echo OPEN)
+    fi
+    [[ "$st" == "CLOSED" ]] || return 1
+  done
+  return 0
+}
+
 OUT='[]'
-while IFS= read -r stub; do
-  [[ -n "$stub" ]] || continue
-  number=$(printf '%s' "$stub" | jq -r .number)
-  title=$(printf '%s' "$stub" | jq -r .title)
-  row=$(gh issue view "$number" --repo "$REPO" --json number,title,body 2>/dev/null || true)
-  [[ -n "$row" ]] || continue
-  body=$(printf '%s' "$row" | jq -r .body)
-  if is_blocked_open "$body"; then
+while IFS= read -r cand; do
+  [[ -n "$cand" ]] || continue
+  number=$(printf '%s' "$cand" | jq -r .number)
+  title=$(printf '%s' "$cand" | jq -r .title)
+  url=$(printf '%s' "$cand" | jq -r .url)
+  body=$(printf '%s' "$cand" | jq -r .body)
+  if ! all_deps_closed "$body"; then
     continue
   fi
-  meta=$(extract_meta "$body" "$title")
-  entry=$(printf '%s' "$row" | jq -c --argjson meta "${meta}" --arg rep "$REPO" \
-    '{number: .number, title: .title, body: .body, opencode_meta: $meta, repo: $rep}')
+  entry=$(jq -c -n --argjson n "$number" --arg t "$title" --arg u "$url" --arg r "$REPO" \
+    '{number: $n, title: $t, url: $u, repo: $r}')
   OUT=$(jq -c --argjson e "$entry" '. + [$e]' <<<"$OUT")
-done <"$STUBS_FILE"
+done <"$CANDS_FILE"
 
 count=$(jq 'length' <<<"$OUT")
 if [[ "$count" -eq 0 ]]; then

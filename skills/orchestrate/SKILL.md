@@ -28,7 +28,7 @@ Runs automatically on every fresh session, before the work-selection menu. Never
 
    ```text
    Task developer load: minimal
-   bash <OC>/scripts/checkout-contract.sh
+   bash "${OPENCODE_CONFIG:-$HOME/.config/opencode}/scripts/checkout-contract.sh"
    ```
 
    Require `status: ok`, repo root, branch, worktree status, main checkout root, protected-branch status, head SHA, and branch policy. Capture `is_linked_worktree` and `branch_policy` — §1 uses them to pick the menu. Expected: branch `develop` in the main checkout (→ Menu A) or a linked worktree branch (→ §1 worktree routing). On mismatch, surface `CHECKOUT_CONTRACT_FAILED` verbatim and stop — do not present the menu and do not offer improvised alternatives.
@@ -101,13 +101,26 @@ If `worktree-manager` returns any `blocker_code`, surface it verbatim and stop.
 ## §5 Batch loop (silent except the single PR-review gate)
 
 ```text
+OC = "${OPENCODE_CONFIG:-$HOME/.config/opencode}"  # resolve once; pass this absolute path in every delegated script call
+
 while true:
-  batch_json = delegated developer (load: minimal): bash <OC>/scripts/dev-loop-batch.sh <slug>
+  batch_json = delegated developer (load: minimal):
+    bash "$OC/scripts/dev-loop-batch.sh" <slug>
+
+  # Relay contract: the developer returns the script stdout VERBATIM — one compact line:
+  #   [{number, title, url, repo}, ...]
+  # Entries never carry bodies or opencode-task-yaml (relay-safe by design). Coder sessions
+  # reconstruct ticket context from GitHub (§5a); worktree-manager derives <abbrev> from the
+  # title itself. Passing entry.url into the §5a kickoff message provides the issue_url.
+  # Exit codes: 1 + empty stdout → nothing runnable; 2 → gh/API failure — surface stderr
+  # verbatim and stop. NEVER treat exit 2 as "all tickets done".
+
   if batch is empty: break
 
   for entry in batch:
     ticket = entry.number
     title  = entry.title
+    url    = entry.url
     abbrev = <derive from title or pass via entry if worktree-manager echoes it>
     branch_name = "opencode/ticket-<n>-<slug>-<abbrev>"
 
@@ -216,6 +229,7 @@ The coder session owns `state:in-progress` (set during `ticket-lifecycle` §0 Bo
 | `worktree-manager` returns `blocker_code` | develop orchestrator loop | Surface verbatim, stop, do not retry. |
 | `worktree-manager` returns `blocker_code: "KICKOFF_FAILED"` (advisory only) | develop orchestrator loop | Surface advisory in lifecycle log; brief file fallback stands. Retry via `worktree-manager` `kickoff` action, or the user opens the GUI session and types anything. **Do not pause the batch.** |
 | `scripts/dev-loop-batch.sh` exits 1 | develop orchestrator loop | All tickets done → exit loop, go to §8. |
+| `scripts/dev-loop-batch.sh` exits 2 | develop orchestrator loop | gh/API failure — surface stderr verbatim, stop. Never treat as "all tickets done" (an empty lifecycle log + exit 2 is a transport failure, not completion). |
 | Ticket `BLOCKED: ENV_BLOCKED` after one repair | coder session → develop orchestrator | Surface `recommended_env_fix`, pause batch. |
 | Ticket `BLOCKED: STABILIZATION_EXHAUSTED` (CI fail after 3 iterations) | coder session | Surface verbatim, pause batch. |
 | Ticket `BLOCKED: CROSS_TICKET_REVIEW` | coder session | Surface verbatim, route to the feature coder's remediation flow (`feature-review` §8) — pause the batch until the feature coder creates `remediation:` issues and the orchestrator re-batches. |
@@ -326,7 +340,7 @@ There is no ticket-dispatch marker — the coder session is the auto-started GUI
 - `agents/coder.md` + `skills/ticket-lifecycle/SKILL.md` — the ticket session.
 - `skills/feature-review/SKILL.md` — the feature coder's verification + sign-off loop (same `coder` agent, different skill).
 - `agents/worktree-manager.md` — `create_ticket` passes `kickoff_agent: "coder"` + `kickoff_message`; `kickoff` action retries failed injections.
-- `scripts/dev-loop-batch.sh` — DAG-respecting batch discovery.
+- `scripts/dev-loop-batch.sh` — DAG-respecting batch discovery (single gh call; relay-safe slim output; exit 1 = done, exit 2 = gh failure).
 - `scripts/dev-loop-watch.sh` — agent-invocable per-issue watcher (consumes `ticket_report:` comments).
 - `scripts/issue-state-transition.sh`, `scripts/checkout-contract.sh`, `scripts/pr-stabilize-watch.sh`, `scripts/feature-finish-pr.sh` — shared lib scripts.
 - `scripts/dev-loop-poller.sh` — server-host cron poller that wakes the develop orchestrator via `DEV_LOOP_WAKE`.
