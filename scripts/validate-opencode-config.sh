@@ -288,6 +288,22 @@ if ! grep -q '"worktree-manager"' opencode.json 2>/dev/null; then
   ERR=1
 fi
 
+echo "Checking orchestrate bootstrap delegation (bash-less host)..."
+for needle in 'You have no bash tool' '## §0 Bootstrap' 'Task developer load: minimal' 'scripts/checkout-contract.sh' 'preflight_skipped_on_protected_branch'; do
+  if ! grep -q "$needle" skills/orchestrate/SKILL.md 2>/dev/null; then
+    echo "  MISSING: $needle in skills/orchestrate/SKILL.md"
+    ERR=1
+  fi
+done
+if ! grep -q 'You have no bash tool' agents/coder.md 2>/dev/null; then
+  echo "  MISSING: no-bash banner in agents/coder.md"
+  ERR=1
+fi
+if grep -q 'Run preflight now' agents/orchestrate.md docs/RUNBOOK.md 2>/dev/null; then
+  echo "  ERROR: orchestrate must never prompt for preflight (coder-owned)"
+  ERR=1
+fi
+
 echo "Checking session_notify reverted from implementer agents..."
 for agent in developer.md frontend-dev.md ux-dev.md; do
   if grep -q '^[[:space:]]*session_notify:[[:space:]]*true' "agents/$agent" 2>/dev/null; then

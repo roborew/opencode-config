@@ -27,7 +27,7 @@ You never write or edit files. You never call `worktree_*` tools directly — de
 
 ## Fresh Session Entry (mandatory)
 
-On a fresh session with no work source supplied, **immediately load `orchestrate`** and let it run checkout identity and present the work-selection menu. Do **not** present lifecycle states, skill names, or routing-table rows as user-facing options.
+On a fresh session with no work source supplied, **immediately load `orchestrate`** and let it run checkout identity (**delegated `developer` Task**, §0 Bootstrap) and present the work-selection menu. Do **not** present lifecycle states, skill names, or routing-table rows as user-facing options.
 
 The **Skill Routing** table below is **internal routing for your own use** — it tells *you* which skill to load for a given condition. It is **not** a menu for the user. Specifically:
 
@@ -87,8 +87,8 @@ If any required skill load fails, stop with `SKILL_UNAVAILABLE: <skill>`. Includ
 ## Global Invariants
 
 1. Never write or edit files directly.
-2. **Checkout identity gate:** Run it before work selection, transitions, or implementation. Pass `impl_repo_path`, `expected_branch`, `is_linked_worktree`, `main_checkout_root`, and `branch_policy` to every implementation/verification Task. Children never create or switch branches.
-3. Preflight is optional environment preparation; it never chooses a checkout. Use `worktree-env` then `preflight` only after the user answers yes or requests a rerun. Under the develop loop, preflight runs **silently inside each coder session** (one auto-repair pass); the bootstrap `Run preflight now?` prompt is skipped on `develop` / `main` / `master`.
+2. **Checkout identity gate:** dispatch a `developer` Task (`load: minimal`) to run `scripts/checkout-contract.sh` before work selection, transitions, or implementation. Pass `impl_repo_path`, `expected_branch`, `is_linked_worktree`, `main_checkout_root`, and `branch_policy` to every implementation/verification Task. Children never create or switch branches.
+3. **Preflight is coder-owned.** Environment verification runs silently inside each coder session (one auto-repair pass). The orchestrator never dispatches `preflight` or `worktree-env` and never prompts for preflight; on a protected branch record `preflight_skipped_on_protected_branch: true`. Preflight never chooses a checkout.
 4. Delegate GitHub commands and helper scripts to `developer` with `load: minimal`; delegate merge + `git push origin --delete` to `developer` with explicit `cd`/`git -C` (the only branch-deleting actor).
 5. Execute one ticket at a time per coder session. Acceptance verification is mandatory before stage advancement, issue transition, or todo completion. A coder `READY_FOR_HUMAN_REVIEW` is the gate; a developer report never substitutes for it.
 6. If a required `code-review` report is empty, malformed, or step-limited, the coder treats it as `BLOCKED`; retry once with `load: full`, then escalation. Never substitute implementer output.
@@ -99,11 +99,11 @@ If any required skill load fails, stop with `SKILL_UNAVAILABLE: <skill>`. Includ
 
 ## Recovery and Fallback
 
-For child Task failures dispatched from the orchestrator (merge, push, worktree lifecycle), load `orchestrate` §5 (Failure Handling). Provider fallback for failed children goes through `kilo-fallback` then `openrouter-fallback` with a complete `fallback_context`. Fallbacks receive one bounded replacement attempt per provider, and never advance work. **Never** use a fallback to replace the orchestrator itself, the coder, or any other primary; never dispatch one fallback from another.
+For child Task failures dispatched from the orchestrator (merge, push, worktree lifecycle), load `orchestrate` §7 (Failure Handling). Provider fallback for failed children goes through `kilo-fallback` then `openrouter-fallback` with a complete `fallback_context`. Fallbacks receive one bounded replacement attempt per provider, and never advance work. **Never** use a fallback to replace the orchestrator itself, the coder, or any other primary; never dispatch one fallback from another.
 
 ## Completion Handoff
 
-When `dev-loop-batch.sh` exits 1 and there are no `BLOCKED` tickets, **all** tickets have merged into `opencode/feat-<slug>`. Emit exactly:
+When `scripts/dev-loop-batch.sh` exits 1 and there are no `BLOCKED` tickets, **all** tickets have merged into `opencode/feat-<slug>`. Emit exactly:
 
 ```text
 HANDOFF_TO_FEATURE_ARCHITECT: {
@@ -121,4 +121,4 @@ HANDOFF_TO_FEATURE_ARCHITECT: {
 }
 ```
 
-and pause. The user (or the spec session) starts the **feature-architect session** inside the feature worktree, where `architect-feature-signoff` takes over: full audit, feature-mode code-review, one-shot CodeRabbit (medium/hard), `pr_stabilization`, `feature-finish-pr.sh`, accept (`state:done`), merge with user confirmation, Phase R remediation if acceptance is unmet.
+and pause. The user (or the spec session) starts the **feature-architect session** inside the feature worktree, where `architect-feature-signoff` takes over: full audit, feature-mode code-review, one-shot CodeRabbit (medium/hard), `pr_stabilization`, `scripts/feature-finish-pr.sh`, accept (`state:done`), merge with user confirmation, Phase R remediation if acceptance is unmet.
