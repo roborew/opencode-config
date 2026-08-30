@@ -121,20 +121,17 @@ Dispatch `code-review` (`load: full`) with the full diff vs `develop` (delegated
 
 ### 2. PR-side CodeRabbit gate (medium / hard only)
 
-For **easy** → skip CodeRabbit (easy features skip the PR-side gate; each ticket already ran its local pre-flight inside its own coder session). For **medium** or **hard** → dispatch `review` once with `load: full`, `execution_mode: orchestrate_coderabbit_gate`, the feature worktree path, base branch `develop`, aggregate files/commits, and the `code-review` evidence from step 1. This is the **PR-side policy gate** — broader scope than the per-ticket local pre-flight: style, regressions, cross-branch context, and policy. Parse the inventory: `PASS` requires no critical/major/minor findings and trivial/info resolved. On `BLOCKED` → fix findings directly in this feature worktree (do not create `remediation:` tickets for CodeRabbit fixes); the PR-stabilization loop below owns the bounded fix flow. The develop orchestrator never dispatches CodeRabbit and never checks this verdict — `PASS` is reported in your terminal `feature_report:`.
+For **easy** → skip the PR-side gate (easy features skip it; each ticket already ran its local pre-flight inside its own coder session). For **medium** or **hard** → dispatch `code-review` once with `load: full`, `execution_mode: feature_coderabbit_gate`, the feature worktree path, `base_branch: develop`, aggregate files/commits, and the `code-review` evidence from step 1. This is the **PR-side policy gate** — style, regressions, cross-branch context, and policy (the run contract, severities, and report shape live in `skills/code-review/SKILL.md`). On `PASS` → continue. On `BLOCKED` → fix findings directly in this feature worktree (do not create `remediation:` tickets for CodeRabbit fixes); the PR-stabilization loop below owns the bounded fix flow. The develop orchestrator never dispatches CodeRabbit and never checks this verdict — `PASS` is reported in your terminal `feature_report:`.
 
 ### 3. Difficulty gates
 
-After CodeRabbit (or skip on easy):
-
-- **medium** → dispatch `review` once with the feature completion context; the **medium** gate's verdict (Merge-ready / Needs changes) feeds into the final report. Merge-ready → continue; Needs changes → fix-now in this feature worktree, then continue.
+- **easy** → none (the full-suite + acceptance evidence from step 1 completes the gate).
+- **medium** → the `completion_summary: Merge-ready | Needs changes` field from the step-1 feature-mode `code-review` report is the medium gate. Merge-ready → continue; Needs changes → fix-now in this feature worktree, then continue.
 - **hard** → dispatch `senior-dev` once with `execution_mode: scheduled_review`, the feature worktree path, the rolled-up acceptance + per-ticket `code_review_gate:` summaries, the CodeRabbit inventory, and the feature completion context. Senior-dev's `APPROVED` / `NEEDS_CHANGES` / `BLOCKED` feeds into the final report. Hard completes the bounded gate.
-
-(The old `helper` strategy-conformance step is dropped — senior-dev covers it.)
 
 ### 4. Documentation (before the PR opens)
 
-1. Dispatch `document` with `load: full`, the feature completion context, the rolled-up acceptance mapping, and the CodeRabbit inventory. `document` returns changelog (required) plus optional guides/architecture content per the parent's doc scope.
+1. Dispatch `document` with `load: full`, `execution_mode: feature_docs`, `feature_slug`, `doc_scope` (changelog required; guides/architecture per scope), the rolled-up acceptance mapping, and the CodeRabbit inventory. `document` returns changelog (required) plus optional guides/architecture content per `doc_scope`.
 2. Dispatch `scribe` (`load: full`) to write the docs to the approved paths:
    - `docs/changelog/<YYYY-MM-DD>-<slug>.md` (required)
    - `docs/guides/<slug>.md` (when in scope)
@@ -279,11 +276,10 @@ Emit the terminal report and stop. The coder agent Hard Rules' post-completion g
 ## See also
 
 - `agents/coder.md` — host posture + skill/task allow-list.
-- `agents/developer.md`, `agents/frontend-dev.md`, `agents/ux-dev.md`, `agents/code-review.md`, `agents/senior-dev.md`, `agents/review.md`, `agents/document.md`, `agents/scribe.md` — bounded children.
+- `agents/developer.md`, `agents/frontend-dev.md`, `agents/ux-dev.md`, `agents/code-review.md`, `agents/senior-dev.md`, `agents/document.md`, `agents/scribe.md` — bounded children.
 - `skills/ticket-lifecycle/SKILL.md` — the per-ticket inner loop whose `code_review_gate: all_stages: true APPROVED` outputs feed step 1's rolled-up acceptance.
-- `skills/code-review/SKILL.md` — feature-mode grading gate (full regression at sign-off).
+- `skills/code-review/SKILL.md` — feature-mode verification contract: full suite, PR-side CodeRabbit gate (`feature_coderabbit_gate`), medium completion summary.
 - `skills/docker-sandbox/SKILL.md` — `sandbox exec` vs direct compose matrix + lifecycle-aware destroy.
-- `skills/review/SKILL.md` — `orchestrate_coderabbit_gate` mode + difficulty-gate medium-difficulty completion-summary pass.
 - `skills/to-tickets/SKILL.md` — `remediation:` issue publishing (`--parent-issue`).
 - `scripts/issue-state-transition.sh`, `scripts/feature-finish-pr.sh`, `scripts/dev-loop-watch.sh` — shared lib scripts.
 - `plugins/worktree.js` — `worktree_create` and `session_notify`.

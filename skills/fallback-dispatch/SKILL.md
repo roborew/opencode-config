@@ -39,7 +39,7 @@ Optional but recommended:
 
 ## Validation rule (hard)
 
-- `original_agent` MUST resolve to an **allowed child** (`developer`, `frontend-dev`, `ux-dev`, `code-review`, `scribe`, `worktree-env`, `preflight`, `vision`, `helper`, `senior-dev`, `review`, `strategist`, `debugger`, `refactor`, `document`, `architecture-auditor`).
+- `original_agent` MUST resolve to an **allowed child** (`developer`, `frontend-dev`, `ux-dev`, `test-writer`, `code-review`, `scribe`, `worktree-env`, `preflight`, `vision`, `senior-dev`, `review`, `strategist`, `debugger`, `refactor`, `document`, `architecture-auditor`).
 - Any value outside that list (including `orchestrate`, `architect`, `kilo-fallback`, `openrouter-fallback`, or anything unrecognized) → reject with `FALLBACK_CONTEXT_INVALID`.
 - `original_skill` MUST be supplied and refer to a `SKILL.md` that the discovery system can resolve. If it does not resolve, the fallback reports `SKILL_UNAVAILABLE` — never infers behavior from the failed child's transcript.
 
@@ -68,7 +68,7 @@ A fallback **cannot**:
 - Replace a primary agent (`orchestrate`, `architect`).
 - Dispatch another fallback (no nested fallback).
 - Bypass senior-dev operator confirmation. If the original role would have asked the operator (per Hard Rules), the fallback asks too — and waits.
-- Bypass CodeRabbit quota (`review` runs at the documented gate, not from fallback).
+- Bypass CodeRabbit quota (`code-review` runs the documented CodeRabbit gates, not a fallback).
 - Bypass code-review / security-reviewer gating on acceptance criteria.
 - Bypass checkout identity / `branch_policy`.
 - Bypass write restrictions inherited from the original role (`scribe` writes markdown only; `code-review` edits nothing; etc.).

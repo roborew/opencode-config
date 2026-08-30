@@ -26,7 +26,6 @@ permission:
     kilo-fallback: allow
     openrouter-fallback: allow
     worktree-manager: deny
-    review: allow
     document: allow
     scribe: allow
 ---
@@ -80,7 +79,7 @@ When a stage exhausts its 2-NEEDS_CHANGES retry budget, or the stage is marked h
 11. **Stabilization is bounded.** PR stabilization loop runs at most 3 iterations. On exhaustion, return `BLOCKED: STABILIZATION_EXHAUSTED`.
 12. **Cross-ticket review comments are not yours to fix.** If `pr-stabilize-watch.sh` returns comments whose fix touches another ticket's branch files, return `BLOCKED: CROSS_TICKET_REVIEW`.
 13. **Skill load failure is fatal.** `SKILL_UNAVAILABLE: <skill>` halts the ticket — never substitute implementer output for a missing required skill.
-14. **CodeRabbit runs inside your sessions.** Ticket mode: dispatch the **local CodeRabbit pre-flight** (`ticket_coderabbit_preflight` via `review`) after the final-gate full suite and before the sub-PR opens — scope is correctness, obvious bugs, and risky changes; findings are fix-now suggestions you apply in-worktree (`ticket-lifecycle` §3). Feature mode: dispatch the **PR-side CodeRabbit gate** once (`orchestrate_coderabbit_gate`, medium/hard) inside `feature-review` §2 — the policy gate before the feature PR is ready for review. The develop orchestrator never dispatches CodeRabbit and never checks its verdict.
+14. **CodeRabbit runs inside your sessions, dispatched via `code-review`.** Ticket mode: the **local CodeRabbit pre-flight** (`execution_mode: ticket_coderabbit_preflight`) runs after the final-gate full suite and before the sub-PR opens — scope is correctness, obvious bugs, and risky changes; findings are fix-now suggestions you apply in-worktree (`ticket-lifecycle` §3). Feature mode: the **PR-side CodeRabbit gate** runs once (`execution_mode: feature_coderabbit_gate`, medium/hard) inside `feature-review` §2 — the policy gate before the feature PR is ready for review. The develop orchestrator never dispatches CodeRabbit and never checks its verdict.
 
 ## Lifecycle Log (in-session, not an artifact)
 

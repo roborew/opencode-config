@@ -187,20 +187,21 @@ fallback_context: {
 
 One attempt per provider per bounded Task; track `attempted_providers`. After both fail → `BLOCKED: FALLBACK_EXHAUSTED` and prompt the operator. **Never** dispatch one fallback from another. **Never** replace a primary agent (`coder`, `orchestrate`, `architect`).
 
-### 3. Local CodeRabbit pre-flight (before push/PR)
+### 3. Final gate — full suite + CodeRabbit pre-flight (before push/PR)
 
-After every per-stage gate has APPROVED and the final-gate `all_stages: true` suite is green, dispatch `review` once with `load: full`, `execution_mode: ticket_coderabbit_preflight`, the ticket worktree path, the per-stage code-review evidence, and the ticket issue context. Scope: correctness, obvious bugs, and risky changes only (narrow rule set — narrow further if this and the PR-side feature gate keep producing duplicate noise).
+1. **Final-gate full-suite verification** — dispatch `code-review` (`load: full`) for the **final** `all_stages: true` gate: the **full test suite** via the compose backend (full regression, integration, e2e). The per-stage code-review stays focused. On `APPROVED` → post the `code_review_gate:` comment with `all_stages: true`, `verdict: APPROVED`, and add the `verified` label. On `NEEDS_CHANGES` → fix in-worktree (TDD), re-run (grading + retry rules: the "Code-review grading gate" section below).
 
-- On `PASS` → proceed to step 4.
-- On `BLOCKED` → apply the fix-now suggestions in-worktree (TDD, behaviour changes only), commit `Refs: #<issue_number>`, push the ticket branch, re-run the pre-flight before the sub-PR opens. Max 2 retries, then `BLOCKED: PREFLIGHT_EXHAUSTED`.
-- On `SKIPPED` (CLI/auth unavailable) → record `coderabbit_preflight: SKIPPED` in the ticket_report and proceed. The PR-side feature gate is the policy blocker; missing the pre-flight does not block the ticket terminal report.
+2. **Local CodeRabbit pre-flight** — dispatch `code-review` once with `load: full`, `execution_mode: ticket_coderabbit_preflight`, the ticket worktree path, `base_branch: opencode/feat-<slug>`, and the per-stage code-review evidence. Scope: correctness, obvious bugs, and risky changes only (narrow rule set — narrow further if this and the PR-side feature gate keep producing duplicate noise).
+
+   - On `PASS` → proceed to §4.
+   - On `BLOCKED` → apply the fix-now suggestions in-worktree (TDD, behaviour changes only), commit `Refs: #<issue_number>`, push the ticket branch, re-run the pre-flight before the sub-PR opens. Max 2 retries, then `BLOCKED: PREFLIGHT_EXHAUSTED`.
+   - On `SKIPPED` (CLI/auth unavailable) → record `coderabbit_preflight: SKIPPED` in the ticket_report and proceed. The PR-side feature gate is the policy blocker; missing the pre-flight does not block the ticket terminal report.
 
 ### 4. Open the sub-PR
 
 1. Push your branch: `git push -u origin <expected_branch>` (delegated developer).
 2. Open the sub-PR via `gh pr create --base opencode/feat-<slug> --head <expected_branch> --title "feat(<slug>): ticket <issue> — <title>" --body <auto-body>` (delegated developer).
-3. Post the `code_review_gate:` comment with `all_stages: true`, `verdict: APPROVED`, and add the `verified` label.
-4. `state:ready-for-review` on the issue via `scripts/issue-state-transition.sh`.
+3. `state:ready-for-review` on the issue via `scripts/issue-state-transition.sh` (the sub-PR is now open; the final gate + `verified` label already landed in §3).
 
 ### 5. PR stabilization loop (max 3 iterations)
 
@@ -320,7 +321,7 @@ Final `all_stages: true` gate (before `state:ready-for-review`): same grading, p
 - `agents/developer.md`, `agents/frontend-dev.md`, `agents/ux-dev.md`, `agents/test-writer.md`, `agents/code-review.md` — stage executors.
 - `agents/senior-dev.md` + `skills/senior-dev/SKILL.md` — escalation_fix returns `HANDOFF_TO_DEVELOPER` to resume the wrapping coder.
 - `agents/kilo-fallback.md`, `agents/openrouter-fallback.md` — provider fallback for failed children (never replaces the coder).
-- `skills/code-review/SKILL.md` — per-stage focused vs final-gate full-suite split.
+- `skills/code-review/SKILL.md` — the verification contract: per-stage focused checks, final-gate full suite, local CodeRabbit pre-flight (`ticket_coderabbit_preflight`).
 - `skills/docker-sandbox/SKILL.md` — `sandbox exec` vs direct compose matrix + lifecycle-aware destroy.
 - `skills/preflight/SKILL.md` — silent preflight, `compose_test_file`/`verification_gap` reporting.
 - `scripts/issue-state-transition.sh`, `scripts/pr-stabilize-watch.sh`, `scripts/dev-loop-watch.sh`, `scripts/checkout-contract.sh` — moved lib scripts.

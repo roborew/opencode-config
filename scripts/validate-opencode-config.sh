@@ -344,7 +344,7 @@ done
 
 echo "Checking dead-name sweeps (repo-wide, excluding ADR history and the validator itself)..."
 DEAD_NAME_EXCLUDES=( --exclude-dir=.git --exclude-dir=.kilo --exclude-dir=adr --exclude-dir=smoke --exclude=validate-opencode-config.sh )
-for needle in orchestrate-sandbox architect-feature-signoff sandbox_feature_build HANDOFF_TO_FEATURE_ARCHITECT mode-f-accept-issues merge-feature-prs architect-plan architect-review archive_plan plan-artifact-schema; do
+for needle in orchestrate-sandbox architect-feature-signoff sandbox_feature_build HANDOFF_TO_FEATURE_ARCHITECT mode-f-accept-issues merge-feature-prs architect-plan architect-review archive_plan plan-artifact-schema github_feature_signoff orchestrate_coderabbit_gate; do
   if grep -R -n "${DEAD_NAME_EXCLUDES[@]}" -F "$needle" . >/dev/null 2>&1; then
     echo "  ERROR: dead name '$needle' must not appear in the source tree"
     ERR=1
@@ -366,12 +366,16 @@ for needle in 'feature_report:' 'feature-finish-pr.sh' 'state:done' 'remediation
     ERR=1
   fi
 done
-for needle in 'feature-review: allow' 'review: allow' 'document: allow' 'scribe: allow'; do
+for needle in 'feature-review: allow' 'code-review: allow' 'document: allow' 'scribe: allow'; do
   if ! grep -q "$needle" agents/coder.md 2>/dev/null; then
     echo "  MISSING: $needle in agents/coder.md"
     ERR=1
   fi
 done
+if grep -qE '^[[:space:]]*review:[[:space:]]*allow' agents/coder.md 2>/dev/null; then
+  echo "  ERROR: coder must not dispatch review (architect-only analysis agent; CodeRabbit + completion summary run via code-review)"
+  ERR=1
+fi
 if ! grep -q 'feature-review' agents/orchestrate.md 2>/dev/null; then
   echo "  MISSING: feature-review reference in agents/orchestrate.md"
   ERR=1
@@ -384,6 +388,20 @@ if ! grep -q 'close-feature-issues' skills/feature-complete/SKILL.md 2>/dev/null
   echo "  MISSING: close-feature-issues reference in skills/feature-complete/SKILL.md"
   ERR=1
 fi
+
+echo "Checking review/code-review role boundary (review is architect-only analysis)..."
+for f in agents/review.md skills/review/SKILL.md; do
+  if grep -qE 'coderabbit review|CODERABBIT_|ticket_coderabbit_preflight|feature_coderabbit_gate' "$f" 2>/dev/null; then
+    echo "  ERROR: $f must not run CodeRabbit or carry its execution modes (machine verification lives in the code-review agent; review is architect-only analysis)"
+    ERR=1
+  fi
+done
+for mode in ticket_coderabbit_preflight feature_coderabbit_gate; do
+  if ! grep -q "$mode" skills/code-review/SKILL.md 2>/dev/null; then
+    echo "  MISSING: $mode execution mode in skills/code-review/SKILL.md"
+    ERR=1
+  fi
+done
 
 echo "Checking dead skill names absent from live config and docs..."
 if grep -R -n --exclude-dir=.git --exclude-dir=.kilo --exclude-dir=adr --exclude-dir=smoke --exclude=validate-opencode-config.sh -E 'orchestrate-(execution|verification|recovery|completion|bootstrap|develop-loop|orchestrate-sandbox)|`feature-worktree`|`github-issue-run`|architect-(feature-signoff|review|plan)' agents skills rules docs README.md CONTEXT.md >/dev/null 2>&1; then

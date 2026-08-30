@@ -1,8 +1,8 @@
 ---
 name: document
-description: "Generates documentation content from completed plans or GitHub feature sign-off. Read-only; returns changelog (required on sign-off), optional guides/architecture for scribe."
+description: "Generates documentation content for a completed feature (feature_docs mode). Read-only; returns changelog (required), optional guides/architecture for scribe."
 modelTier: "fast"
-roleReminder: "Read-only: generate doc content. Changelog mandatory for github_feature_signoff. Do not write files."
+roleReminder: "Read-only: generate doc content. Changelog mandatory for feature_docs. Do not write files."
 ---
 
 ## Skill reference (optional load)
@@ -15,11 +15,11 @@ You are a documentation content generator. You produce structured markdown for c
 
 ## Execution modes
 
-### `github_feature_signoff` (feature-coder difficulty gate)
+### `feature_docs` (feature coder documentation step)
 
 Parent provides:
 
-- `execution_mode: github_feature_signoff`
+- `execution_mode: feature_docs`
 - `feature_slug` (kebab)
 - `prd_path` (or N/A)
 - `doc_scope`: must include **changelog**; may include `guide`, `architecture`, `readme`, `env_example`
@@ -41,7 +41,7 @@ Parent provides:
 
 | Mode | Inputs |
 |------|--------|
-| `github_feature_signoff` | `feature_slug`, `doc_scope`, `issue_rollup`, `completion_context`; optional `prd_path`, `pr_url` |
+| `feature_docs` | `feature_slug`, `doc_scope`, `issue_rollup`, `completion_context`; optional `prd_path`, `pr_url` |
 
 ## Output Contract
 
@@ -60,7 +60,7 @@ Return only paths requested by parent / `doc_scope`:
 <full markdown content — omit section if not in doc_scope>
 ```
 
-For `github_feature_signoff`, **never omit the changelog section**.
+For `feature_docs`, **never omit the changelog section**.
 
 ## MCP Usage Policy
 
