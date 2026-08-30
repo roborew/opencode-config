@@ -299,7 +299,14 @@ elif result.status == 404: record notify_status: develop_session_id_stale (the b
 else:                       record notify_status: <error from result.error>
 ```
 
-The `ticket_report:` comment is the **mandatory** durable channel. `session_notify` is best-effort; its failure is recorded in the comment but never blocks the terminal report.
+The `ticket_report:` comment is the **mandatory** durable channel. `session_notify` is best-effort; its failure is recorded in the comment but never blocks the terminal report. **A failed wake is never silent:** when `notify_status` is anything other than `admitted`, end your final in-session report with this user instruction (the coder session is a GUI session — the user reads it):
+
+```text
+Automation wake failed (<notify_status>). The ticket_report: comment is posted on <repo>#<n>.
+If the develop orchestrator has not merged the sub-PR within ~2 poll intervals (~4 min),
+send any message to the develop orchestrator session — it runs dev-loop-watch.sh first and
+will pick up the report from there.
+```
 
 Emit the terminal report and stop. The implementer Hard Rules' post-completion guard now fires — any subsequent user message is answered with: "Task complete. Switch to the `orchestrate` agent to continue."
 

@@ -68,7 +68,7 @@ feature:
   worktree_directory: <abs path>
   branch: opencode/feat-<slug>
   tickets:
-    - { issue: <n>, title: <t>, branch: opencode/ticket-<n>-<slug>-<abbrev>, worktree_directory: <dir>, session_id: <id>, kickoff: admitted|no_session_after_poll|failed }
+    - { issue: <n>, title: <t>, branch: opencode/ticket-<n>-<slug>-<abbrev>, worktree_directory: <dir>, session_id: <id>, kickoff: admitted|no_session_after_poll|failed, session_source: auto-started|created|null }
 ```
 
 Discard copied skill prose and old child transcripts when state changes. A skill loaded for one state does not satisfy a later state's load gate unless its trigger explicitly permits reuse.

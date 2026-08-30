@@ -123,7 +123,7 @@ The orchestrator calls you with a JSON-shaped `prompt`. Parse it and execute **o
    - If empty after trimming, fall back to `ticket`.
 2. **Collision dedupe:** list existing ticket worktree branches in this feature (`git -C <REPO_ROOT> branch -r | grep -E "origin/opencode/ticket-<issue>-<slug>-" || true`); if `<issue>-<slug>-<abbrev>` already exists, try `<abbrev>-2`, `<abbrev>-3`, … (cap at `-9`; on overflow return `BLOCKED: WORKTREE_NAME_COLLISION`).
 3. Derive `name = "ticket-" + issue + "-" + slug + "-" + abbrev`. Same validation as `create_feature` (no `/`, no whitespace, length ≤ 64).
-4. Call `worktree_create({ name, kickoff_agent, kickoff_message })`. The plugin writes a durable brief JSON to `<worktree-gitdir>/opencode-ticket-brief.json` (NEVER into the working tree — see `skills/ticket-lifecycle/SKILL.md` §0 Bootstrap), resolves the develop orchestrator session id, polls for the auto-started GUI session, and injects the kickoff message via `session.promptAsync`. The tool envelope is `{ ok, status, body: { name, branch, directory }, brief_file, session_id, develop_session_id, kickoff_agent, kickoff: "admitted"|"no_session_after_poll"|"failed" }`.
+4. Call `worktree_create({ name, kickoff_agent, kickoff_message })`. The plugin writes a durable brief JSON to `<worktree-gitdir>/opencode-ticket-brief.json` (NEVER into the working tree — see `skills/ticket-lifecycle/SKILL.md` §0 Bootstrap), resolves the develop orchestrator session id, polls for the auto-started GUI session in the worktree directory, and — when the server auto-started none — creates the coder session explicitly (`session_source: "created"`), then injects the kickoff message via `session.promptAsync`. The tool envelope is `{ ok, status, body: { name, branch, directory }, brief_file, session_id, session_source: "auto-started"|"created"|null, develop_session_id, kickoff_agent, kickoff: "admitted"|"no_session_after_poll"|"failed", human_instruction }`. On any kickoff failure, `human_instruction` carries the exact recovery steps — relay it verbatim to the parent, never summarize it away.
 5. **Pre-flight for base**: ensure `base` (e.g. `opencode/feat-<slug>`) exists on the remote. If not, return `BLOCKED: BASE_NOT_PUSHED` and instruct the orchestrator to push `opencode/feat-<slug>` first.
    ```bash
    git -C "$REPO_ROOT" rev-parse --verify "origin/$base" || echo MISSING
@@ -137,7 +137,7 @@ The orchestrator calls you with a JSON-shaped `prompt`. Parse it and execute **o
    ```
    The branch name stays `opencode/ticket-<issue>-<slug>-<abbrev>`; only the tree content is rebased onto the feature branch.
 8. Verify with `git -C "$directory" rev-parse --abbrev-ref HEAD` → expect `opencode/ticket-<issue>-<slug>-<abbrev>`. Verify with `git -C "$directory" merge-base --is-ancestor "origin/$base" HEAD` → expect success.
-9. Return the same shape as `create_feature` with `action: "create_ticket"`, plus `auto_spawn` echoed back from the input (default `false`), `abbrev` (the derived `<abbrev>`, including any `-2/-3` suffix), and the kickoff fields echoed from the tool envelope: `session_id`, `develop_session_id`, `kickoff` status, `brief_file`. If `kickoff !== "admitted"`, surface `blocker_code: "KICKOFF_FAILED"` (advisory, not a hard stop — the brief file fallback stands; the orchestrator may retry with `kickoff` action, or the user may open the GUI session and type any message — the bootstrap reads the brief file).
+9. Return the same shape as `create_feature` with `action: "create_ticket"`, plus `auto_spawn` echoed back from the input (default `false`), `abbrev` (the derived `<abbrev>`, including any `-2/-3` suffix), and the kickoff fields echoed from the tool envelope: `session_id`, `session_source`, `develop_session_id`, `kickoff` status, `brief_file`, `human_instruction`. If `kickoff !== "admitted"`, surface `blocker_code: "KICKOFF_FAILED"` (advisory, not a hard stop — the brief file fallback stands; the orchestrator may retry with `kickoff` action, or the user may open the GUI session and type any message — the bootstrap reads the brief file).
 10. **Idempotence note**: the brief file path is stable for the lifetime of the worktree gitdir. A second `create_ticket` for the same issue is blocked by Hard Rule 4 (name collision → `-2` suffix). A `kickoff` retry after a restart reuses the same brief file (the plugin overwrites it deterministically).
 
 ### `delete`
@@ -188,7 +188,7 @@ The orchestrator calls you with a JSON-shaped `prompt`. Parse it and execute **o
 
 ### `kickoff`
 
-Used to retry ticket kickoff after a `KICKOFF_FAILED` advisory (create-time race) or after a server restart + `reset` (the GUI session list is empty until the auto-start re-fires). The plugin resolves the worktree directory to its newest no-parent session via `session.list` and re-injects the same short pointer text.
+Used to retry ticket kickoff after a `KICKOFF_FAILED` advisory (create-time race) or after a server restart + `reset` (the GUI session list is empty until the auto-start re-fires). The plugin resolves the worktree directory to its newest no-parent session via `session.list` scoped to that worktree directory (with an unfiltered fallback) and re-injects the same short pointer text.
 
 1. Validate `directory` and `message` are present strings.
 2. Call `session_notify({ directory, agent: agent || "coder", message })`.
@@ -219,7 +219,7 @@ Every parent-facing report is JSON-shaped with these fields when failing:
 }
 ```
 
-`KICKOFF_FAILED` is an **advisory, not a hard stop**: the worktree exists, the brief file is durable on disk, and the ticket session can still bootstrap from it (the user opens the GUI session and types any message, the bootstrap reads the brief file and reconstructs from GitHub). The orchestrator records it and continues — the develop loop does not block on it.
+`KICKOFF_FAILED` is an **advisory, not a hard stop**: the worktree exists, the brief file is durable on disk, and the ticket session can still bootstrap from it (the user opens the GUI session and types any message, the bootstrap reads the brief file and reconstructs from GitHub). The orchestrator records it and continues — the develop loop does not block on it — but it **immediately relays the envelope's `human_instruction` to the user**: a kickoff failure is never silent.
 
 Never throw, never silently advance, never call `git worktree` as a fallback.
 

@@ -146,11 +146,13 @@ while true:
     }
 
     if kickoff != admitted:
-      # advisory only — brief file fallback stands.
-      # The orchestrator may retry via worktree-manager `kickoff` action,
-      # or the user may open the GUI session and type any message —
-      # ticket-lifecycle §0 reads the brief file and reconstructs from GitHub.
-      surface advisory in lifecycle log; do NOT pause the batch.
+      # Advisory for the batch (do NOT pause other tickets) — but NEVER silent:
+      # relay the envelope's human_instruction to the user immediately:
+      #   notify user: "Kickoff failed for #<n>: <human_instruction>"
+      # (recovery: worktree-manager `kickoff` retry, or the user opens the GUI
+      #  session at <worktree dir> and types any message — ticket-lifecycle §0
+      #  reads the brief file and reconstructs from GitHub)
+      record kickoff + session_source in lifecycle log; do NOT pause the batch.
       # The poller scripts/dev-loop-poller.sh + dev-loop-watch.sh will detect
       # the ticket_report: comment regardless of how the ticket was kicked.
 
@@ -231,7 +233,7 @@ The coder session owns `state:in-progress` (set during `ticket-lifecycle` §0 Bo
 | Failure | Where it surfaces | Response |
 |---|---|---|
 | `worktree-manager` returns `blocker_code` | develop orchestrator loop | Surface verbatim, stop, do not retry. |
-| `worktree-manager` returns `blocker_code: "KICKOFF_FAILED"` (advisory only) | develop orchestrator loop | Surface advisory in lifecycle log; brief file fallback stands. Retry via `worktree-manager` `kickoff` action, or the user opens the GUI session and types anything. **Do not pause the batch.** |
+| `worktree-manager` returns `blocker_code: "KICKOFF_FAILED"` (advisory only) | develop orchestrator loop | Relay the envelope's `human_instruction` to the user IMMEDIATELY (never silent); record advisory in lifecycle log; brief file fallback stands. Retry via `worktree-manager` `kickoff` action, or the user opens the GUI session and types anything. **Do not pause the batch.** |
 | `scripts/dev-loop-batch.sh` exits 1 | develop orchestrator loop | All tickets done → exit loop, go to §8. |
 | `scripts/dev-loop-batch.sh` exits 2 | develop orchestrator loop | gh/API failure — surface stderr verbatim, stop. Never treat as "all tickets done" (an empty lifecycle log + exit 2 is a transport failure, not completion). |
 | Ticket `BLOCKED: ENV_BLOCKED` after one repair | coder session → develop orchestrator | Surface `recommended_env_fix`, pause batch. |
