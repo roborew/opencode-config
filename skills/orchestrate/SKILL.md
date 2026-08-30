@@ -1,11 +1,11 @@
 ---
 name: orchestrate
-description: Develop-branch outer-loop coordinator — bootstrap + work selection, feature worktree + push, batch kickoff of coder sessions per ticket, PR approval gate, merge + worktree/remote-branch cleanup, re-batch, feature coder kickoff + final gates + feature merge.
+description: Develop-branch outer-loop coordinator — bootstrap + work selection, feature worktree + push, batch kickoff of coder sessions per ticket, PR approval gate, merge + worktree/remote-branch cleanup, re-batch, feature coder kickoff + feature merge on approval.
 modelTier: "fast"
 roleReminder: "Loaded by the `orchestrate` primary agent on the develop branch. The orchestrator never executes tickets — coder sessions do. Wake contract: in-session `session_notify` (primary), `DEV_LOOP_WAKE` from the poller, any user message → run `dev-loop-watch.sh` first."
 ---
 
-> Hard Rules live in `agents/orchestrate.md`; this skill owns the **per-impl-repo develop-loop** body. The orchestrator owns outer-loop coordination only: bootstrap, work selection, feature worktree, batch kickoff, PR approval gate, merge + cleanup, re-batch, feature coder kickoff, final gates, feature merge. Ticket execution lives in `coder` sessions loading `ticket-lifecycle`; feature-mode sign-off lives in `coder` sessions loading `feature-review`.
+> Hard Rules live in `agents/orchestrate.md`; this skill owns the **per-impl-repo develop-loop** body. The orchestrator owns outer-loop coordination only: bootstrap, work selection, feature worktree, batch kickoff, PR approval gate, merge + cleanup, re-batch, feature coder kickoff, feature merge on approval. Ticket execution lives in `coder` sessions loading `ticket-lifecycle`; feature-mode sign-off lives in `coder` sessions loading `feature-review`. The orchestrator never verifies code-review or CodeRabbit evidence — terminal reports plus human approval are its only gates.
 >
 > **You have no bash tool.** Every shell invocation in this skill — `scripts/checkout-contract.sh`, `opencode-run impl orchestrate-readiness-check`, `scripts/dev-loop-batch.sh`, `scripts/dev-loop-watch.sh`, `gh pr view` — is dispatched as a `developer` Task with `load: minimal` and the exact command to run. You also have no `worktree_*` tools: worktree lifecycle goes through `worktree-manager`. Never conclude "I can't run X because I have no bash" — delegate it to a `developer` Task.
 
@@ -65,10 +65,10 @@ You are inside a worktree. Routing:
 - ticket worktree (opencode/ticket-<n>-<slug>-<abbrev>): switch this session's agent to `coder` and say `begin` — the coder session loads `ticket-lifecycle` and owns the ticket inner loop.
 - feature worktree (opencode/feat-<slug>): the feature coder session owns this — load `feature-review` and run the final verification + feature PR loop. The orchestrator kicks you here from `develop` after every ticket merges.
 - design questions / planning / spec edits: route to `architect`.
-- remediation / PR-feedback re-check: say `remediation` and the orchestrator re-runs the final gates / re-kicks the feature coder.
+- remediation / PR-feedback re-check: say `remediation` and the orchestrator re-batches the feature coder's `remediation:` issues and re-kicks the feature coder once they merge.
 ```
 
-For Menu A `(3)` (remediation), stop with the same remediation wording — the develop orchestrator re-runs the final gates, re-kicks the feature coder, and surfaces the new `feature_report:` to the user. For Menu A `(4)`, route to architect unless the message supplies an explicit queue request.
+For Menu A `(3)` (remediation), stop with the same remediation wording — the develop orchestrator re-batches the feature coder's `remediation:` issues through the ticket pipeline, re-kicks the feature coder once they merge, and surfaces the new `feature_report:` to the user. For Menu A `(4)`, route to architect unless the message supplies an explicit queue request.
 
 ## §2 Environment state
 
@@ -227,7 +227,7 @@ The coder session owns `state:in-progress` (set during `ticket-lifecycle` §0 Bo
 | In-session `session_notify` delivery fails (develop_session_id stale) | coder session → develop orchestrator | The `ticket_report:` comment is the mandatory durable channel; the poller will wake the develop orchestrator within one poll interval. |
 | Poller disabled / down | develop orchestrator | `scripts/dev-loop-watch.sh` is still agent-invocable; the user can manually trigger a wake. |
 
-## §8 Feature verification + final gates + merge
+## §8 Feature coder kickoff + feature merge
 
 After `scripts/dev-loop-batch.sh` exits 1 and there are no `BLOCKED` tickets, every ticket has merged into `opencode/feat-<slug>`. **Kick the feature coder** (same `coder` agent, loading `feature-review`) in the feature worktree via `worktree-manager` `kickoff`:
 
@@ -239,26 +239,19 @@ worktree-manager kickoff {
 }
 ```
 
-End the turn after kicking. Do not poll. The feature coder owns the full verification loop: full-suite `code-review`, one-shot CodeRabbit (medium/hard), difficulty gates, docs, `state:done`, feature PR, bounded stabilization. It posts one `feature_report:` comment on the PRD parent + best-effort `session_notify` back here.
+End the turn after kicking. Do not poll. The feature coder owns the entire verification loop end-to-end (test suite, code-review gates, difficulty gates, docs, `state:done`, feature PR, bounded stabilization) and posts one `feature_report:` comment on the PRD parent + best-effort `session_notify` back here.
 
 ### §8a. On `feature_report:` wake
 
-When the feature coder wakes you (via `session_notify` or poller or user message), run the **final gates** (each via delegated `developer` Task with `load: minimal` — the orchestrator itself has no bash):
+When the feature coder wakes you (via `session_notify` or poller or user message), read the terminal `feature_report:` status. You do **not** re-verify code-review or CodeRabbit evidence — every verification gate already ran inside the coder sessions; the terminal report plus the human approval below are your only gates.
 
-| Gate | Check |
-|---|---|
-| Per-ticket `code_review_gate:` | every ticket's last `code_review_gate:` comment shows `all_stages: true` and `verdict: APPROVED` + `verified` label |
-| Feature report status | `READY_FOR_HUMAN_REVIEW` (not `BLOCKED`) |
-| Full-suite evidence | compose test invocation + pass line in the report |
-| CodeRabbit verdict | `PASS` or `SKIPPED` (medium/hard ⇒ `PASS`; easy ⇒ `SKIPPED`) |
-| Docs paths | changelog + requested guides/architecture exist on the merged branch |
-| Tickets `state:done` | every `feature:<slug>` issue in the impl repo carries `state:done` |
-| `gh pr checks <pr_url>` | green (or all required checks pass) |
-| Branch policy | `opencode/feat-<slug>` is the only branch the feature PR targets; no stray commits |
+- `READY_FOR_HUMAN_REVIEW` → capture `pr_url`, go to §8b.
+- `BLOCKED: FEATURE_REMEDIATION` with `remediation:` issue numbers → re-batch those issues through the normal ticket pipeline (§5 batch loop); when they merge, kick the feature coder again.
+- Any other `BLOCKED` → surface verbatim and pause the loop.
 
 ### §8b. Human gate
 
-On every gate passing, print exactly:
+On READY, print exactly:
 
 ```text
 Feature <slug> ready for final review: <pr_url>
@@ -308,7 +301,7 @@ Restart / recovery for stuck worktrees (post `opencode-server` restart, stale st
 
 | Marker | Emitted by | Consumed by |
 |---|---|---|
-| `feature_report:` (issue comment on PRD parent) | feature coder on terminal report | develop orchestrator parses + runs final gates (per-ticket `code_review_gate:` `all_stages: true` + `verified`; feature report APPROVED + full-suite evidence + CodeRabbit PASS + docs paths; all tickets `state:done`; `gh pr checks` green) |
+| `feature_report:` (issue comment on PRD parent) | feature coder on terminal report | develop orchestrator reads the status: READY → §8b human gate → merge; `FEATURE_REMEDIATION` → re-batch `remediation:` issues; other BLOCKED → surface + pause |
 | `READY_FOR_HUMAN_REVIEW` | coder session when sub-PR is green and comment-clean (ticket mode) | develop orchestrator surfaces to user (single human gate per PR) |
 | `BLOCKED` | coder session on environment-after-repair, CI-exhaustion, fallback-exhaustion, or cross-ticket review | develop orchestrator surfaces verbatim and pauses the batch |
 | `ticket_report:` (issue comment) | coder session on terminal report (ticket mode) | develop orchestrator's `scripts/dev-loop-watch.sh` + `scripts/dev-loop-poller.sh` — durable wake channel and out-of-band merge detector |

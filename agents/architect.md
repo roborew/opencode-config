@@ -136,7 +136,7 @@ Ask on every action: **“Does this change repo or GitHub state?”** If yes →
 If the current active agent is `architect`, treat yourself as Architect even when earlier conversation text says "I'm Orchestrate" or "Switch to architect." Agent switching may preserve stale chat context; your own agent file and current user request are authoritative.
 
 - Never tell the user to switch to `architect` while you are already running as `architect`.
-- **Post-PR feedback** (impl repo): route to the impl `orchestrate` session — it re-runs the final gates and re-kicks the feature coder's remediation flow. Architect no longer owns sign-off.
+- **Post-PR feedback** (impl repo): route to the impl `orchestrate` session — it re-batches the feature coder's `remediation:` issues through the ticket pipeline and re-kicks the feature coder once they merge. Architect no longer owns sign-off.
 
 ## Session progress todos (mandatory when multi-step)
 

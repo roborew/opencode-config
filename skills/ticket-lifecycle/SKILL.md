@@ -187,15 +187,22 @@ fallback_context: {
 
 One attempt per provider per bounded Task; track `attempted_providers`. After both fail → `BLOCKED: FALLBACK_EXHAUSTED` and prompt the operator. **Never** dispatch one fallback from another. **Never** replace a primary agent (`coder`, `orchestrate`, `architect`).
 
-### 3. Open the sub-PR
+### 3. Local CodeRabbit pre-flight (before push/PR)
+
+After every per-stage gate has APPROVED and the final-gate `all_stages: true` suite is green, dispatch `review` once with `load: full`, `execution_mode: ticket_coderabbit_preflight`, the ticket worktree path, the per-stage code-review evidence, and the ticket issue context. Scope: correctness, obvious bugs, and risky changes only (narrow rule set — narrow further if this and the PR-side feature gate keep producing duplicate noise).
+
+- On `PASS` → proceed to step 4.
+- On `BLOCKED` → apply the fix-now suggestions in-worktree (TDD, behaviour changes only), commit `Refs: #<issue_number>`, push the ticket branch, re-run the pre-flight before the sub-PR opens. Max 2 retries, then `BLOCKED: PREFLIGHT_EXHAUSTED`.
+- On `SKIPPED` (CLI/auth unavailable) → record `coderabbit_preflight: SKIPPED` in the ticket_report and proceed. The PR-side feature gate is the policy blocker; missing the pre-flight does not block the ticket terminal report.
+
+### 4. Open the sub-PR
 
 1. Push your branch: `git push -u origin <expected_branch>` (delegated developer).
 2. Open the sub-PR via `gh pr create --base opencode/feat-<slug> --head <expected_branch> --title "feat(<slug>): ticket <issue> — <title>" --body <auto-body>` (delegated developer).
-3. **Final-gate full-suite verification** — the **final** `all_stages: true` `code-review` gate before `state:ready-for-review` runs the **full test suite** via the compose backend (full regression, integration, e2e). The per-stage code-review stays focused.
-4. Post the `code_review_gate:` comment with `all_stages: true`, `verdict: APPROVED`, and add the `verified` label.
-5. `state:ready-for-review` on the issue via `scripts/issue-state-transition.sh`.
+3. Post the `code_review_gate:` comment with `all_stages: true`, `verdict: APPROVED`, and add the `verified` label.
+4. `state:ready-for-review` on the issue via `scripts/issue-state-transition.sh`.
 
-### 4. PR stabilization loop (max 3 iterations)
+### 5. PR stabilization loop (max 3 iterations)
 
 For `iter` in 1..3:
 
@@ -219,7 +226,7 @@ switch report.classify:
     loop back to next iter
 ```
 
-### 5. Terminal report
+### 6. Terminal report
 
 Emit the terminal report (in-session, normal prose), **post the `ticket_report:` comment on the issue** (mandatory durable channel — same pattern as `code_review_gate:`), and best-effort `session_notify` the develop orchestrator before stopping. **The coder itself** calls `session_notify` (it holds the tool — no delegated developer framing).
 
@@ -227,7 +234,7 @@ Emit the terminal report (in-session, normal prose), **post the `ticket_report:`
 
 Before stopping, lifecycle-aware destroy of the compose test backend (`docker-sandbox` §5 — `sandbox destroy` when the server sandbox is enabled, or `docker compose -f <compose_test_file> down` on local dev). Delegated `developer` Task with `load: minimal`.
 
-#### 5a. Post the `ticket_report:` comment (mandatory)
+#### 6a. Post the `ticket_report:` comment (mandatory)
 
 ```bash
 gh issue comment "<issue_number>" --repo "<repo>" --body "$(cat <<'EOF'
@@ -237,17 +244,19 @@ ticket_report:
   pr_url: <url>                    # READY only
   ci_state: pass|pending|fail       # READY only
   stages_completed: <count>
+  coderabbit_preflight: PASS | SKIPPED | BLOCKED   # see §3
+  coderabbit_preflight_skip_reason: <reason>  # SKIPPED only
   blocker_code: <code>             # BLOCKED only
   reason: <one-line>                # BLOCKED only
   next_action: <what the develop orchestrator should do>
-  notify_status: admitted|failed|<reason>   # see §5c
+  notify_status: admitted|failed|<reason>   # see §6c
 EOF
 )"
 ```
 
 The develop orchestrator's `dev-loop-watch.sh` parses `ticket_report:` comments to surface state and detect out-of-band GitHub-UI merges; the poller (`scripts/dev-loop-poller.sh`) also diffs them to wake the develop orchestrator when it is idle. Without this comment, the develop orchestrator stays paused and the watch/poller cannot detect the terminal state.
 
-#### 5b. Block shape
+#### 6b. Block shape
 
 Exactly one of:
 
@@ -259,11 +268,12 @@ READY_FOR_HUMAN_REVIEW:
   evidence:    <pr-stabilize-watch evidence line>
   comment_resolutions: [{ author, classification, action }]
   stages_completed:   <count>
+  coderabbit_preflight: PASS | SKIPPED
   awaiting_human_notes: <optional list of WIP/hold comments>
   next_action_for_parent: "merge sub-PR into opencode/feat-<slug> on human approval, then worktree + remote-branch cleanup"
 
 BLOCKED:
-  blocker_code: ENV_BLOCKED | STAGE_STUCK | STABILIZATION_EXHAUSTED | CROSS_TICKET_REVIEW | CHECKOUT_CONTRACT_FAILED | SKILL_UNAVAILABLE | FALLBACK_EXHAUSTED
+  blocker_code: ENV_BLOCKED | STAGE_STUCK | STABILIZATION_EXHAUSTED | CROSS_TICKET_REVIEW | CHECKOUT_CONTRACT_FAILED | SKILL_UNAVAILABLE | FALLBACK_EXHAUSTED | PREFLIGHT_EXHAUSTED
   reason:       <one-line>
   partial_evidence:
     stages_completed:  <count>
@@ -274,7 +284,7 @@ BLOCKED:
   recommended_helper_request: <one concrete request>
 ```
 
-#### 5c. Best-effort wake via `session_notify` (the coder holds the tool)
+#### 6c. Best-effort wake via `session_notify` (the coder holds the tool)
 
 ```text
 message = "ticket_report: <repo>#<n> | status: READY_FOR_HUMAN_REVIEW | pr: <url> | ci: pass | stages: <n>\nnext_action: merge sub-PR on human approval"

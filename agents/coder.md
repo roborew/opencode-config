@@ -46,7 +46,7 @@ On **any** first message (injected kickoff, user `begin`, or resume after server
 
 **Manual path.** The user may create a worktree (via the develop orchestrator) and open the GUI session directly. The auto-started GUI session's default agent doesn't matter — `kickoff_agent` passed via `promptAsync` switches it per message. The manual path relies on the Desktop UI's session agent selector: switch the session to `coder` and type `begin`. Bootstrap reconstructs the brief from the branch + GitHub if the file is absent.
 
-**Feature worktree mode.** When the develop orchestrator kicks you into the feature worktree (`opencode/feat-<slug>`) after the last ticket sub-PR merged, load **`feature-review`** and run its verification loop: full-suite `code-review`, one-shot CodeRabbit (medium/hard), difficulty gates, docs, `state:done` on every ticket, feature PR, bounded stabilization, one terminal `feature_report:` + `session_notify`. Same host posture as ticket mode — non-writing coordinator, all execution delegated to children.
+**Feature worktree mode.** When the develop orchestrator kicks you into the feature worktree (`opencode/feat-<slug>`) after the last ticket sub-PR merged, load **`feature-review`** and run its verification loop: full-suite `code-review`, **PR-side CodeRabbit** (medium/hard), difficulty gates, docs, `state:done` on every ticket, feature PR, bounded stabilization, one terminal `feature_report:` + `session_notify`. Same host posture as ticket mode — non-writing coordinator, all execution delegated to children.
 
 ## Context Discipline
 
@@ -80,6 +80,7 @@ When a stage exhausts its 2-NEEDS_CHANGES retry budget, or the stage is marked h
 11. **Stabilization is bounded.** PR stabilization loop runs at most 3 iterations. On exhaustion, return `BLOCKED: STABILIZATION_EXHAUSTED`.
 12. **Cross-ticket review comments are not yours to fix.** If `pr-stabilize-watch.sh` returns comments whose fix touches another ticket's branch files, return `BLOCKED: CROSS_TICKET_REVIEW`.
 13. **Skill load failure is fatal.** `SKILL_UNAVAILABLE: <skill>` halts the ticket — never substitute implementer output for a missing required skill.
+14. **CodeRabbit runs inside your sessions.** Ticket mode: dispatch the **local CodeRabbit pre-flight** (`ticket_coderabbit_preflight` via `review`) after the final-gate full suite and before the sub-PR opens — scope is correctness, obvious bugs, and risky changes; findings are fix-now suggestions you apply in-worktree (`ticket-lifecycle` §3). Feature mode: dispatch the **PR-side CodeRabbit gate** once (`orchestrate_coderabbit_gate`, medium/hard) inside `feature-review` §2 — the policy gate before the feature PR is ready for review. The develop orchestrator never dispatches CodeRabbit and never checks its verdict.
 
 ## Lifecycle Log (in-session, not an artifact)
 
@@ -113,4 +114,4 @@ When all stages are `APPROVED` and the final-gate full-suite compose run is gree
 3. Tear down the compose test backend (lifecycle-aware destroy, `docker-sandbox` §5).
 4. End your turn. The implementer Hard Rules' post-completion guard fires after this terminal report.
 
-The ticket sub-PR + stabilization + terminal-report procedure (including the comment shape, the BLOCKED envelope, and the `session_notify` fallback when `develop_session_id` is stale) lives in `ticket-lifecycle` §3–§5. The feature-mode procedure (full-suite + CodeRabbit + difficulty gates + docs + `state:done` + feature PR + stabilization + `feature_report:`) lives in `feature-review` §1–§9.
+The ticket sub-PR + stabilization + terminal-report procedure (including the comment shape, the BLOCKED envelope, the `session_notify` fallback when `develop_session_id` is stale, and the **local CodeRabbit pre-flight** before push) lives in `ticket-lifecycle` §3–§6. The feature-mode procedure (full-suite + **PR-side CodeRabbit** + difficulty gates + docs + `state:done` + feature PR + stabilization + `feature_report:`) lives in `feature-review` §1–§9.

@@ -5,7 +5,7 @@ modelTier: "fast"
 roleReminder: "Loaded by the `coder` agent in the feature worktree after all ticket sub-PRs merge into `opencode/feat-<slug>`. Sign-off duty migrated from the deleted architect review skill."
 ---
 
-> You are operating inside a **coder** session that was kicked into the feature worktree (`opencode/feat-<slug>`) by the develop orchestrator after the last ticket sub-PR merged. The ticket inner loop has already finished for every ticket in this feature — you own the feature-mode verification: full test suite + e2e via the compose backend, acceptance replay, one-shot CodeRabbit (medium/hard), difficulty gates, docs, `state:done` on every ticket, the feature PR, bounded stabilization, and one terminal `feature_report:` (or `BLOCKED: FEATURE_REMEDIATION` with `remediation:` issues). The spec `feature-complete` skill later verifies + closes; impl feature PR merge happens in the orchestrator, not here.
+> You are operating inside a **coder** session that was kicked into the feature worktree (`opencode/feat-<slug>`) by the develop orchestrator after the last ticket sub-PR merged. The ticket inner loop has already finished for every ticket in this feature (each ticket ran its own local CodeRabbit pre-flight inside its coder session) — you own the feature-mode verification: full test suite + e2e via the compose backend, acceptance replay, the PR-side CodeRabbit gate (medium/hard), difficulty gates, docs, `state:done` on every ticket, the feature PR, bounded stabilization, and one terminal `feature_report:` (or `BLOCKED: FEATURE_REMEDIATION` with `remediation:` issues). The spec `feature-complete` skill later verifies + closes; impl feature PR merge happens in the orchestrator on your READY report + human approval — the orchestrator never re-verifies your evidence.
 
 ## Hard rules
 
@@ -119,9 +119,9 @@ Dispatch `code-review` (`load: full`) with the full diff vs `develop` (delegated
 - On `BLOCKED` (cross-cutting blocker) → return `BLOCKED` (cross-ticket / cross-cutting).
 - `code-review` destroys the sandbox after `APPROVED` or `ENV_BLOCKED`, keeps alive on `BLOCKED`.
 
-### 2. One-shot CodeRabbit (medium / hard only)
+### 2. PR-side CodeRabbit gate (medium / hard only)
 
-For **easy** → skip CodeRabbit (the "skip CodeRabbit for easy" invariant). For **medium** or **hard** → dispatch `review` once with `load: full`, `execution_mode: orchestrate_coderabbit_gate`, the feature worktree path, base branch `develop`, aggregate files/commits, and the `code-review` evidence from step 1. Parse the inventory: `PASS` requires no critical/major/minor findings and trivial/info resolved. On `BLOCKED` → fix findings directly in this feature worktree (do not create `remediation:` tickets for CodeRabbit fixes); the PR-stabilization loop below owns the bounded fix flow.
+For **easy** → skip CodeRabbit (easy features skip the PR-side gate; each ticket already ran its local pre-flight inside its own coder session). For **medium** or **hard** → dispatch `review` once with `load: full`, `execution_mode: orchestrate_coderabbit_gate`, the feature worktree path, base branch `develop`, aggregate files/commits, and the `code-review` evidence from step 1. This is the **PR-side policy gate** — broader scope than the per-ticket local pre-flight: style, regressions, cross-branch context, and policy. Parse the inventory: `PASS` requires no critical/major/minor findings and trivial/info resolved. On `BLOCKED` → fix findings directly in this feature worktree (do not create `remediation:` tickets for CodeRabbit fixes); the PR-stabilization loop below owns the bounded fix flow. The develop orchestrator never dispatches CodeRabbit and never checks this verdict — `PASS` is reported in your terminal `feature_report:`.
 
 ### 3. Difficulty gates
 
