@@ -2,7 +2,9 @@
   "$schema": "https://opencode.ai/config.json",
   "default_agent": "orchestrate",
   "plugin": [
-    "./plugins/probe.js"
+    "./plugins/worktree.js",
+    "./plugins/localhost-to-docker-host.js",
+    "./plugins/rewrite-worktree-gitdirs.js"
   ],
   "instructions": [
     "rules/testing.md",
