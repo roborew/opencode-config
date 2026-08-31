@@ -2,7 +2,10 @@
   "$schema": "https://opencode.ai/config.json",
   "default_agent": "orchestrate",
   "plugin": [
-    "@warp-dot-dev/opencode-warp"
+    "@warp-dot-dev/opencode-warp",
+    "./plugins/worktree.js",
+    "./plugins/localhost-to-docker-host.js",
+    "./plugins/rewrite-worktree-gitdirs.js"
   ],
   "instructions": [
     "rules/testing.md",
