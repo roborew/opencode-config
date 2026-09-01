@@ -88,6 +88,8 @@ Track `auto_spawn_consent` (set on first prompt) and `MCP_FALLBACK`. Do not crea
 
 ## §4 Feature worktree + push
 
+> One-op-per-Task applies here. `create_feature` is one dispatch. If the user request also names ticket worktrees, do **not** run `create_feature` and `create_ticket` in the same Task — dispatch `create_feature` first, then continue in the next Task once its envelope returns (per the Hard rule above). The §5 batch loop below already dispatches one `create_ticket` per loop iteration.
+
 Dispatch `worktree-manager` `create_feature`:
 
 ```json
@@ -333,6 +335,7 @@ There is no ticket-dispatch marker — the coder session is the auto-started GUI
 ## Hard rules for the develop orchestrator
 
 - Never call `worktree_*` tools directly — delegate to `worktree-manager`.
+- **One worktree op per `worktree-manager` Task.** Every `create_feature` / `create_ticket` / `delete` / `reset` / `kickoff` call is its own Task — one op, one Task, one round-trip. If the user names N worktree ops in a single message (e.g. "create a feature worktree and two ticket worktrees"), dispatch N separate `worktree-manager` Tasks **in order**, each as its own `developer`-style dispatch with idempotent pre-checks (does the worktree already exist? if yes, exit fast). Never chain multiple `worktree_*` calls inside a single Task. Rationale: a hang or slow call in one chained op silently truncates the rest with no error payload; sequential one-per-Task dispatches stay sub-second on a warm daemon (measured: 3 creates ≈ 3.1s) and each emits a clean envelope on failure. If you spot a chained-worktree pattern in a user message or draft dispatch, flag it and split before acting.
 - Never dispatch ticket sessions via the `task` tool — the auto-started GUI session for the ticket worktree IS the coder session. The `task` tool would inherit the `develop` cwd and `scripts/checkout-contract.sh --verify` would reject the subagent.
 - Never run `git push origin --delete` from the develop orchestrator session itself — delegate to a `developer` Task with explicit `cd`/`git -C`. This is the only branch-deleting actor.
 - Children never create, switch, checkout, or rename branches. The develop orchestrator is the only branch-switching actor.
