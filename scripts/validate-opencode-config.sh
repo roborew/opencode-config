@@ -109,6 +109,27 @@ else
   echo "  WARN: $AUDIT_DIR does not exist — audit is a no-op until worktree-manager transcripts are captured. Scaffold with: mkdir -p $AUDIT_DIR"
 fi
 
+echo "Checking session-manager blocker_code allowlist + obsolete NO_SESSION_IN_DIRECTORY sweep..."
+SESSION_KNOWN_BLOCKER_CODES='SESSION_TOOLS_NOT_REGISTERED|SESSION_API_FAILED|NO_SESSION_FOR_WORKTREE|SESSION_NOT_FOUND|LIST_SCOPE_INCOMPLETE|AMBIGUOUS_TARGET|KICKOFF_FAILED|KICKOFF_DIRECTORY_BIND_FAILED|KICKOFF_AGENT_BIND_MISMATCH|KICKOFF_RESOLVED_TO_SELF|WORKTREE_API_FAILED|WORKTREE_TOOLS_NOT_REGISTERED|WORKTREE_NAME_COLLISION|WORKTREE_NOT_CLEAN_OR_PUSHED|BASE_NOT_PUSHED|PROTECTED_PROJECT_ROOT|NOT_A_GIT_WORKTREE|WORKTREE_RECOVERY_FAILED|HANDSHAKE_PUSH_FAILED|HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED|TICKET_NOT_FORKED_FROM_FEATURE|directory_bind_failed|agent_bind_mismatch|no_session_in_directory|session_not_found|ambiguous_target|list_scope_incomplete'
+SESSION_FILES="agents/session-manager.md agents/worktree-manager.md skills/orchestrate/SKILL.md skills/ticket-lifecycle/SKILL.md skills/feature-review/SKILL.md"
+for f in $SESSION_FILES; do
+  [[ -f "$f" ]] || continue
+  CODE_LINES=$(grep -nE '"blocker_code":[[:space:]]*"[A-Za-z_0-9]+"' "$f" 2>/dev/null || true)
+  if [[ -n "$CODE_LINES" ]]; then
+    LISTED=$(echo "$CODE_LINES" | grep -oE '"[A-Za-z_0-9]+"' | grep -v '"blocker_code"' | tr -d '"' | sort -u)
+    for code in $LISTED; do
+      if ! echo "$code" | grep -qE "^($SESSION_KNOWN_BLOCKER_CODES)$"; then
+        echo "  INVENTED blocker_code: \"$code\" in $f (not in canonical blocker_code allowlist)"
+        ERR=1
+      fi
+    done
+  fi
+done
+if grep -R -n --exclude-dir=.git --exclude-dir=.kilo 'NO_SESSION_IN_DIRECTORY' agents skills >/dev/null 2>&1; then
+  echo "  ERROR: obsolete NO_SESSION_IN_DIRECTORY literal must be removed from agents/ and skills/ (replaced by NO_SESSION_FOR_WORKTREE + create_if_absent:false opt-in)"
+  ERR=1
+fi
+
 echo "Checking moved lib scripts exist under scripts/..."
 for f in scripts/checkout-contract.sh scripts/issue-state-transition.sh scripts/dev-loop-batch.sh scripts/dev-loop-watch.sh scripts/pr-stabilize-watch.sh scripts/feature-finish-pr.sh scripts/dev-loop-poller.sh; do
   if [[ ! -f "$f" ]]; then

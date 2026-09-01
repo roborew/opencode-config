@@ -288,6 +288,8 @@ BLOCKED:
 
 #### 9c. Best-effort wake via `session-manager.notify` (the coder dispatches the subagent)
 
+When the explicit `develop_session_id` is passed and `session_list` does not return it, `session-manager.notify` returns `error: "session_not_found"` (hard stop — no silent create) — the durable `feature_report:` comment is the wake channel.
+
 ```text
 message = "feature_report: feature:<slug> | status: READY_FOR_HUMAN_REVIEW | pr: <url> | ci: pass | tickets: <n>"
 # or, for BLOCKED:
@@ -305,6 +307,7 @@ result = dispatch session-manager notify {
 }
 
 if result.admitted == true: record notify_status: admitted
+elif result.error == "session_not_found" and result.session_id == develop_session_id: record notify_status: develop_session_id_stale
 elif result.status == 404: record notify_status: develop_session_id_stale
 else:                       record notify_status: <error from result.error>
 ```

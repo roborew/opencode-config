@@ -43,7 +43,7 @@ Callers dispatch you with a JSON-shaped prompt. Parse it and execute **one** act
 
 | `action`  | Required fields                                                                                          |
 | --------- | -------------------------------------------------------------------------------------------------------- |
-| `kickoff` | `directory` (required, absolute worktree dir), `agent` (optional, default `"coder"`), `message` (required, short pointer) |
+| `kickoff` | `directory` (required, absolute worktree dir), `agent` (optional, default `"coder"`), `message` (required, short pointer), `create_if_absent` (optional, default `true`) |
 | `notify`  | `sessionID` **xor** `directory` (one required), `agent` (optional), `message` (required)                |
 
 ## Procedures
@@ -54,8 +54,8 @@ Used for the per-ticket kickoff in `orchestrate` §5a, the post-merge feature co
 
 Resolution policy: **scoped reuse if matching, scoped create otherwise — never fall back to the global list**. You are the owner of sessions and know what's going on for the worktree directory you were asked to bind.
 
-1. Validate `directory` and `message` are non-empty strings. Resolve `agent` (default `"coder"`).
-2. Call `session_list({ directory })` — **scoped**. Do not call `session_list({})`. Treat any non-ok body or empty array as "no candidate yet".
+1. Validate `directory` and `message` are non-empty strings. Resolve `agent` (default `"coder"`). Resolve `create_if_absent` (default `true` — preserves the historical behavior of `kickoff`; opt in to `false` to force `NO_SESSION_FOR_WORKTREE` when zero candidates exist).
+2. Call `session_list({ scope: "directory", directory })` — **scoped**. The plugin forwards `?directory=<dir>` to the server (advisory), but the server may ignore it on some builds. Do not call `session_list({})` (unfiltered — Hard Rule 4). Treat any non-ok body or empty array as "no candidate yet".
 3. **Client-side filter to reuse candidates.** The server's scoped list filter is advisory and may return the full table in some builds. Iterate the returned array and keep only sessions where both:
    - `s.directory === directory` (match both `directory` and `directory` — handle either server casing defensively)
    - `s.agent === agent` (match both `agent` and `agent` — handle either server casing defensively)
@@ -67,17 +67,17 @@ Resolution policy: **scoped reuse if matching, scoped create otherwise — never
    - If `noParent` is non-empty, pick the candidate with the max `updatedAt` / `updated_at` (fall back to `0` if missing). Set `resolution: "reused"`, `reused: true`, `agent_match: true`, `directory_match: true` (the step-3 filter already enforces both).
    - Else if `withParent` is non-empty (user manually opened a sub-session of the coder), pick the candidate with the max `updatedAt` / `updated_at`. Set `resolution: "reused"`, `reused: true`, `agent_match: true`, `directory_match: true`.
    - Otherwise, fall through to step 5 (treat as no candidate).
-5. **No matching session** — call `session_create({ directory, agent, title: "ticket coder session" })`.
-   - The plugin forwards `directory` as `?directory=...` on the POST URL; the server binds the new session to that worktree directory.
-   - Use the returned `id` as the chosen session id.
-   - **Verify the session is bound to the right directory AND agent.** The create response can carry the session object back, but a silent server-side drift (e.g. a build that ignores `?directory=`) would leave the coder in the wrong cwd and `scripts/checkout-contract.sh --verify` would reject it. So re-list scoped to `directory`, find the entry with the new id, and check both:
-     - `s.directory === directory` (handle either server casing defensively — `directory` / `directory`).
-     - `s.agent === agent` (handle either server casing defensively — `agent` / `agent`).
-   - On either mismatch, surface:
-     - `directory` mismatch: `{ok: false, admitted: false, action: "kickoff", error: "directory_bind_failed", session_id, target_directory: directory, manualRecovery: "curl -u \"${OPENCODE_SERVER_USERNAME:-opencode}:${OPENCODE_SERVER_PASSWORD:-opencode}\" -H 'Content-Type: application/json' -d '<body>' \"<serverUrl>/session?directory=<encoded-directory>\""}`. The session exists but is not bound to the worktree dir — coder would load the wrong repo context.
-     - `agent` mismatch: `{ok: false, admitted: false, action: "kickoff", error: "agent_bind_mismatch", session_id, target_directory: directory, manualRecovery: "..."}`. Same shape.
-     - **Both mismatches are hard stops** — the kickoff is not `admitted` and the orchestrator pauses the batch per `BLOCKED: KICKOFF_DIRECTORY_BIND_FAILED` / `BLOCKED: KICKOFF_AGENT_BIND_MISMATCH`.
-   - If both pass, set `resolution: "created"`, `reused: false`, `agent_match: true`, `directory_match: true`.
+5. **No matching session** — handle per `create_if_absent`:
+   - **`create_if_absent === true` (default):** call `session_create({ directory, agent, title: "ticket coder session" })`. The plugin forwards `directory` as `?directory=...` on the POST URL; the server binds the new session to that worktree directory. Use the returned `id` as the chosen session id.
+     - **Verify the session is bound to the right directory AND agent via a global-scope re-list.** A scoped re-list would re-introduce the bug we just fixed (the previous scoped re-list missed worktree-bound sessions because the opencode server `?directory=` filter excluded them). Call `session_list({})` (no args — global is the default), find the entry with the new id, and check both:
+       - `s.directory === directory` (handle either server casing defensively — `directory` / `directory`).
+       - `s.agent === agent` (handle either server casing defensively — `agent` / `agent`).
+     - On either mismatch, surface:
+       - `directory` mismatch: `{ok: false, admitted: false, action: "kickoff", error: "directory_bind_failed", blocker_code: "KICKOFF_DIRECTORY_BIND_FAILED", session_id, target_directory: directory, manualRecovery: "..."}`. The session exists but is not bound to the worktree dir — coder would load the wrong repo context.
+       - `agent` mismatch: `{ok: false, admitted: false, action: "kickoff", error: "agent_bind_mismatch", blocker_code: "KICKOFF_AGENT_BIND_MISMATCH", session_id, target_directory: directory, manualRecovery: "..."}`. Same shape.
+       - **Both mismatches are hard stops** — the kickoff is not `admitted` and the orchestrator pauses the batch per `BLOCKED: KICKOFF_DIRECTORY_BIND_FAILED` / `BLOCKED: KICKOFF_AGENT_BIND_MISMATCH`.
+     - If both pass, set `resolution: "created"`, `reused: false`, `agent_match: true`, `directory_match: true`.
+   - **`create_if_absent === false`:** do not call `session_create`. Surface `{ok: false, admitted: false, action: "kickoff", blocker_code: "NO_SESSION_FOR_WORKTREE", target_directory: directory, error: "no_session_in_directory", manualRecovery: "..."}`. The caller (worktree-manager retry path or operator) decides what to do next.
 6. **Inject** the kickoff message — call `session_notify({ sessionID: <chosen_id>, agent, message })`.
    - Use the **chosen id** (from step 4 reuse or step 5 create) and the **requested agent**, not the session's stored agent.
 7. Compose and return the envelope:
@@ -109,11 +109,12 @@ Resolution policy: **scoped reuse if matching, scoped create otherwise — never
 
 Used for coder → orchestrator terminal-report injection (the coder holds `session_notify` in the old design; here the coder dispatches `session-manager` `notify` with the stored `develop_session_id`).
 
-**This action is unchanged from the previous design.** The unfiltered fallback in directory-mode is **legitimate here** — the coder legitimately needs to resolve the develop orchestrator when `develop_session_id` is missing. The kickoff self-resolve bug was specific to the `kickoff` path; `notify` keeps its existing two-mode behavior.
+**This action is unchanged from the previous design.** The plugin's directory-mode resolve now defaults to `scope: "global"` (unfiltered) and the client-side filter does the directory match — the previous scoped-list fallback was the bug. Both modes keep working:
 
 1. Validate exactly one of `sessionID` / `directory` is present and `message` is non-empty.
-2. Call `session_notify({ sessionID: <id> | directory: <dir>, agent, message })`. The plugin handles the resolution (id-mode → direct; directory-mode → scoped list with unfiltered fallback for the directory resolve).
-3. Return the same envelope shape as `kickoff` with `action: "notify"`. The `resolution` field reflects what the plugin reported (may be `"reused"` or `"none"` — directory-mode reuse).
+2. **`sessionID` mode:** call `session_notify({ sessionID: <id>, agent, message })`. The plugin asserts the id appears in `GET /session` (global list); a miss returns `error: "session_not_found"` with `manualRecovery` (the curl snippet for `/session/<id>/prompt_async`) — no silent create.
+3. **`directory` mode:** call `session_notify({ directory: <dir>, agent, message })`. The plugin does a global-scope `GET /session`, client-side filter by directory, then `resolveNewestNoParent` to pick the target. No scoped fallback; if the directory is empty, returns `error: "no_session_in_directory"`.
+4. Return the same envelope shape as `kickoff` with `action: "notify"`. The `directory_match` and `agent_match` fields come from the plugin's envelope; the `resolution` field reflects what the plugin reported (may be `"reused"` or `"none"` — directory-mode reuse).
 
 ## Failure reporting contract
 
@@ -122,7 +123,7 @@ Every parent-facing report is JSON-shaped:
 ```json
 {
   "ok": false,
-  "blocker_code": "SESSION_TOOLS_NOT_REGISTERED" | "SESSION_API_FAILED",
+  "blocker_code": "SESSION_TOOLS_NOT_REGISTERED" | "SESSION_API_FAILED" | "NO_SESSION_FOR_WORKTREE" | "SESSION_NOT_FOUND" | "LIST_SCOPE_INCOMPLETE" | "AMBIGUOUS_TARGET",
   "status": <http status or 0>,
   "error": <tool body or stderr>,
   "manualRecovery": "<curl snippet or GUI fallback from the tool>",
@@ -132,7 +133,12 @@ Every parent-facing report is JSON-shaped:
 
 `SESSION_API_FAILED` is **advisory, not a hard stop** — the parent surfaces the envelope's `manualRecovery` to the user immediately and continues. The kickoff message was composed but not delivered; the coder can still bootstrap from the branch + GitHub if the worktree session exists, or the user can open the GUI session and type any message.
 
-`NO_SESSION_IN_DIRECTORY` no longer exists in the `kickoff` path — an empty scoped list means "create" (never "fail"). A session-create failure is reported as `SESSION_API_FAILED`.
+- `NO_SESSION_FOR_WORKTREE` — `kickoff({ directory, create_if_absent: false })` and zero live sessions for that directory. Do not retry; surface to the parent verbatim.
+- `SESSION_NOT_FOUND` — `notify({ sessionID })` and `GET /session` (global) has no entry with that id. The durable `ticket_report:` / `feature_report:` issue comment is the wake channel.
+- `LIST_SCOPE_INCOMPLETE` — internal: scoped `GET /session?directory=...` returned matching entries but `resolveNewestNoParent` could not pick one (unexpected server shape). Surface verbatim; do not retry.
+- `AMBIGUOUS_TARGET` — `notify({ sessionID, directory })` and the looked-up session is bound to a different directory than `args.directory` (caller misuse — explicit id wins, but the binding mismatch is a hard signal). Surface verbatim.
+
+The obsolete `"no_session_in_directory"` `blocker_code` no longer exists in `kickoff` (an empty scoped list means "create" when `create_if_absent` is the default `true`; only the explicit `create_if_absent: false` opt-in returns `NO_SESSION_FOR_WORKTREE`). The string `no_session_in_directory` survives in the plugin envelope as a backward-compatible `error` code for the directory-mode path in `session_notify`. A session-create failure is reported as `SESSION_API_FAILED`.
 
 Never throw, never silently advance, never bypass the plugin tools with raw HTTP calls.
 

@@ -195,7 +195,7 @@ Used to retry ticket kickoff after a `KICKOFF_FAILED` advisory (the orchestrator
 2. Dispatch `session-manager.kickoff { directory, agent: agent || "coder", message }`.
 3. Return:
    - On `{ ok: true, admitted: true }` → `{ ok: true, action: "kickoff", directory, session_id, session_source, agent }`.
-   - On `{ ok: false, blocker_code: "NO_SESSION_IN_DIRECTORY" | "SESSION_API_FAILED" }` → surface the envelope verbatim to the parent, including `manualRecovery`. The kickoff message is the contract; the coder can still bootstrap from the branch + GitHub via `ticket-lifecycle` §0, or the user can open the GUI session and type any message.
+   - On `{ ok: false, blocker_code: "NO_SESSION_FOR_WORKTREE" | "SESSION_API_FAILED" }` → surface the envelope verbatim to the parent, including `manualRecovery`. `NO_SESSION_FOR_WORKTREE` only fires when the orchestrator passed `create_if_absent: false` (the explicit opt-in). The kickoff message is the contract; the coder can still bootstrap from the branch + GitHub via `ticket-lifecycle` §0, or the user can open the GUI session and type any message.
    - On `SESSION_TOOLS_NOT_REGISTERED` → surface verbatim; the orchestrator routes to deploy `plugins/session-manager.js` and restart the server.
 4. **Never delete or recreate the worktree on a failed kickoff.** The worktree exists; only the message injection failed. Do not retry by re-running `create_ticket` (Hard Rule 4 name collision would suffix `-2`).
 

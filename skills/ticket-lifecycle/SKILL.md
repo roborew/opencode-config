@@ -325,6 +325,8 @@ BLOCKED:
 
 #### 6c. Best-effort wake via `session-manager.notify` (the coder dispatches the subagent)
 
+When the explicit `develop_session_id` is passed and `session_list` does not return it, `session-manager.notify` returns `error: "session_not_found"` (hard stop — no silent create) — the durable `ticket_report:` comment + `scripts/dev-loop-poller.sh` are the wake channel.
+
 ```text
 message = "ticket_report: <repo>#<n> | status: READY_FOR_HUMAN_REVIEW | pr: <url> | ci: pass | stages: <n>\nnext_action: merge sub-PR on human approval"
 # or, for BLOCKED:
@@ -343,6 +345,7 @@ result = dispatch session-manager notify {
 }
 
 if result.admitted == true: record notify_status: admitted
+elif result.error == "session_not_found" and result.session_id == develop_session_id: record notify_status: develop_session_id_stale (the kickoff message's stored id may be stale after a restart — the ticket_report: comment + poller are the durable wake path)
 elif result.status == 404: record notify_status: develop_session_id_stale (the kickoff message's stored id may be stale after a restart — the ticket_report: comment + poller are the durable wake path)
 else:                       record notify_status: <error from result.error>
 ```
