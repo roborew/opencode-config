@@ -10,6 +10,9 @@
  * owns the kickoff / notify choreography on top of these primitives.
  *
  *   session_create   POST /session                                  {directory?, agent?, title?}
+ *                     (directory is forwarded as `?directory=...` on the URL — the
+ *                      opencode server's POST /session binds sessions to a directory
+ *                      via the query string, not the body)
  *   session_list     GET  /session                                  {directory?}
  *   session_notify   POST /session/{id}/prompt_async                resolves target then
  *                     posts {parts:[{type:"text", text:msg}], agent?} as a 204-ack async prompt
@@ -87,12 +90,12 @@ export const SessionManagerPlugin = async (ctx) => {
     tool: {
       session_create: {
         description:
-          "Create a new session for the current project (or a project directory). Returns the new session id. Use when a fresh GUI session is needed (e.g. kicking a coder into a newly-created ticket worktree). For the common kickoff path prefer the session-manager subagent — it composes list-then-create and notification as one atomic action.",
+          "Create a new session for the current project (or a project directory). Returns the new session id. Use when a fresh GUI session is needed (e.g. kicking a coder into a newly-created ticket worktree). For the common kickoff path prefer the session-manager subagent — it composes list-then-create and notification as one atomic action. The `directory` arg is forwarded to the server as `?directory=...` on the POST URL and binds the new session to that worktree directory; without it, the server binds to the calling project's directory.",
         args: {
           directory: {
             type: "string",
             description:
-              "Optional absolute project directory for the session. Defaults to the calling project's directory.",
+              "Optional absolute project directory for the session. Forwarded as `?directory=...` to POST /session; defaults to the calling project's directory when omitted.",
           },
           agent: {
             type: "string",
@@ -112,7 +115,7 @@ export const SessionManagerPlugin = async (ctx) => {
           const r = await smFetch(
             "/session",
             { method: "POST", body: JSON.stringify(body) },
-            context,
+            args && args.directory ? { directory: args.directory } : context,
           );
           return JSON.stringify(r);
         },

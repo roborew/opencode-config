@@ -32,7 +32,7 @@ No bash, no write/edit, no skill loads. Pure orchestration of the three plugin t
 
 1. **Use only the three `session_*` tools.** Never call `curl`, never call the opencode HTTP API directly. The plugin already handles auth, JSON parsing, and the 204-void success contract on `/prompt_async`.
 2. **Mutual exclusion on `session_notify`.** Exactly one of `sessionID` or `directory` is allowed (not both, not neither). The plugin rejects mismatches.
-3. **`admitted` keys on HTTP 204.** A successful injection returns `{ok: true, admitted: true, status: 204, session_id}`. Anything else is a failure — surface `manualRecovery` from the envelope verbatim to the parent.
+3. **`admitted` keys on HTTP 204.** A successful injection returns `{ok: true, admitted: true, status: 204, session_id}`. Anything else is a failure — surface `manualRecovery` from the envelope verbatim to the parent. **Both `agent_match` and `directory_match` must be `true`** for the kickoff to be `admitted`; a mismatch on either is a hard stop (not advisory) and the orchestrator pauses the batch per `BLOCKED: KICKOFF_DIRECTORY_BIND_FAILED` / `BLOCKED: KICKOFF_AGENT_BIND_MISMATCH`.
 4. **`kickoff` is scoped — never unfiltered.** In the `kickoff` action, **never** call `session_list({})` (unfiltered). The `kickoff` procedure must always list scoped to the requested `directory`. An empty scoped list means "no session exists for this directory — create a new one", **not** "fall back to the global session list". The unfiltered fallback is forbidden in `kickoff` because it caused the self-resolve bug (resolving the develop orchestrator's own session). The `notify` action may still use directory-mode with the unfiltered fallback (the legitimate coder → orchestrator path) — see the `notify` procedure below.
 5. **Hard-stop on missing tools.** If `session_create` / `session_list` / `session_notify` are absent from your tool list, return immediately with `{ok: false, blocker_code: "SESSION_TOOLS_NOT_REGISTERED", next_action: "Deploy plugins/session-manager.js into ${OPENCODE_CONFIG_DIR:-~/.config/opencode}/plugins/ and restart opencode-server; confirm the boot log shows '[session-manager-plugin] messaging tools loaded'" }`. Never simulate a result.
 6. **Never write a brief file.** The kickoff message is the contract — the develop orchestrator composes the short pointer and you inject it inline. No `<gitdir>/opencode-ticket-brief.json`, no filesystem writes.
@@ -64,13 +64,20 @@ Resolution policy: **scoped reuse if matching, scoped create otherwise — never
 4. **Pick the best candidate** from the filtered pool (mirror `resolveNewestNoParent` from `plugins/session-manager.js:70-84`):
    - Defensive field reads: each candidate may use `parentID` or `parent_id`, `updatedAt` or `updated_at`. Treat absence as `undefined`.
    - Partition into `noParent` (no `parentID` and no `parent_id`) and `withParent`.
-   - If `noParent` is non-empty, pick the candidate with the max `updatedAt` / `updated_at` (fall back to `0` if missing). Set `resolution: "reused"`, `reused: true`, `agent_match: true`.
-   - Else if `withParent` is non-empty (user manually opened a sub-session of the coder), pick the candidate with the max `updatedAt` / `updated_at`. Set `resolution: "reused"`, `reused: true`, `agent_match: true`.
+   - If `noParent` is non-empty, pick the candidate with the max `updatedAt` / `updated_at` (fall back to `0` if missing). Set `resolution: "reused"`, `reused: true`, `agent_match: true`, `directory_match: true` (the step-3 filter already enforces both).
+   - Else if `withParent` is non-empty (user manually opened a sub-session of the coder), pick the candidate with the max `updatedAt` / `updated_at`. Set `resolution: "reused"`, `reused: true`, `agent_match: true`, `directory_match: true`.
    - Otherwise, fall through to step 5 (treat as no candidate).
 5. **No matching session** — call `session_create({ directory, agent, title: "ticket coder session" })`.
+   - The plugin forwards `directory` as `?directory=...` on the POST URL; the server binds the new session to that worktree directory.
    - Use the returned `id` as the chosen session id.
-   - **Verify the agent bound.** The response body should carry `agent: agent` back. If `session_create` returns an id but the response body does not confirm `agent === agent` (e.g. it auto-bound to a different agent), surface `{ok: false, agent_match: false, resolution: "created", session_id, error: "agent_bind_mismatch"}` so the orchestrator can investigate. The `kickoff` is not `admitted` in that case.
-   - Set `resolution: "created"`, `reused: false`, `agent_match: <true|false from step 5 response check>`.
+   - **Verify the session is bound to the right directory AND agent.** The create response can carry the session object back, but a silent server-side drift (e.g. a build that ignores `?directory=`) would leave the coder in the wrong cwd and `scripts/checkout-contract.sh --verify` would reject it. So re-list scoped to `directory`, find the entry with the new id, and check both:
+     - `s.directory === directory` (handle either server casing defensively — `directory` / `directory`).
+     - `s.agent === agent` (handle either server casing defensively — `agent` / `agent`).
+   - On either mismatch, surface:
+     - `directory` mismatch: `{ok: false, admitted: false, action: "kickoff", error: "directory_bind_failed", session_id, target_directory: directory, manualRecovery: "curl -u \"${OPENCODE_SERVER_USERNAME:-opencode}:${OPENCODE_SERVER_PASSWORD:-opencode}\" -H 'Content-Type: application/json' -d '<body>' \"<serverUrl>/session?directory=<encoded-directory>\""}`. The session exists but is not bound to the worktree dir — coder would load the wrong repo context.
+     - `agent` mismatch: `{ok: false, admitted: false, action: "kickoff", error: "agent_bind_mismatch", session_id, target_directory: directory, manualRecovery: "..."}`. Same shape.
+     - **Both mismatches are hard stops** — the kickoff is not `admitted` and the orchestrator pauses the batch per `BLOCKED: KICKOFF_DIRECTORY_BIND_FAILED` / `BLOCKED: KICKOFF_AGENT_BIND_MISMATCH`.
+   - If both pass, set `resolution: "created"`, `reused: false`, `agent_match: true`, `directory_match: true`.
 6. **Inject** the kickoff message — call `session_notify({ sessionID: <chosen_id>, agent, message })`.
    - Use the **chosen id** (from step 4 reuse or step 5 create) and the **requested agent**, not the session's stored agent.
 7. Compose and return the envelope:
@@ -84,6 +91,7 @@ Resolution policy: **scoped reuse if matching, scoped create otherwise — never
      "resolution": "reused" | "created",
      "reused": <bool>,
      "agent_match": <bool>,
+     "directory_match": <bool>,
      "admitted": <bool>,
      "status": <http status>,
      "target_directory": "<dir>",

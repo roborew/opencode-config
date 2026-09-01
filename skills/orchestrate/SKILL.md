@@ -164,15 +164,26 @@ while true:
     if ks.session_id == <ctx.sessionID>:
       surface "BLOCKED: KICKOFF_RESOLVED_TO_SELF" verbatim
       pause the batch
+    # Tripwire: kickoff must bind the new/reused session to <directory> AND <agent>.
+    # The session-manager re-lists and matches both fields post-create so a silent
+    # server-side drift (build ignores ?directory=) surfaces as a hard stop, not
+    # as the coder landing in the wrong cwd and failing scripts/checkout-contract.sh.
+    if not ks.directory_match:
+      surface "BLOCKED: KICKOFF_DIRECTORY_BIND_FAILED" verbatim (ks.manualRecovery or the envelope's curl snippet)
+      pause the batch
+    if not ks.agent_match:
+      surface "BLOCKED: KICKOFF_AGENT_BIND_MISMATCH" verbatim (ks.manualRecovery or the envelope's curl snippet)
+      pause the batch
     record {
       directory, branch: branch_name, abbrev,
       session_id: ks.session_id, session_source: ks.session_source, resolution: ks.resolution,
+      directory_match: ks.directory_match, agent_match: ks.agent_match,
       kickoff: ks.admitted ? "admitted" : "failed"
     }
     # Envelope shape (informational; admitted: true is the only success gate):
     #   { ok, action: "kickoff", session_id, session_source: reused|created, resolution: reused|created,
-    #     reused: <bool>, agent_match: <bool>, admitted: <bool>, status, target_directory, agent,
-    #     error, manualRecovery }
+    #     reused: <bool>, agent_match: <bool>, directory_match: <bool>, admitted: <bool>, status,
+    #     target_directory, agent, error, manualRecovery }
     if not ks.admitted:
       # Advisory for the batch (do NOT pause other tickets) — but NEVER silent:
       # relay the envelope's manualRecovery to the user immediately:
@@ -265,6 +276,8 @@ The coder session owns `state:in-progress` (set during `ticket-lifecycle` §0 Bo
 | `session-manager` returns `SESSION_TOOLS_NOT_REGISTERED` | develop orchestrator loop | The session-manager plugin is not loaded in this environment. Surface `next_action` verbatim and stop: deploy `plugins/session-manager.js` into the config `plugins/` dir, restart opencode-server, confirm the boot log shows `[session-manager-plugin] messaging tools loaded` before retrying. |
 | `session-manager` returns `SESSION_API_FAILED` (advisory only) | develop orchestrator loop | Relay the envelope's `manualRecovery` to the user IMMEDIATELY (never silent); record advisory in lifecycle log; the kickoff message is the contract and the coder session can still bootstrap from the branch + GitHub. **Do not pause the batch.** The `kickoff` action no longer returns `NO_SESSION_IN_DIRECTORY` — an empty scoped list now means "create", not "fail". |
 | `session-manager.kickoff` returns `session_id == <ctx.sessionID>` (`BLOCKED: KICKOFF_RESOLVED_TO_SELF`) | develop orchestrator loop (tripwire per Global Invariants #8) | Pause the batch and surface `BLOCKED: KICKOFF_RESOLVED_TO_SELF` verbatim. This indicates a regression — `session-manager.kickoff` resolved to the orchestrator's own session instead of creating/reusing one for the worktree directory. Investigate `agents/session-manager.md` (scoped list filter, agent match) before retrying. Should never fire post-fix. |
+| `session-manager.kickoff` returns `directory_match: false` (`BLOCKED: KICKOFF_DIRECTORY_BIND_FAILED`) | develop orchestrator loop (tripwire per Global Invariants #9; hard stop, not advisory) | Pause the batch and surface `BLOCKED: KICKOFF_DIRECTORY_BIND_FAILED` verbatim along with the envelope's `manualRecovery` curl snippet. The kickoff landed the coder in the wrong cwd — `scripts/checkout-contract.sh --verify` would reject it. Indicates `plugins/session-manager.js` `session_create` did not bind the new session to `<directory>` (server ignored `?directory=`, or the create-time wire-up regressed). Investigate `plugins/session-manager.js` and re-run the `session_create({directory: ...})` verification recipe in the plan before retrying. Should never fire post-fix. |
+| `session-manager.kickoff` returns `agent_match: false` (`BLOCKED: KICKOFF_AGENT_BIND_MISMATCH`) | develop orchestrator loop (tripwire per Global Invariants #9; hard stop, not advisory) | Pause the batch and surface `BLOCKED: KICKOFF_AGENT_BIND_MISMATCH` verbatim along with the envelope's `manualRecovery` curl snippet. The new session was bound to a different agent than requested (the coder would load the wrong agent prompt). Investigate `plugins/session-manager.js` `session_create` body before retrying. Should never fire post-fix. |
 | `scripts/dev-loop-batch.sh` exits 1 | develop orchestrator loop | All tickets done → exit loop, go to §8. |
 | `scripts/dev-loop-batch.sh` exits 2 | develop orchestrator loop | gh/API failure — surface stderr verbatim, stop. Never treat as "all tickets done" (an empty lifecycle log + exit 2 is a transport failure, not completion). |
 | Ticket `BLOCKED: ENV_BLOCKED` after one repair | coder session → develop orchestrator | Surface `recommended_env_fix`, pause batch. |
