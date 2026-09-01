@@ -192,7 +192,7 @@ When step 1, step 2, step 3, or step 7 surface unmet acceptance criteria that ca
 
 ### 9. Terminal report
 
-Emit the terminal report (in-session, normal prose), **post the `feature_report:` comment on the PRD parent issue** (mandatory durable channel), and best-effort `session_notify` the develop orchestrator before stopping. **The coder itself** calls `session_notify` (it holds the tool — no delegated developer framing).
+Emit the terminal report (in-session, normal prose), **post the `feature_report:` comment on the PRD parent issue** (mandatory durable channel), and best-effort `session-manager.notify` the develop orchestrator before stopping. **The coder dispatches the `session-manager` subagent** for the injection (the `session-manager` subagent owns `session_notify` — the coder does not hold the plugin tool directly).
 
 #### §9-completion: tear down the verification backend
 
@@ -248,21 +248,30 @@ BLOCKED:
   recommended_helper_request: <one concrete request>
 ```
 
-#### 9c. Best-effort wake via `session_notify` (the coder holds the tool)
+#### 9c. Best-effort wake via `session-manager.notify` (the coder dispatches the subagent)
 
 ```text
 message = "feature_report: feature:<slug> | status: READY_FOR_HUMAN_REVIEW | pr: <url> | ci: pass | tickets: <n>"
 # or, for BLOCKED:
 message = "feature_report: feature:<slug> | status: BLOCKED | blocker: <code> | reason: <one-line>"
 
-result = session_notify { sessionID: <develop_session_id>, agent: orchestrate, message }
+# The develop_session_id is supplied in the feature coder kickoff message inline.
+# If it's missing (kickoff truncated), pass `directory: <feature worktree dir>` instead —
+# the session-manager falls back to the newest no-parent session under that directory.
+develop_target = { sessionID: <develop_session_id> } if develop_session_id else { directory: <feature worktree abs path> }
+
+result = dispatch session-manager notify {
+  ...develop_target,
+  agent: "orchestrate",
+  message,
+}
 
 if result.admitted == true: record notify_status: admitted
 elif result.status == 404: record notify_status: develop_session_id_stale
 else:                       record notify_status: <error from result.error>
 ```
 
-The `feature_report:` comment is the **mandatory** durable channel. `session_notify` is best-effort; its failure is recorded in the comment but never blocks the terminal report.
+The `feature_report:` comment is the **mandatory** durable channel. `session-manager.notify` is best-effort; its failure is recorded in the comment but never blocks the terminal report.
 
 Emit the terminal report and stop. The coder agent Hard Rules' post-completion guard now fires — any subsequent user message is answered with: "Task complete. Switch to the `orchestrate` agent to continue."
 
@@ -282,5 +291,7 @@ Emit the terminal report and stop. The coder agent Hard Rules' post-completion g
 - `skills/docker-sandbox/SKILL.md` — `sandbox exec` vs direct compose matrix + lifecycle-aware destroy.
 - `skills/to-tickets/SKILL.md` — `remediation:` issue publishing (`--parent-issue`).
 - `scripts/issue-state-transition.sh`, `scripts/feature-finish-pr.sh`, `scripts/dev-loop-watch.sh` — shared lib scripts.
-- `plugins/worktree.js` — `worktree_create` and `session_notify`.
+- `plugins/worktree.js` — `worktree_create_feature` is the sibling tool that creates this worktree.
+- `plugins/session-manager.js` — `session_notify` is the underlying tool `session-manager.notify` dispatches for the terminal wake injection.
+- `agents/session-manager.md` — the subagent the coder dispatches for the §9c terminal-report injection.
 - `skills/orchestrate/SKILL.md` — the develop orchestrator that kicks this loop and merges the feature PR after "all reviewed".

@@ -3,6 +3,7 @@
   "default_agent": "orchestrate",
   "plugin": [
     "./plugins/worktree.js",
+    "./plugins/session-manager.js",
     "./plugins/localhost-to-docker-host.js",
     "./plugins/rewrite-worktree-gitdirs.js"
   ],
@@ -381,6 +382,11 @@
       "mode": "subagent",
       "model": "opencode-gpt/gpt-5-nano",
       "steps": 20
+    },
+    "session-manager": {
+      "mode": "subagent",
+      "model": "opencode-gpt/gpt-5-nano",
+      "steps": 15
     },
     "preflight": {
       "mode": "subagent",
