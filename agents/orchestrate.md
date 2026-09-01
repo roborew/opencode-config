@@ -69,7 +69,7 @@ feature:
   worktree_directory: <abs path>
   branch: opencode/feat-<slug>
   tickets:
-    - { issue: <n>, title: <t>, branch: opencode/ticket-<n>-<slug>-<abbrev>, worktree_directory: <dir>, session_id: <id>, kickoff: admitted|no_session_after_poll|failed, session_source: auto-started|created|null }
+    - { issue: <n>, title: <t>, branch: opencode/ticket-<n>-<slug>-<abbrev>, worktree_directory: <dir>, session_id: <id>, kickoff: admitted|failed, session_source: reused|created, resolution: reused|created }
 ```
 
 Discard copied skill prose and old child transcripts when state changes. A skill loaded for one state does not satisfy a later state's load gate unless its trigger explicitly permits reuse.
@@ -93,6 +93,7 @@ If any required skill load fails, stop with `SKILL_UNAVAILABLE: <skill>`. Includ
 5. Normal GitHub readiness failure stops and returns to spec architect issue-expand. It never enters flat mode or local-plan compatibility.
 6. Preserve machine contracts: `state:*`, `verified`, `unverified`, `code_review_gate:`, `ticket_report:`, `feature_report:`, and close-at-merge behavior remain unchanged.
 7. **Worktree + remote-branch ownership.** The orchestrator is the **only** actor that may call `worktree-manager` for `create_feature` / `create_ticket` / `delete` / `reset` / `kickoff` and `session-manager` for `kickoff` / `notify`. Coder sessions never call `worktree-manager` or `session-manager` directly except for their own outbound terminal-report `notify`, and never create, switch, or delete remote branches. The orchestrator may not run `git push origin --delete` itself; it delegates `git push origin --delete <branch>` to a `developer` Task with `load: minimal`. Coder sessions push **only** their own ticket branch (`opencode/ticket-<issue>-<slug>-<abbrev>`); they never delete it. **Exception — terminal reports:** the **coder** session may dispatch `session-manager.notify` to inject the `ticket_report:` or `feature_report:` terminal report back into the develop orchestrator session (message injection only, no agent spawning, no worktree or branch mutation). The `develop_session_id` for the injection is passed in the kickoff message inline.
+8. **Kickoff self-resolve tripwire.** After every `session-manager.kickoff` dispatch, assert `kickoff.session_id != <ctx.sessionID>`. If equal, surface `BLOCKED: KICKOFF_RESOLVED_TO_SELF` verbatim and pause the batch — the kickoff resolved to the orchestrator's own session instead of the coder session for the worktree directory. This should never fire post-fix (the kickoff procedure is scoped-list-only with no global fallback and creates a fresh session when no matching one exists); if it does fire, that's a regression in `session-manager.kickoff` and the orchestrator should investigate before proceeding.
 
 ## Recovery and Fallback
 

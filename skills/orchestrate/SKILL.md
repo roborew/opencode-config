@@ -147,17 +147,27 @@ while true:
         issue=entry, feature_slug=slug, branch=branch_name,
         worktree_dir=directory, develop_session_id=<ctx.sessionID>)
 
-    # 5a-iii. Kick the coder session via session-manager (one atomic action: list-then-create-then-inject)
+    # 5a-iii. Kick the coder session via session-manager (one atomic action: scoped-list-then-reuse-or-create-then-inject)
+    # Resolution policy (locked): scoped-list filter by directory+agent → reuse if matching, create otherwise.
+    # No global-list fallback in kickoff (see Global Invariants #8 in agents/orchestrate.md).
     ks = dispatch session-manager kickoff {
       directory,
       agent: "coder",
       message: kickoff_message,
     }
+    # Tripwire: kickoff must never resolve to the orchestrator's own session.
+    if ks.session_id == <ctx.sessionID>:
+      surface "BLOCKED: KICKOFF_RESOLVED_TO_SELF" verbatim
+      pause the batch
     record {
       directory, branch: branch_name, abbrev,
-      session_id: ks.session_id, session_source: ks.session_source,
+      session_id: ks.session_id, session_source: ks.session_source, resolution: ks.resolution,
       kickoff: ks.admitted ? "admitted" : "failed"
     }
+    # Envelope shape (informational; admitted: true is the only success gate):
+    #   { ok, action: "kickoff", session_id, session_source: reused|created, resolution: reused|created,
+    #     reused: <bool>, agent_match: <bool>, admitted: <bool>, status, target_directory, agent,
+    #     error, manualRecovery }
     if not ks.admitted:
       # Advisory for the batch (do NOT pause other tickets) — but NEVER silent:
       # relay the envelope's manualRecovery to the user immediately:
@@ -189,7 +199,7 @@ develop_session_id: <ctx.sessionID>     # the develop orchestrator's session id 
 Load skill ticket-lifecycle and begin. The GitHub issue body (opencode-task-yaml) is the source of truth for stages[], acceptance, and test commands. Do not ask for a pasted brief; reconstruct anything missing per ticket-lifecycle §0 Bootstrap.
 ```
 
-Compose it once per ticket; pass it verbatim to `session-manager.kickoff` as `message`. The session-manager subagent does list-then-create-then-inject atomically — no brief file is written; the kickoff message is the contract.
+Compose it once per ticket; pass it verbatim to `session-manager.kickoff` as `message`. The session-manager subagent does scoped-list-then-reuse-or-create-then-inject atomically (never falls back to the unfiltered global session list — that path caused the self-resolve bug). The `kickoff` returns `session_source: reused|created` and `resolution: reused|created` so the orchestrator can audit which path was taken; the orchestrator's only success gate remains `admitted: true`. No brief file is written; the kickoff message is the contract.
 
 ### §5b. Wake contract
 
@@ -248,7 +258,8 @@ The coder session owns `state:in-progress` (set during `ticket-lifecycle` §0 Bo
 | `worktree-manager` returns `WORKTREE_TOOLS_NOT_REGISTERED` | develop orchestrator loop | The worktree plugin is not loaded in this environment. Surface `next_action` verbatim and stop: deploy `plugins/worktree.js` into the config `plugins/` dir, restart opencode-server, confirm the boot log shows `[worktree-plugin] loaded` before retrying. |
 | `worktree-manager` returns `blocker_code: "KICKOFF_FAILED"` (advisory only) | develop orchestrator loop | Relay the envelope's `manualRecovery` to the user IMMEDIATELY (never silent); record advisory in lifecycle log; the kickoff message is the contract and the coder session can still bootstrap from the branch + GitHub. Retry via `worktree-manager` `kickoff` action (which now routes through `session-manager`), or the user opens the GUI session and types anything. **Do not pause the batch.** |
 | `session-manager` returns `SESSION_TOOLS_NOT_REGISTERED` | develop orchestrator loop | The session-manager plugin is not loaded in this environment. Surface `next_action` verbatim and stop: deploy `plugins/session-manager.js` into the config `plugins/` dir, restart opencode-server, confirm the boot log shows `[session-manager-plugin] messaging tools loaded` before retrying. |
-| `session-manager` returns `NO_SESSION_IN_DIRECTORY` or `SESSION_API_FAILED` (advisory only) | develop orchestrator loop | Relay the envelope's `manualRecovery` to the user IMMEDIATELY (never silent); record advisory in lifecycle log; the coder session can still bootstrap from the branch + GitHub. **Do not pause the batch.** |
+| `session-manager` returns `SESSION_API_FAILED` (advisory only) | develop orchestrator loop | Relay the envelope's `manualRecovery` to the user IMMEDIATELY (never silent); record advisory in lifecycle log; the kickoff message is the contract and the coder session can still bootstrap from the branch + GitHub. **Do not pause the batch.** The `kickoff` action no longer returns `NO_SESSION_IN_DIRECTORY` — an empty scoped list now means "create", not "fail". |
+| `session-manager.kickoff` returns `session_id == <ctx.sessionID>` (`BLOCKED: KICKOFF_RESOLVED_TO_SELF`) | develop orchestrator loop (tripwire per Global Invariants #8) | Pause the batch and surface `BLOCKED: KICKOFF_RESOLVED_TO_SELF` verbatim. This indicates a regression — `session-manager.kickoff` resolved to the orchestrator's own session instead of creating/reusing one for the worktree directory. Investigate `agents/session-manager.md` (scoped list filter, agent match) before retrying. Should never fire post-fix. |
 | `scripts/dev-loop-batch.sh` exits 1 | develop orchestrator loop | All tickets done → exit loop, go to §8. |
 | `scripts/dev-loop-batch.sh` exits 2 | develop orchestrator loop | gh/API failure — surface stderr verbatim, stop. Never treat as "all tickets done" (an empty lifecycle log + exit 2 is a transport failure, not completion). |
 | Ticket `BLOCKED: ENV_BLOCKED` after one repair | coder session → develop orchestrator | Surface `recommended_env_fix`, pause batch. |
