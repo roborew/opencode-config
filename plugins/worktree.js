@@ -8,17 +8,30 @@
  * kickoff machinery (brief files, session polling, promptAsync) — those are
  * deferred to their own stages.
  *
- * Tools:
- *   worktree_list   GET    /experimental/worktree
- *   worktree_create POST   /experimental/worktree        {name, base}
- *   worktree_delete DELETE /experimental/worktree        {directory}
- *   worktree_reset  POST   /experimental/worktree/reset  {directory}
+ * Tools (interface deliberately split by responsibility so the model can't
+ * pick the wrong tool or forget to fork a ticket off the feature branch):
  *
- * Every call carries ?directory=<context.directory> to scope the operation to
- * the calling project. worktree_create defaults `base` to "develop".
+ *   worktree_list             GET    /experimental/worktree
+ *   worktree_create_feature   POST   /experimental/worktree  {name, base?}
+ *                             base optional, defaults to "develop".
+ *                             Use ONLY for the top-level feature worktree
+ *                             (opencode/feat-<slug>).
+ *   worktree_create_ticket    POST   /experimental/worktree  {name, base}
+ *                             base REQUIRED and must match ^opencode/feat-.
+ *                             Caller passes the `branch` field returned by
+ *                             worktree_create_feature. Guarantees tickets
+ *                             always fork off the feature branch, never off
+ *                             develop or a previous ticket.
+ *   worktree_delete           DELETE /experimental/worktree  {directory}
+ *   worktree_reset            POST   /experimental/worktree/reset {directory}
+ *
+ * Every call carries ?directory=<context.directory> to scope the operation
+ * to the calling project. All HTTP work goes through one shared `wtFetch`
+ * helper; per-tool code is just arg validation + body shape.
  */
 
 const DEFAULT_BASE = "develop";
+const FEATURE_BRANCH_PATTERN = /^opencode\/feat-/;
 
 export const WorktreePlugin = async (ctx) => {
   console.log(
@@ -60,6 +73,10 @@ export const WorktreePlugin = async (ctx) => {
     return { ok: res.ok, status: res.status, body };
   }
 
+  function clientError(msg) {
+    return JSON.stringify({ ok: false, status: 0, body: msg });
+  }
+
   return {
     tool: {
       worktree_list: {
@@ -76,34 +93,77 @@ export const WorktreePlugin = async (ctx) => {
         },
       },
 
-      worktree_create: {
+      worktree_create_feature: {
         description:
-          "Create a new git worktree for the current project. Use this to set up an isolated checkout for a feature or ticket. Returns the created worktree's directory and branch.",
+          "Create a FEATURE worktree (opencode/feat-<slug>) for the current project. Forks off `base` (defaults to 'develop'). Use this ONLY for the top-level feature branch. The response includes a `branch` field (e.g. 'opencode/feat-<name>') — capture it and pass it as `feature_branch` to worktree_create_ticket when creating ticket worktrees off this feature.",
         args: {
           name: {
             type: "string",
             description:
-              "Required. Worktree name / branch slug, e.g. 'feat-billing-flow'.",
+              "Required. Feature slug, e.g. 'test' or 'billing-flow'. The created branch will be opencode/feat-<name>.",
           },
           base: {
             type: "string",
             description:
-              "Base branch to create the worktree from. Optional — pass an empty string to use the default 'develop'.",
+              "Base branch to fork from. Pass an empty string to use the default 'develop'. Use 'main' or another long-lived branch if your repo does not use 'develop'.",
           },
         },
         async execute(args, context) {
           const name = args && args.name;
           if (!name) {
-            return JSON.stringify({
-              ok: false,
-              status: 0,
-              body: "worktree_create requires a non-empty 'name' argument.",
-            });
+            return clientError(
+              "worktree_create_feature requires a non-empty 'name' argument.",
+            );
           }
           const base = (args && args.base) || DEFAULT_BASE;
           const r = await wtFetch(
             "/experimental/worktree",
             { method: "POST", body: JSON.stringify({ name, base }) },
+            context,
+          );
+          return JSON.stringify(r);
+        },
+      },
+
+      worktree_create_ticket: {
+        description:
+          "Create a TICKET worktree that forks off an existing feature branch. REQUIRED: pass the `branch` field from a prior worktree_create_feature response as `feature_branch`. The plugin rejects any value that does not start with 'opencode/feat-' so tickets cannot accidentally be forked off develop, main, or a sibling ticket. Always call worktree_create_feature first and pass its exact `branch` field here.",
+        args: {
+          feature_branch: {
+            type: "string",
+            description:
+              "Required. The opencode/feat-<slug> branch returned by worktree_create_feature. Must start with 'opencode/feat-'. Pass the EXACT branch name from the create response — do not derive or guess it.",
+          },
+          name: {
+            type: "string",
+            description:
+              "Required. Ticket worktree name, e.g. 'ticket-1-test-abcd'.",
+          },
+        },
+        async execute(args, context) {
+          const featureBranch = args && args.feature_branch;
+          const name = args && args.name;
+          if (!featureBranch) {
+            return clientError(
+              "worktree_create_ticket requires a non-empty 'feature_branch' argument — pass the 'branch' field returned by worktree_create_feature.",
+            );
+          }
+          if (!name) {
+            return clientError(
+              "worktree_create_ticket requires a non-empty 'name' argument.",
+            );
+          }
+          if (!FEATURE_BRANCH_PATTERN.test(featureBranch)) {
+            return clientError(
+              `worktree_create_ticket: feature_branch must start with 'opencode/feat-' — got '${featureBranch}'. Pass the branch returned by worktree_create_feature, not develop or main.`,
+            );
+          }
+          const r = await wtFetch(
+            "/experimental/worktree",
+            {
+              method: "POST",
+              body: JSON.stringify({ name, base: featureBranch }),
+            },
             context,
           );
           return JSON.stringify(r);
@@ -123,11 +183,9 @@ export const WorktreePlugin = async (ctx) => {
         async execute(args, context) {
           const directory = args && args.directory;
           if (!directory) {
-            return JSON.stringify({
-              ok: false,
-              status: 0,
-              body: "worktree_delete requires a non-empty 'directory' argument.",
-            });
+            return clientError(
+              "worktree_delete requires a non-empty 'directory' argument.",
+            );
           }
           const r = await wtFetch(
             "/experimental/worktree",
@@ -151,11 +209,9 @@ export const WorktreePlugin = async (ctx) => {
         async execute(args, context) {
           const directory = args && args.directory;
           if (!directory) {
-            return JSON.stringify({
-              ok: false,
-              status: 0,
-              body: "worktree_reset requires a non-empty 'directory' argument.",
-            });
+            return clientError(
+              "worktree_reset requires a non-empty 'directory' argument.",
+            );
           }
           const r = await wtFetch(
             "/experimental/worktree/reset",
