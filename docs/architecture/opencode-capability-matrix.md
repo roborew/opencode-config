@@ -25,4 +25,5 @@ Other read-only specialists (`debugger`, `refactor`, `designer`, `strategist`, `
 
 - Per-agent model routing in `opencode.json`.
 - MCP: `mcpjungle` and `claude-context` (command path unchanged). MCPJungle manages Context7, Cloudflare API, Cloudflare Docs, and `docs-mcp-server` upstream authentication. Narrow Cloudflare skills: `cloudflare`, `wrangler`, `workers-best-practices` (from [cloudflare/skills](https://github.com/cloudflare/skills)).
+- **Branch creation is owned by the coder session's §0.0 Handshake** (`skills/ticket-lifecycle` §0.0 / `skills/feature-review` §0.0): the coder dispatches a `developer` Task with `gh api create_ref` for the initial feature branch and shell `git push` from the worktree cwd. The orchestrator delegates only `git push origin --delete` for cleanup (delete-only) — it never pushes a branch it didn't delete, and worktree-manager never pushes at all (local-only `/experimental/worktree` plumbing).
 - `strategist`, `preflight`, architect plan/review split.

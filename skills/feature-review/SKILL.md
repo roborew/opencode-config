@@ -24,6 +24,44 @@ roleReminder: "Loaded by the `coder` agent in the feature worktree after all tic
 
 Runs on **any** first message: the injected kickoff pointer, a user `begin`, or a resume after a server restart. The pointer is a short by design; a truncated message must not stall you. The **coder** agent has `bash: false`; reading the kickoff pointer uses the read tool, every shell invocation is delegated to ONE `developer` Task with `load: minimal`.
 
+### §0.0 Handshake (push the feature branch from this worktree — runs before §0.1 / §0.2)
+
+The feature coder's cwd IS the feature worktree directory. You own the handshake push for `opencode/feat-<slug>`: ensure it exists remotely, push it from your worktree cwd, and verify the branch is on the remote. **worktree-manager does not push** (local-only `/experimental/worktree` plumbing), and the orchestrator never pushes a branch it didn't delete. Delegate ONE `developer load: minimal` Task from the worktree cwd. The ticket-branch push (step 5 of `ticket-lifecycle` §0.0) is **skipped** in feature mode — your worktree branch IS the feature branch.
+
+```text
+Task developer load: minimal
+Run the §0.0 Handshake push for the feature worktree.
+
+cwd: <feature worktree absolute path>      # you ARE the feature worktree
+repo_root: <impl_repo root>
+feature_branch: opencode/feat-<slug>
+expected_branch: opencode/feat-<slug>      # = feature_branch in feature mode
+
+1. default_branch=$(gh repo view <OWNER>/<REPO> --json defaultBranchRef -q .defaultBranchRef.name)
+2. git fetch origin <feature_branch> || true
+3. if ! git rev-parse --verify "origin/<feature_branch>" >/dev/null 2>&1; then
+     sha=$(gh api repos/<OWNER>/<REPO>/git/ref/heads/<default_branch> -q .object.sha)
+     gh api -X POST repos/<OWNER>/<REPO>/git/refs \
+       -f ref="refs/heads/<feature_branch>" -f sha="$sha"
+     # 422 (already exists) is treated as success
+   fi
+4. git push -u origin <feature_branch>                  # BLOCKED: HANDSHAKE_PUSH_FAILED on failure (stderr verbatim)
+5. [ "$(git rev-parse --abbrev-ref HEAD)" = "<expected_branch>" ] || { echo "BLOCKED: CHECKOUT_CONTRACT_FAILED"; exit 1; }
+   git rev-parse --verify "origin/<expected_branch>" >/dev/null 2>&1 || { echo "BLOCKED: CHECKOUT_CONTRACT_FAILED"; exit 1; }
+   git merge-base --is-ancestor "origin/<feature_branch>" HEAD || { echo "BLOCKED: TICKET_NOT_FORKED_FROM_FEATURE"; exit 1; }
+
+Return JSON:
+{
+  "ok": true,
+  "feature_branch": "opencode/feat-<slug>",
+  "expected_branch": "opencode/feat-<slug>",
+  "remote_feature_branch_created": true|false,
+  "merge_base_ok": true
+}
+```
+
+On any non-zero exit, surface the developer's `blocker_code` verbatim — do not retry from here.
+
 ### §0.1 Pointer resolution
 
 The kickoff message names the feature slug, the feature branch `opencode/feat-<slug>`, and (optionally) the absolute feature worktree directory. Reconstruct anything missing:
@@ -238,7 +276,7 @@ READY_FOR_HUMAN_REVIEW:
   next_action_for_parent: "feature PR is open and ready for review; merge is the develop orchestrator's gate on 'all reviewed'"
 
 BLOCKED:
-  blocker_code: FEATURE_REMEDIATION | STABILIZATION_EXHAUSTED | ENV_BLOCKED | CHECKOUT_CONTRACT_FAILED | SKILL_UNAVAILABLE
+  blocker_code: FEATURE_REMEDIATION | STABILIZATION_EXHAUSTED | ENV_BLOCKED | CHECKOUT_CONTRACT_FAILED | SKILL_UNAVAILABLE | HANDSHAKE_PUSH_FAILED | HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED | TICKET_NOT_FORKED_FROM_FEATURE
   reason: <one-line>
   remediation_issues: [<n1>, <n2>, ...]      # FEATURE_REMEDIATION only
   partial_evidence:

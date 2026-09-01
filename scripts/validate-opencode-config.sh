@@ -94,6 +94,21 @@ if [[ -n "${GH_PROJECT:-}" ]] && command -v gh >/dev/null 2>&1; then
   fi
 fi
 
+echo "Checking WRONG_BASE transcript audit (.opencode/audit/worktree-manager/)..."
+AUDIT_DIR=".opencode/audit/worktree-manager"
+if [[ -d "$AUDIT_DIR" ]]; then
+  WRONG_BASE_HITS=$(grep -R -l 'WRONG_BASE' "$AUDIT_DIR" 2>/dev/null || true)
+  if [[ -n "$WRONG_BASE_HITS" ]]; then
+    echo "  FAIL: WRONG_BASE blocker_code found in worktree-manager transcripts (invented value — not in canonical blocker_code table):"
+    echo "$WRONG_BASE_HITS" | sed 's/^/    /'
+    ERR=1
+  else
+    echo "  OK: no WRONG_BASE hits in worktree-manager transcripts"
+  fi
+else
+  echo "  WARN: $AUDIT_DIR does not exist — audit is a no-op until worktree-manager transcripts are captured. Scaffold with: mkdir -p $AUDIT_DIR"
+fi
+
 echo "Checking moved lib scripts exist under scripts/..."
 for f in scripts/checkout-contract.sh scripts/issue-state-transition.sh scripts/dev-loop-batch.sh scripts/dev-loop-watch.sh scripts/pr-stabilize-watch.sh scripts/feature-finish-pr.sh scripts/dev-loop-poller.sh; do
   if [[ ! -f "$f" ]]; then

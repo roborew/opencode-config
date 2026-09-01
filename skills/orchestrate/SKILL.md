@@ -96,11 +96,13 @@ Dispatch `worktree-manager` `create_feature`:
 { "action": "create_feature", "slug": "<slug>", "base": "develop" }
 ```
 
-On success, record `{ name: "feat-<slug>", branch: <wr_feat.body.branch>, directory }` in the lifecycle log. The `branch` field (e.g. `opencode/feat-<slug>`) is captured here and passed as `feature_branch` to every `create_ticket` call in §5 — it is the safety link that prevents tickets from forking off `develop`/`main`. Push the feature branch from the develop orchestrator's own checkout via a delegated `developer` Task (`load: minimal`, `git push -u origin opencode/feat-<slug>`). The plugin does not push.
+On success, record `{ name: "feat-<slug>", branch: <wr_feat.body.branch>, directory }` in the lifecycle log. The `branch` field (e.g. `opencode/feat-<slug>`) is captured here and passed as `feature_branch` to every `create_ticket` call in §5 — it is the safety link that prevents tickets from forking off `develop`/`main`. **The feature branch is pushed by the first coder session to receive a kickoff** (the feature coder at §8, or the first ticket coder at §5a). worktree-manager does not push. The orchestrator does not push. The coder session owns the handshake push via `developer` (`gh` for branch metadata, shell `git push` from the worktree cwd — see `ticket-lifecycle` §0.0 / `feature-review` §0.0).
 
 If `worktree-manager` returns any `blocker_code`, surface it verbatim and stop. If the response has no `branch` field, abort the §5 batch loop with `BLOCKED: FEATURE_WORKTREE_FAILED` before dispatching any ticket.
 
 ## §5 Batch loop (silent except the single PR-review gate)
+
+> **Worktree-manager and session-manager dispatches are pure JSON envelopes.** The subagents own their own procedures (see `agents/worktree-manager.md` §Procedures, `agents/session-manager.md` §Procedures). Do not include procedural narration, verification commands, or invented `blocker_code` values in the Task prompt — pass the action and its inputs, require `report_to_parent`, and surface the envelope verbatim on failure.
 
 ```text
 OC = "${OPENCODE_CONFIG:-$HOME/.config/opencode}"  # resolve once; pass this absolute path in every delegated script call
@@ -131,6 +133,9 @@ while true:
     branch_name = "opencode/ticket-<n>-<slug>-<abbrev>"
 
     # 5a-i. Create ticket worktree (forked off the feature branch captured at §4)
+    #       Pure JSON envelope — worktree-manager owns the procedure. Do NOT include
+    #       verification commands or invented blocker_code in the prompt; surface the
+    #       envelope verbatim on failure.
     dispatch worktree-manager create_ticket {
       issue: ticket,
       slug,
@@ -138,7 +143,7 @@ while true:
       title,
       auto_spawn: true,
     }
-    if response.body.directory is missing:
+    if not response.ok:
       surface blocker_code verbatim, continue to next entry (advisory — do not pause the batch)
       record { directory: null, branch: branch_name, abbrev, kickoff: "no_directory" }
 

@@ -28,6 +28,46 @@ Runs on **any** first message: the injected kickoff pointer (via `session-manage
 
 If the message is empty, unparseable, or was truncated, fall back to §0.2 GitHub reconstruction — that is now the primary resilience path. The kickoff message is short by design and a truncated message must never stall you. The **coder** agent has `bash: false`; reading the kickoff pointer uses the read tool, and the reconstruction block is delegated to ONE `developer` Task.
 
+### §0.0 Handshake (push the feature branch from this worktree — runs before §0.1 / §0.2)
+
+The coder session's cwd IS the ticket worktree directory. You own the handshake push: ensure `opencode/feat-<slug>` exists remotely, push it from your worktree cwd, then push your own ticket branch. **worktree-manager does not push** (local-only `/experimental/worktree` plumbing), and the orchestrator never pushes a branch it didn't delete. Delegate ONE `developer load: minimal` Task from the worktree cwd:
+
+```text
+Task developer load: minimal
+Run the §0.0 Handshake push for the current ticket worktree.
+
+cwd: <worktree absolute path>            # you ARE the ticket worktree
+repo_root: <impl_repo root>
+feature_branch: opencode/feat-<slug>
+expected_branch: opencode/ticket-<n>-<slug>-<abbrev>
+
+1. default_branch=$(gh repo view <OWNER>/<REPO> --json defaultBranchRef -q .defaultBranchRef.name)
+2. git fetch origin <feature_branch> || true
+3. if ! git rev-parse --verify "origin/<feature_branch>" >/dev/null 2>&1; then
+     sha=$(gh api repos/<OWNER>/<REPO>/git/ref/heads/<default_branch> -q .object.sha)
+     gh api -X POST repos/<OWNER>/<REPO>/git/refs \
+       -f ref="refs/heads/<feature_branch>" -f sha="$sha"
+     # 422 (already exists) is treated as success
+   fi
+4. git push -u origin <feature_branch>                  # BLOCKED: HANDSHAKE_PUSH_FAILED on failure (stderr verbatim)
+5. git push -u origin <expected_branch>                # BLOCKED: HANDSHAKE_PUSH_FAILED on failure (stderr verbatim)
+6. [ "$(git rev-parse --abbrev-ref HEAD)" = "<expected_branch>" ] || { echo "BLOCKED: CHECKOUT_CONTRACT_FAILED"; exit 1; }
+   git rev-parse --verify "origin/<expected_branch>" >/dev/null 2>&1 || { echo "BLOCKED: CHECKOUT_CONTRACT_FAILED"; exit 1; }
+   git merge-base --is-ancestor "origin/<feature_branch>" HEAD || { echo "BLOCKED: TICKET_NOT_FORKED_FROM_FEATURE"; exit 1; }
+
+Return JSON:
+{
+  "ok": true,
+  "feature_branch": "opencode/feat-<slug>",
+  "expected_branch": "opencode/ticket-<n>-<slug>-<abbrev>",
+  "remote_feature_branch_created": true|false,
+  "remote_expected_branch_created": true|false,
+  "merge_base_ok": true
+}
+```
+
+Step ordering is load-bearing: `gh api create_ref` MUST run before `git push` so a missing remote branch surfaces as `BLOCKED: HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED` (or simply succeeds and falls through to `git push`) rather than a confusing `fatal: could not read Username` from `git push`. Step 3 checks `rev-parse --verify origin/<feature_branch>` first so `create_ref` is unreachable when the branch exists (422 means "already exists" — treat as success). Step 4's `git push -u origin <feature_branch>` is naturally idempotent across parallel coder sessions (fast-forward or up-to-date). On any non-zero exit, surface the developer's `blocker_code` verbatim — do not retry from here. Subsequent steps (§0.1 / §0.2 / §0.3 / §0.4) depend on the handshake succeeding.
+
 ### §0.1 Brief resolution — REMOVED
 
 The brief file (`<worktree-gitdir>/opencode-ticket-brief.json`) is **no longer written**. There is no file on disk to read. The kickoff message inline is the brief. Skip this section entirely; do not look for `<gitdir>/opencode-ticket-brief.json` on disk. The worktree's `.git` file is irrelevant to bootstrap — `git rev-parse` (via delegated `developer`) is how you confirm `expected_branch`.
@@ -272,7 +312,7 @@ READY_FOR_HUMAN_REVIEW:
   next_action_for_parent: "merge sub-PR into opencode/feat-<slug> on human approval, then worktree + remote-branch cleanup"
 
 BLOCKED:
-  blocker_code: ENV_BLOCKED | STAGE_STUCK | STABILIZATION_EXHAUSTED | CROSS_TICKET_REVIEW | CHECKOUT_CONTRACT_FAILED | SKILL_UNAVAILABLE | FALLBACK_EXHAUSTED | PREFLIGHT_EXHAUSTED
+  blocker_code: ENV_BLOCKED | STAGE_STUCK | STABILIZATION_EXHAUSTED | CROSS_TICKET_REVIEW | CHECKOUT_CONTRACT_FAILED | SKILL_UNAVAILABLE | FALLBACK_EXHAUSTED | PREFLIGHT_EXHAUSTED | HANDSHAKE_PUSH_FAILED | HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED | TICKET_NOT_FORKED_FROM_FEATURE
   reason:       <one-line>
   partial_evidence:
     stages_completed:  <count>
