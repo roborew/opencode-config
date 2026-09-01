@@ -100,7 +100,7 @@ export const WorktreePlugin = async (ctx) => {
           name: {
             type: "string",
             description:
-              "Required. Feature slug, e.g. 'test' or 'billing-flow'. The created branch will be opencode/feat-<name>.",
+              "Required. Feature slug, e.g. 'test' or 'billing-flow'. The plugin auto-prefixes 'feat-' if not already present, so the created branch is always 'opencode/feat-<name>' (idempotent — 'feat-x' is left as-is).",
           },
           base: {
             type: "string",
@@ -109,12 +109,13 @@ export const WorktreePlugin = async (ctx) => {
           },
         },
         async execute(args, context) {
-          const name = args && args.name;
-          if (!name) {
+          const rawName = args && args.name;
+          if (!rawName) {
             return clientError(
               "worktree_create_feature requires a non-empty 'name' argument.",
             );
           }
+          const name = rawName.startsWith("feat-") ? rawName : `feat-${rawName}`;
           const base = (args && args.base) || DEFAULT_BASE;
           const r = await wtFetch(
             "/experimental/worktree",
