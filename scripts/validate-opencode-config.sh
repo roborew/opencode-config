@@ -131,9 +131,53 @@ if ! grep -q "session_delete: true" agents/session-manager.md 2>/dev/null; then
   echo "  MISSING: session_delete: true in agents/session-manager.md frontmatter"
   ERR=1
 fi
+# session_create envelope must surface directory_match + agent_match inside the create body
+# (synchronous bind check — eliminates the follow-up-list race). Use a brace-counter to
+# scope the needles to the session_create execute block so a stray match in another tool
+# body doesn't satisfy the check too loosely.
+extract_tool_block() {
+  local file="$1" tool="$2" out="$3"
+  python3 - "$file" "$tool" "$out" <<'PY'
+import sys, re
+path, tool, out = sys.argv[1], sys.argv[2], sys.argv[3]
+src = open(path).read().splitlines(keepends=False)
+start = None
+for i, line in enumerate(src):
+  m = re.match(r'^(\s*)' + re.escape(tool) + r':\s*\{$', line)
+  if m:
+    start = i; indent = m.group(1); break
+if start is None:
+  open(out, 'w').close(); sys.exit(0)
+end = None
+depth = 0
+for j in range(start, len(src)):
+  opens = src[j].count('{')
+  closes = src[j].count('}')
+  depth += opens - closes
+  if depth == 0:
+    end = j + 1; break
+open(out, 'w').write('\n'.join(src[start:end or start+1]))
+PY
+}
+extract_tool_block plugins/session-manager.js session_create /tmp/sm_create_block.$$
+for needle in directory_match agent_match; do
+  if ! grep -q "$needle" /tmp/sm_create_block.$$ 2>/dev/null; then
+    echo "  MISSING: $needle inside session_create envelope in plugins/session-manager.js"
+    ERR=1
+  fi
+done
+rm -f /tmp/sm_create_block.$$
+# session_delete args must include force (orphan-cleanup path). Scope to the args block
+# (the session_delete tool body, not the whole module).
+extract_tool_block plugins/session-manager.js session_delete /tmp/sm_delete_block.$$
+if ! grep -qE "^[[:space:]]+force:" /tmp/sm_delete_block.$$ 2>/dev/null; then
+  echo "  MISSING: force arg in session_delete args in plugins/session-manager.js"
+  ERR=1
+fi
+rm -f /tmp/sm_delete_block.$$
 
 echo "Checking session-manager blocker_code allowlist + obsolete NO_SESSION_IN_DIRECTORY sweep..."
-SESSION_KNOWN_BLOCKER_CODES='SESSION_TOOLS_NOT_REGISTERED|SESSION_API_FAILED|NO_SESSION_FOR_WORKTREE|SESSION_NOT_FOUND|LIST_SCOPE_INCOMPLETE|AMBIGUOUS_TARGET|KICKOFF_FAILED|KICKOFF_DIRECTORY_BIND_FAILED|KICKOFF_AGENT_BIND_MISMATCH|KICKOFF_RESOLVED_TO_SELF|WORKTREE_API_FAILED|WORKTREE_TOOLS_NOT_REGISTERED|WORKTREE_NAME_COLLISION|WORKTREE_NOT_CLEAN_OR_PUSHED|BASE_NOT_PUSHED|PROTECTED_PROJECT_ROOT|NOT_A_GIT_WORKTREE|WORKTREE_RECOVERY_FAILED|HANDSHAKE_PUSH_FAILED|HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED|TICKET_NOT_FORKED_FROM_FEATURE|directory_bind_failed|agent_bind_mismatch|no_session_in_directory|session_not_found|ambiguous_target|list_scope_incomplete'
+SESSION_KNOWN_BLOCKER_CODES='SESSION_TOOLS_NOT_REGISTERED|SESSION_API_FAILED|NO_SESSION_FOR_WORKTREE|SESSION_NOT_FOUND|LIST_SCOPE_INCOMPLETE|AMBIGUOUS_TARGET|CREATE_BIND_MISMATCH|KICKOFF_FAILED|KICKOFF_DIRECTORY_BIND_FAILED|KICKOFF_AGENT_BIND_MISMATCH|KICKOFF_RESOLVED_TO_SELF|WORKTREE_API_FAILED|WORKTREE_TOOLS_NOT_REGISTERED|WORKTREE_NAME_COLLISION|WORKTREE_NOT_CLEAN_OR_PUSHED|BASE_NOT_PUSHED|PROTECTED_PROJECT_ROOT|NOT_A_GIT_WORKTREE|WORKTREE_RECOVERY_FAILED|HANDSHAKE_PUSH_FAILED|HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED|TICKET_NOT_FORKED_FROM_FEATURE|directory_bind_failed|agent_bind_mismatch|no_session_in_directory|session_not_found|ambiguous_target|list_scope_incomplete'
 SESSION_FILES="agents/session-manager.md agents/worktree-manager.md skills/orchestrate/SKILL.md skills/ticket-lifecycle/SKILL.md skills/feature-review/SKILL.md"
 for f in $SESSION_FILES; do
   [[ -f "$f" ]] || continue

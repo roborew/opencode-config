@@ -107,7 +107,7 @@ export const SessionManagerPlugin = async (ctx) => {
     tool: {
       session_create: {
         description:
-          "Create a new session for the current project (or a project directory). Returns the new session id. Use when a fresh GUI session is needed (e.g. kicking a coder into a newly-created ticket worktree). For the common kickoff path prefer the session-manager subagent — it composes list-then-create and notification as one atomic action. The `directory` arg is forwarded to the server as `?directory=...` on the POST URL and binds the new session to that worktree directory; without it, the server binds to the calling project's directory.",
+          "Create a new session for the current project (or a project directory). Returns the new session id plus the server's stored `directory` and `agent` for the new session, inline in the same envelope as the create response (no follow-up list — eliminates the bind race that the previous global re-list had). Use when a fresh GUI session is needed (e.g. kicking a coder into a newly-created ticket worktree). For the common kickoff path prefer the session-manager subagent — it composes list-then-create and notification as one atomic action. The `directory` arg is forwarded to the server as `?directory=...` on the POST URL and binds the new session to that worktree directory; without it, the server binds to the calling project's directory. Returns {ok, status, body, session_id, target_directory, agent, requested_directory, requested_agent, directory_match, agent_match}; `directory_match` is `false` when the caller passed a `directory` and the server returned a different one (or none) — the session-manager subagent surfaces this as a tripwire instead of silently admitting.",
         args: {
           directory: {
             type: "string",
@@ -132,7 +132,33 @@ export const SessionManagerPlugin = async (ctx) => {
           const init = { method: "POST", body: JSON.stringify(body) };
           if (args && args.directory) init.query = { directory: args.directory };
           const r = await smFetch("/session", init, context);
-          return JSON.stringify(r);
+          // Normalize the new-session payload across server response shapes — some
+          // builds return the session directly, some wrap as {session}, some as
+          // {sessions:[...]}, some as [...]. When the shape is unknown, every stored
+          // field is null and directory_match / agent_match are conservative-false so
+          // the caller hard-stops rather than silently admitting.
+          const newSession = Array.isArray(r.body) ? r.body[0]
+                           : r.body && Array.isArray(r.body.sessions) ? r.body.sessions[0]
+                           : r.body && r.body.session && typeof r.body.session === "object" ? r.body.session
+                           : r.body && typeof r.body === "object" && r.body.id ? r.body
+                           : null;
+          const storedDirectory = newSession ? (newSession.directory ?? newSession.directory) : null;
+          const storedAgent     = newSession ? (newSession.agent ?? newSession.agent) : null;
+          const sessionId       = newSession ? (newSession.id ?? newSession.id) : null;
+          const requestedDirectory = (args && args.directory) || null;
+          const requestedAgent     = (args && args.agent) || null;
+          const directoryMatch = !!(requestedDirectory && storedDirectory && storedDirectory === requestedDirectory);
+          const agentMatch     = !!(requestedAgent && storedAgent && storedAgent === requestedAgent);
+          return JSON.stringify({
+            ...r,
+            session_id: sessionId,
+            target_directory: storedDirectory,
+            agent: storedAgent || requestedAgent,
+            requested_directory: requestedDirectory,
+            requested_agent: requestedAgent,
+            directory_match: directoryMatch,
+            agent_match: agentMatch,
+          });
         },
       },
 
@@ -377,7 +403,7 @@ export const SessionManagerPlugin = async (ctx) => {
 
       session_delete: {
         description:
-          "Delete one or more sessions. Pass EITHER `sessionID` (single target, exact) OR `directory` (deletes every session bound to that worktree directory, returning per-id results). Returns {ok, deleted: [{session_id, status}], not_found?: [session_id], error?, manualRecovery?} where `ok` is true when the server returned a 2xx for every targeted id (404s on individual ids in directory-mode are not fatal — they are reported in `not_found`).",
+          "Delete one or more sessions. Pass EITHER `sessionID` (single target, exact) OR `directory` (deletes every session bound to that worktree directory, returning per-id results). Returns {ok, deleted: [{session_id, status}], not_found?: [session_id], error?, manualRecovery?} where `ok` is true when the server returned a 2xx for every targeted id (404s on individual ids in directory-mode are not fatal — they are reported in `not_found`). Set `force: true` in sessionID-mode to treat a 404 as success — for the orphan-cleanup case where the operator is racing the server's eventual consistency on a session they just created. Directory-mode's `not_found[]` already handles 404s gracefully; `force` does NOT change directory-mode behavior.",
         args: {
           sessionID: {
             type: "string",
@@ -389,10 +415,16 @@ export const SessionManagerPlugin = async (ctx) => {
             description:
               "Absolute worktree directory. Every session whose `directory` matches this value is deleted (global list — the previous scoped-list path was the self-resolve bug). Mutually exclusive with `sessionID`.",
           },
+          force: {
+            type: "boolean",
+            description:
+              "Optional bool (default false). sessionID-mode only — when true, a 404 is treated as success (`ok: true, status: 200, forced_404: true`) instead of the failure envelope. Directory-mode is unaffected (its 404 path is already non-fatal via `not_found`).",
+          },
         },
         async execute(args, context) {
           const sessionID = args && args.sessionID;
           const directory = args && args.directory;
+          const force = !!(args && args.force);
 
           if (Boolean(sessionID) === Boolean(directory)) {
             return clientError(
@@ -424,6 +456,16 @@ export const SessionManagerPlugin = async (ctx) => {
 
           if (sessionID) {
             const r = await deleteOne(sessionID);
+            if (r.status === 404 && force) {
+              return JSON.stringify({
+                ok: true,
+                status: 200,
+                session_id: sessionID,
+                forced_404: true,
+                error: null,
+                manualRecovery: null,
+              });
+            }
             const manualRecovery =
               r.status === 404
                 ? `curl -u "${process.env.OPENCODE_SERVER_USERNAME || "opencode"}:${process.env.OPENCODE_SERVER_PASSWORD || "opencode"}" -X DELETE "${baseUrl}/session/${encodeURIComponent(sessionID)}" — already gone, no action needed`
