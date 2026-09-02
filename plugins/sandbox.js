@@ -151,12 +151,8 @@ function execCapture(bin, args, opts = {}) {
   });
 }
 
-async function sandboxExec(sandboxId, dockerArgs, worktreePath) {
-  const args = ["exec", "--id", sandboxId];
-  if (worktreePath) {
-    args.push("--cwd", worktreePath);
-  }
-  args.push("--", "docker", "compose", ...dockerArgs);
+async function sandboxExec(sandboxId, dockerArgs, _worktreePath) {
+  const args = ["exec", "--id", sandboxId, "--", "docker", "compose", ...dockerArgs];
   return execCapture("sandbox", args);
 }
 
