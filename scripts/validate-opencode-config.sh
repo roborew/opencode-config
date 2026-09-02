@@ -160,13 +160,22 @@ open(out, 'w').write('\n'.join(src[start:end or start+1]))
 PY
 }
 extract_tool_block plugins/session-manager.js session_create /tmp/sm_create_block.$$
-for needle in directory_match agent_match; do
+for needle in directory_match agent_match bind_failed; do
   if ! grep -q "$needle" /tmp/sm_create_block.$$ 2>/dev/null; then
     echo "  MISSING: $needle inside session_create envelope in plugins/session-manager.js"
     ERR=1
   fi
 done
 rm -f /tmp/sm_create_block.$$
+# session_notify must wrap its GET /session lookup in a bounded retry (EVENTUAL_CONSISTENCY_RETRY
+# marker) — the server commits POST /session before it surfaces in GET /session, so a freshly-created
+# id can miss the first list attempt for ~250-1000 ms.
+extract_tool_block plugins/session-manager.js session_notify /tmp/sm_notify_block.$$
+if ! grep -q "EVENTUAL_CONSISTENCY_RETRY" /tmp/sm_notify_block.$$ 2>/dev/null; then
+  echo "  MISSING: EVENTUAL_CONSISTENCY_RETRY marker inside session_notify execute body in plugins/session-manager.js"
+  ERR=1
+fi
+rm -f /tmp/sm_notify_block.$$
 # session_delete args must include force (orphan-cleanup path). Scope to the args block
 # (the session_delete tool body, not the whole module).
 extract_tool_block plugins/session-manager.js session_delete /tmp/sm_delete_block.$$
@@ -177,7 +186,7 @@ fi
 rm -f /tmp/sm_delete_block.$$
 
 echo "Checking session-manager blocker_code allowlist + obsolete NO_SESSION_IN_DIRECTORY sweep..."
-SESSION_KNOWN_BLOCKER_CODES='SESSION_TOOLS_NOT_REGISTERED|SESSION_API_FAILED|NO_SESSION_FOR_WORKTREE|SESSION_NOT_FOUND|LIST_SCOPE_INCOMPLETE|AMBIGUOUS_TARGET|CREATE_BIND_MISMATCH|KICKOFF_FAILED|KICKOFF_DIRECTORY_BIND_FAILED|KICKOFF_AGENT_BIND_MISMATCH|KICKOFF_RESOLVED_TO_SELF|WORKTREE_API_FAILED|WORKTREE_TOOLS_NOT_REGISTERED|WORKTREE_NAME_COLLISION|WORKTREE_NOT_CLEAN_OR_PUSHED|BASE_NOT_PUSHED|PROTECTED_PROJECT_ROOT|NOT_A_GIT_WORKTREE|WORKTREE_RECOVERY_FAILED|HANDSHAKE_PUSH_FAILED|HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED|TICKET_NOT_FORKED_FROM_FEATURE|directory_bind_failed|agent_bind_mismatch|no_session_in_directory|session_not_found|ambiguous_target|list_scope_incomplete'
+SESSION_KNOWN_BLOCKER_CODES='SESSION_TOOLS_NOT_REGISTERED|SESSION_API_FAILED|NO_SESSION_FOR_WORKTREE|SESSION_NOT_FOUND|LIST_SCOPE_INCOMPLETE|AMBIGUOUS_TARGET|CREATE_BIND_MISMATCH|KICKOFF_FAILED|KICKOFF_DIRECTORY_BIND_FAILED|KICKOFF_AGENT_BIND_MISMATCH|KICKOFF_BIND_CONFIRMATION_MISSING|KICKOFF_RESOLVED_TO_SELF|WORKTREE_API_FAILED|WORKTREE_TOOLS_NOT_REGISTERED|WORKTREE_NAME_COLLISION|WORKTREE_NOT_CLEAN_OR_PUSHED|BASE_NOT_PUSHED|PROTECTED_PROJECT_ROOT|NOT_A_GIT_WORKTREE|WORKTREE_RECOVERY_FAILED|HANDSHAKE_PUSH_FAILED|HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED|TICKET_NOT_FORKED_FROM_FEATURE|directory_bind_failed|agent_bind_mismatch|no_session_in_directory|session_not_found|ambiguous_target|list_scope_incomplete'
 SESSION_FILES="agents/session-manager.md agents/worktree-manager.md skills/orchestrate/SKILL.md skills/ticket-lifecycle/SKILL.md skills/feature-review/SKILL.md"
 for f in $SESSION_FILES; do
   [[ -f "$f" ]] || continue

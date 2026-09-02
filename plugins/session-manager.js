@@ -13,15 +13,16 @@
  *                     (directory is forwarded as `?directory=...` on the URL — the
  *                      opencode server's POST /session binds sessions to a directory
  *                      via the query string, not the body)
- *   session_list     GET  /session                                  {scope?, directory?}
- *                     (scope defaults to "global"; pass scope:"directory" + directory to
- *                      ask the server to filter — advisory; the session-manager subagent
+*   session_list     GET  /session                                  {scope?, directory?}
+ *                     (no scope arg = no query string, server returns everything the calling
+ *                      project knows about; pass scope:"directory" + directory to forward
+ *                      `?directory=...` to the server — advisory; the session-manager subagent
  *                      also filters client-side defensively)
  *   session_notify   POST /session/{id}/prompt_async                resolves target then
  *                     posts {parts:[{type:"text", text:msg}], agent?} as a 204-ack async prompt
- *                     (when sessionID is omitted, scope defaults to "global" so the
- *                     directory-resolve sees worktree-bound sessions even when the
- *                     calling agent's `context.directory` differs from the target dir)
+ *                     (when sessionID is omitted, the list call has no query string so
+ *                      directory-resolve sees worktree-bound sessions even when the
+ *                      calling agent's `context.directory` differs from the target dir)
  *   session_delete   DELETE /session/{id}                            {sessionID?}
  *                     OR                                                    {directory?}
  *                     (mutual exclusion — same shape as session_notify; directory-mode
@@ -107,7 +108,7 @@ export const SessionManagerPlugin = async (ctx) => {
     tool: {
       session_create: {
         description:
-          "Create a new session for the current project (or a project directory). Returns the new session id plus the server's stored `directory` and `agent` for the new session, inline in the same envelope as the create response (no follow-up list — eliminates the bind race that the previous global re-list had). Use when a fresh GUI session is needed (e.g. kicking a coder into a newly-created ticket worktree). For the common kickoff path prefer the session-manager subagent — it composes list-then-create and notification as one atomic action. The `directory` arg is forwarded to the server as `?directory=...` on the POST URL and binds the new session to that worktree directory; without it, the server binds to the calling project's directory. Returns {ok, status, body, session_id, target_directory, agent, requested_directory, requested_agent, directory_match, agent_match}; `directory_match` is `false` when the caller passed a `directory` and the server returned a different one (or none) — the session-manager subagent surfaces this as a tripwire instead of silently admitting.",
+          "Create a new session for the current project (or a project directory). Returns the new session id plus the server's stored `directory` and `agent` for the new session, inline in the same envelope as the create response (no follow-up list — eliminates the bind race that the previous global re-list had). Use when a fresh GUI session is needed (e.g. kicking a coder into a newly-created ticket worktree). For the common kickoff path prefer the session-manager subagent — it composes list-then-create and notification as one atomic action. The `directory` arg is forwarded to the server as `?directory=...` on the POST URL and binds the new session to that worktree directory; without it, the server binds to the calling project's directory. Returns {ok, status, body, session_id, target_directory, agent, requested_directory, requested_agent, directory_match, agent_match}; `directory_match` is `false` when the caller passed a `directory` and the server returned a different one (or none) — the session-manager subagent surfaces this as a tripwire instead of silently admitting. Also returns `bind_failed: true` whenever either `directory_match` or `agent_match` is `false`; the orchestrator hard-stops on `bind_failed: true` rather than admitting on `admitted`.",
         args: {
           directory: {
             type: "string",
@@ -158,13 +159,14 @@ export const SessionManagerPlugin = async (ctx) => {
             requested_agent: requestedAgent,
             directory_match: directoryMatch,
             agent_match: agentMatch,
+            bind_failed: !(!directoryMatch || !agentMatch),
           });
         },
       },
 
       session_list: {
         description:
-          "List sessions. Returns the sessions array (each entry includes id, directory, parentID, title, updatedAt, ...). Default scope is `global` (unfiltered) — the session-manager subagent filters client-side against `args.directory` defensively. Pass `scope: \"directory\"` to also forward `?directory=...` to the server (advisory; some server builds ignore it).",
+          "List sessions. Returns the sessions array. With no `scope` arg, sends `GET /session` (no query string) and the server returns everything the calling project knows about — the session-manager subagent filters client-side against `args.directory` defensively. With `scope: \"directory\"` + `directory`, also forwards `?directory=...` to the server (advisory; some server builds ignore it).",
         args: {
           directory: {
             type: "string",
@@ -173,8 +175,9 @@ export const SessionManagerPlugin = async (ctx) => {
           },
           scope: {
             type: "string",
+            enum: ["directory"],
             description:
-              "Optional. `\"global\"` (default) returns every session the server knows about; `\"directory\"` forwards `?directory=<args.directory>` to the server. The session-manager subagent always filters client-side.",
+              "Optional. `\"directory\"` forwards `?directory=<args.directory>` to the server; absence of `scope` means no query string (server returns everything). The session-manager subagent always filters client-side.",
           },
         },
         async execute(args, context) {
@@ -194,7 +197,7 @@ export const SessionManagerPlugin = async (ctx) => {
 
       session_notify: {
         description:
-          "Inject an async message into a session (POST /session/{id}/prompt_async). Resolves the target session id from EITHER `sessionID` (exact) OR `directory` (newest no-parent session bound to that worktree, picked from a global-scope list — the previous scoped-list path was the source of the self-resolve bug against worktree dirs). Passing both, or neither, is a client error. Returns {ok, admitted, session_id, target_directory, agent, directory_match, agent_match, manualRecovery} where `admitted` is true on HTTP 204 (the success contract for /prompt_async). When `sessionID` is provided but the server has no entry with that id, returns `error: \"session_not_found\"` (hard stop — no silent create).",
+          "Inject an async message into a session (POST /session/{id}/prompt_async). Resolves the target session id from EITHER `sessionID` (exact) OR `directory` (newest no-parent session bound to that worktree, picked from an unfiltered list — the previous scoped-list path was the source of the self-resolve bug against worktree dirs). Passing both, or neither, is a client error. Returns {ok, admitted, session_id, target_directory, agent, directory_match, agent_match, manualRecovery} where `admitted` is true on HTTP 204 (the success contract for /prompt_async). When `sessionID` is provided but the server has no entry with that id, returns `error: \"session_not_found\"` (hard stop — no silent create).",
         args: {
           sessionID: {
             type: "string",
@@ -204,7 +207,7 @@ export const SessionManagerPlugin = async (ctx) => {
           directory: {
             type: "string",
             description:
-              "Absolute worktree directory. The newest no-parent session bound to this directory is selected from a global-scope list (`GET /session`, no `?directory=` — the previous scoped path was the self-resolve bug). Mutually exclusive with `sessionID`.",
+              "Absolute worktree directory. The newest no-parent session bound to this directory is selected from an unfiltered list (`GET /session`, no `?directory=` — the previous scoped path was the self-resolve bug). Mutually exclusive with `sessionID`.",
           },
           agent: {
             type: "string",
@@ -218,8 +221,9 @@ export const SessionManagerPlugin = async (ctx) => {
           },
           scope: {
             type: "string",
+            enum: ["directory"],
             description:
-              "Optional. For directory-mode resolution only — `\"global\"` (default) unfiltered list, `\"directory\"` filters by `?directory=`. Ignored in `sessionID` mode (always global so a fresh id is always findable).",
+              "Optional. For directory-mode resolution only — `\"directory\"` filters by `?directory=<args.directory>` to the server (advisory). Ignored in `sessionID` mode (always unfiltered so a fresh id is always findable).",
           },
         },
         async execute(args, context) {
@@ -265,14 +269,28 @@ export const SessionManagerPlugin = async (ctx) => {
           const manualRecoveryCurl = (id, dir) =>
             `curl -u "${process.env.OPENCODE_SERVER_USERNAME || "opencode"}:${process.env.OPENCODE_SERVER_PASSWORD || "opencode"}" -H 'Content-Type: application/json' -d '${JSON.stringify({ parts: [{ type: "text", text: message }] }).replace(/'/g, "'\\''")}' "${baseUrl}/session/${encodeURIComponent(id)}/prompt_async?directory=${encodeURIComponent(dir || "")}"`;
 
-          // sessionID mode: assert the id exists in the global list (no scoped listing
+          // EVENTUAL_CONSISTENCY_RETRY: server commits the POST /session row before it
+          // surfaces in GET /session; a freshly-created id may not be findable for ~250-1000 ms.
+          // We bound this with a 3-attempt / 250-500-1000 ms ladder; the caller (kickoff) also
+          // waits 750 ms after create. Terminal failure shape is unchanged.
+          const RETRY_DELAYS_MS = [250, 500, 1000];
+          const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+          async function listWithRetry(listInit) {
+            let last = null;
+            for (let i = 0; i < RETRY_DELAYS_MS.length + 1; i++) {
+              const list = await smFetch("/session", listInit, context);
+              last = list;
+              const sessions = list.ok && Array.isArray(list.body) ? list.body : [];
+              if (sessions.length > 0) return list;
+              if (i < RETRY_DELAYS_MS.length) await sleep(RETRY_DELAYS_MS[i]);
+            }
+            return last;
+          }
+
+          // sessionID mode: assert the id exists in the unfiltered list (no scoped listing
           // — silent scoping caused the self-resolve bug against worktree dirs).
           if (sessionID) {
-            const list = await smFetch(
-              "/session",
-              { method: "GET" },
-              context,
-            );
+            const list = await listWithRetry({ method: "GET" });
             const sessions =
               list.ok && Array.isArray(list.body) ? list.body : [];
             resolvedSession =
@@ -310,16 +328,22 @@ export const SessionManagerPlugin = async (ctx) => {
               });
             }
           } else {
-            // directory-mode resolve. Default scope is `global`; caller may opt into
-            // scoped listing by passing scope:"directory" + directory.
+            // directory-mode resolve. Caller may opt into scoped listing by passing
+            // scope:"directory" + directory; default is unfiltered.
             const useScoped =
               args &&
               args.scope === "directory" &&
               typeof directory === "string" &&
               directory.length > 0;
+            // EVENTUAL_CONSISTENCY_RETRY: when the caller did not opt into scoped listing,
+            // retry the unfiltered GET /session with the 250/500/1000 ladder. When the
+            // caller DID opt into scoped listing, server presence was already claimed and
+            // a miss is a real LIST_SCOPE_INCOMPLETE — no retry.
             const listInit = { method: "GET" };
             if (useScoped) listInit.query = { directory };
-            const list = await smFetch("/session", listInit, context);
+            const list = useScoped
+              ? await smFetch("/session", listInit, context)
+              : await listWithRetry(listInit);
             let sessions =
               list.ok && Array.isArray(list.body) ? list.body : [];
             // Client-side filter — defensive even when the server scopes, because
