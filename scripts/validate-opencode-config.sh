@@ -166,6 +166,10 @@ for needle in directory_match agent_match bind_failed; do
     ERR=1
   fi
 done
+if grep -Eq 'bind_failed:\s*!\(\s*!directoryMatch\s*\|\|\s*!agentMatch\s*\)' /tmp/sm_create_block.$$; then
+  echo "  REGRESSION: plugins/session-manager.js session_create computes bind_failed as !( !d || !a ) — inverts the spec truth table"
+  ERR=1
+fi
 rm -f /tmp/sm_create_block.$$
 # session_notify must wrap its GET /session lookup in a bounded retry (EVENTUAL_CONSISTENCY_RETRY
 # marker) — the server commits POST /session before it surfaces in GET /session, so a freshly-created

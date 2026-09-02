@@ -159,7 +159,7 @@ export const SessionManagerPlugin = async (ctx) => {
             requested_agent: requestedAgent,
             directory_match: directoryMatch,
             agent_match: agentMatch,
-            bind_failed: !(!directoryMatch || !agentMatch),
+            bind_failed: !directoryMatch || !agentMatch,
           });
         },
       },
