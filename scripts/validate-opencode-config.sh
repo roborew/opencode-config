@@ -109,6 +109,29 @@ else
   echo "  WARN: $AUDIT_DIR does not exist — audit is a no-op until worktree-manager transcripts are captured. Scaffold with: mkdir -p $AUDIT_DIR"
 fi
 
+echo "Checking session-manager plugin wiring..."
+if [[ ! -f plugins/session-manager.js ]]; then
+  echo "  MISSING: plugins/session-manager.js"
+  ERR=1
+elif ! node --check plugins/session-manager.js >/dev/null 2>&1; then
+  echo "  FAIL: plugins/session-manager.js syntax check"
+  ERR=1
+fi
+for tool in session_create session_list session_notify session_delete; do
+  if ! grep -qE "^[[:space:]]*${tool}:[[:space:]]*\{" plugins/session-manager.js 2>/dev/null; then
+    echo "  MISSING: $tool registration in plugins/session-manager.js"
+    ERR=1
+  fi
+done
+if ! grep -q "\[session-manager-plugin\] messaging tools loaded" plugins/session-manager.js 2>/dev/null; then
+  echo "  MISSING: session-manager boot log line in plugins/session-manager.js"
+  ERR=1
+fi
+if ! grep -q "session_delete: true" agents/session-manager.md 2>/dev/null; then
+  echo "  MISSING: session_delete: true in agents/session-manager.md frontmatter"
+  ERR=1
+fi
+
 echo "Checking session-manager blocker_code allowlist + obsolete NO_SESSION_IN_DIRECTORY sweep..."
 SESSION_KNOWN_BLOCKER_CODES='SESSION_TOOLS_NOT_REGISTERED|SESSION_API_FAILED|NO_SESSION_FOR_WORKTREE|SESSION_NOT_FOUND|LIST_SCOPE_INCOMPLETE|AMBIGUOUS_TARGET|KICKOFF_FAILED|KICKOFF_DIRECTORY_BIND_FAILED|KICKOFF_AGENT_BIND_MISMATCH|KICKOFF_RESOLVED_TO_SELF|WORKTREE_API_FAILED|WORKTREE_TOOLS_NOT_REGISTERED|WORKTREE_NAME_COLLISION|WORKTREE_NOT_CLEAN_OR_PUSHED|BASE_NOT_PUSHED|PROTECTED_PROJECT_ROOT|NOT_A_GIT_WORKTREE|WORKTREE_RECOVERY_FAILED|HANDSHAKE_PUSH_FAILED|HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED|TICKET_NOT_FORKED_FROM_FEATURE|directory_bind_failed|agent_bind_mismatch|no_session_in_directory|session_not_found|ambiguous_target|list_scope_incomplete'
 SESSION_FILES="agents/session-manager.md agents/worktree-manager.md skills/orchestrate/SKILL.md skills/ticket-lifecycle/SKILL.md skills/feature-review/SKILL.md"

@@ -171,14 +171,7 @@ The orchestrator calls you with a JSON-shaped `prompt`. Parse it and execute **o
    python3 /usr/local/bin/rewrite-worktree-gitdirs.py scrub
    ```
    (`<repo>` is the project repo name, e.g. `APP-web`.)
-3. Deregister orphan sessions: for each session whose `directory` matches the worktree dir, `DELETE /session/<id>` with the `X-Opencode-Directory` header (same mechanism as `opencode-api.sh:deregister_project`). Use `curl` with auth from `OPENCODE_SERVER_USERNAME`/`OPENCODE_SERVER_PASSWORD` and base URL `http://127.0.0.1:4098`:
-   ```bash
-   AUTH="$OPENCODE_SERVER_USERNAME:$OPENCODE_SERVER_PASSWORD"
-   BASE="http://127.0.0.1:4098"
-   for sid in $(curl -sf -u "$AUTH" "$BASE/session" | jq -r ".[] | select(.directory==\"<dir>\") | .id"); do
-     curl -sf -u "$AUTH" -X DELETE "$BASE/session/$sid" -H "X-Opencode-Directory: <repo>"
-   done
-   ```
+3. Deregister orphan sessions — dispatch `session-manager.delete { directory: <dir> }`. The subagent iterates the global session list, filters by directory, and `DELETE /session/<id>` for each match (404s are non-fatal and reported in `not_found`). On `ok: false`, surface the envelope's first `failures[]` entry + `manualRecovery` verbatim and stop with `BLOCKED: WORKTREE_RECOVERY_FAILED` — do not retry the loop yourself, do not call curl directly (the previous direct-curl loop migrated here for the same reason `kickoff` does: the subagent is the single owner of session_* calls).
 4. Re-list with `worktree_list({})` to confirm the worktree is gone.
 5. Return `{ ok: true, action: "recover", directory, recovered: true }`. On any failure, return `{ ok: false, blocker_code: "WORKTREE_RECOVERY_FAILED", ... }`.
 

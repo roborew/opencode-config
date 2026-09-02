@@ -22,12 +22,14 @@
  *                     (when sessionID is omitted, scope defaults to "global" so the
  *                     directory-resolve sees worktree-bound sessions even when the
  *                     calling agent's `context.directory` differs from the target dir)
+ *   session_delete   DELETE /session/{id}                            {sessionID?}
+ *                     OR                                                    {directory?}
+ *                     (mutual exclusion — same shape as session_notify; directory-mode
+ *                      iterates the global list and deletes every session bound to
+ *                      that directory, returning the per-id results)
  *
- * Mutual exclusion on `session_notify`: pass EITHER `sessionID` (exact
- * target) OR `directory` (resolve to newest no-parent session in that
- * worktree). When `sessionID` is provided, `GET /session` (unfiltered, scope:
- * "global") is consulted only to verify the id exists and (if `args.directory`
- * was also passed) that the binding matches — no silent create on miss.
+ * Mutual exclusion on `session_notify` / `session_delete`: pass EITHER `sessionID` (exact
+ * target) OR `directory` (operate on every session bound to that directory).
  *
  * Listing un-scoping: `smFetch` no longer reads `context.directory` as an
  * implicit query string — the previous behaviour caused the
@@ -369,6 +371,119 @@ export const SessionManagerPlugin = async (ctx) => {
             manualRecovery: r.ok
               ? null
               : manualRecoveryCurl(targetID, targetDir || ""),
+          });
+        },
+      },
+
+      session_delete: {
+        description:
+          "Delete one or more sessions. Pass EITHER `sessionID` (single target, exact) OR `directory` (deletes every session bound to that worktree directory, returning per-id results). Returns {ok, deleted: [{session_id, status}], not_found?: [session_id], error?, manualRecovery?} where `ok` is true when the server returned a 2xx for every targeted id (404s on individual ids in directory-mode are not fatal — they are reported in `not_found`).",
+        args: {
+          sessionID: {
+            type: "string",
+            description:
+              "Exact session id to delete. Mutually exclusive with `directory`.",
+          },
+          directory: {
+            type: "string",
+            description:
+              "Absolute worktree directory. Every session whose `directory` matches this value is deleted (global list — the previous scoped-list path was the self-resolve bug). Mutually exclusive with `sessionID`.",
+          },
+        },
+        async execute(args, context) {
+          const sessionID = args && args.sessionID;
+          const directory = args && args.directory;
+
+          if (Boolean(sessionID) === Boolean(directory)) {
+            return clientError(
+              "session_delete requires exactly one of 'sessionID' or 'directory' (not both, not neither).",
+            );
+          }
+
+          const auth = (() => {
+            const u = process.env.OPENCODE_SERVER_USERNAME || "opencode";
+            const p = process.env.OPENCODE_SERVER_PASSWORD || "opencode";
+            return "Basic " + Buffer.from(`${u}:${p}`).toString("base64");
+          })();
+
+          async function deleteOne(id) {
+            const url = `${baseUrl}/session/${encodeURIComponent(id)}`;
+            const res = await fetch(url, {
+              method: "DELETE",
+              headers: { Authorization: auth },
+            });
+            const text = await res.text();
+            let body;
+            try {
+              body = text ? JSON.parse(text) : null;
+            } catch {
+              body = text;
+            }
+            return { id, ok: res.ok, status: res.status, body };
+          }
+
+          if (sessionID) {
+            const r = await deleteOne(sessionID);
+            const manualRecovery =
+              r.status === 404
+                ? `curl -u "${process.env.OPENCODE_SERVER_USERNAME || "opencode"}:${process.env.OPENCODE_SERVER_PASSWORD || "opencode"}" -X DELETE "${baseUrl}/session/${encodeURIComponent(sessionID)}" — already gone, no action needed`
+                : r.ok
+                  ? null
+                  : `curl -u "${process.env.OPENCODE_SERVER_USERNAME || "opencode"}:${process.env.OPENCODE_SERVER_PASSWORD || "opencode"}" -X DELETE "${baseUrl}/session/${encodeURIComponent(sessionID)}"`;
+            return JSON.stringify({
+              ok: r.ok,
+              status: r.status,
+              session_id: sessionID,
+              error: r.ok ? null : r.body,
+              manualRecovery,
+            });
+          }
+
+          // directory-mode: global list, client-side filter, delete each match.
+          const list = await smFetch("/session", { method: "GET" }, context);
+          const sessions =
+            list.ok && Array.isArray(list.body) ? list.body : [];
+          const inDir = sessions.filter(
+            (s) =>
+              s &&
+              (s.directory === directory || s.directory === directory),
+          );
+          if (inDir.length === 0) {
+            return JSON.stringify({
+              ok: true,
+              status: 200,
+              directory,
+              deleted: [],
+              not_found: [],
+              error: null,
+              manualRecovery: null,
+            });
+          }
+          const deleted = [];
+          const not_found = [];
+          const failures = [];
+          for (const s of inDir) {
+            const r = await deleteOne(s.id);
+            if (r.ok) {
+              deleted.push({ session_id: s.id, status: r.status });
+            } else if (r.status === 404) {
+              not_found.push(s.id);
+            } else {
+              failures.push({ session_id: s.id, status: r.status, body: r.body });
+            }
+          }
+          const ok = failures.length === 0;
+          return JSON.stringify({
+            ok,
+            status: ok ? 200 : failures[0].status,
+            directory,
+            deleted,
+            not_found,
+            failures,
+            error: ok ? null : failures[0].body,
+            manualRecovery: ok
+              ? null
+              : `curl -u "${process.env.OPENCODE_SERVER_USERNAME || "opencode"}:${process.env.OPENCODE_SERVER_PASSWORD || "opencode"}" -X DELETE "${baseUrl}/session/${encodeURIComponent(failures[0].session_id)}"`,
           });
         },
       },
