@@ -197,12 +197,12 @@ export const SessionManagerPlugin = async (ctx) => {
 
       session_notify: {
         description:
-          "Inject an async message into a session (POST /session/{id}/prompt_async). Resolves the target session id from EITHER `sessionID` (exact) OR `directory` (newest no-parent session bound to that worktree, picked from an unfiltered list — the previous scoped-list path was the source of the self-resolve bug against worktree dirs). Passing both, or neither, is a client error. Returns {ok, admitted, session_id, target_directory, agent, directory_match, agent_match, manualRecovery} where `admitted` is true on HTTP 204 (the success contract for /prompt_async). When `sessionID` is provided but the server has no entry with that id, returns `error: \"session_not_found\"` (hard stop — no silent create).",
+          "Inject an async message into a session (POST /session/{id}/prompt_async). Resolves the target session id from EITHER `sessionID` (exact, trusted as-is — the server's 404 on /prompt_async is the canonical stale/unknown signal) OR `directory` (newest no-parent session bound to that worktree, picked from an unfiltered list — the previous scoped-list path was the source of the self-resolve bug against worktree dirs). Passing both, or neither, is a client error. Returns {ok, admitted, session_id, target_directory, agent, directory_match, agent_match, manualRecovery} where `admitted` is true on HTTP 204 (the success contract for /prompt_async).",
         args: {
           sessionID: {
             type: "string",
             description:
-              "Exact session id to inject into. Mutually exclusive with `directory`. When provided, the plugin asserts the id appears in `GET /session` (scope: global) — a miss returns `error: \"session_not_found\"`, never silently creates.",
+              "Exact session id to inject into. Mutually exclusive with `directory`. The id is trusted as-is and POSTed to `/session/{id}/prompt_async`; a server 404 is surfaced as `error: \"session_not_found\"` with `manualRecovery`.",
           },
           directory: {
             type: "string",
@@ -287,46 +287,14 @@ export const SessionManagerPlugin = async (ctx) => {
             return last;
           }
 
-          // sessionID mode: assert the id exists in the unfiltered list (no scoped listing
-          // — silent scoping caused the self-resolve bug against worktree dirs).
+          // sessionID mode: trust the id. The server's /prompt_async 404 is the
+          // canonical signal for stale/unknown ids. Re-validating against an
+          // unscoped list was the source of the false-404 against worktree-bound
+          // sessions (the unscoped list doesn't always include them; the subagent
+          // already proved presence via the scoped list at kickoff step 2-4).
           if (sessionID) {
-            const list = await listWithRetry({ method: "GET" });
-            const sessions =
-              list.ok && Array.isArray(list.body) ? list.body : [];
-            resolvedSession =
-              sessions.find((s) => s && s.id === sessionID) || null;
-            if (!resolvedSession) {
-              return JSON.stringify({
-                ok: false,
-                admitted: false,
-                status: 404,
-                session_id: sessionID,
-                target_directory: null,
-                agent: requestedAgent,
-                directory_match: false,
-                agent_match: false,
-                error: "session_not_found",
-                manualRecovery: manualRecoveryCurl(sessionID, ""),
-              });
-            }
-            targetDir = sessionDirectory(resolvedSession) || null;
-            // If caller passed BOTH sessionID and directory (client error shape), also
-            // flag a binding mismatch — the explicit id wins, but a mismatch is a sign
-            // of caller misuse.
-            if (directory && !directoryMatches(resolvedSession, directory)) {
-              return JSON.stringify({
-                ok: false,
-                admitted: false,
-                status: 409,
-                session_id: sessionID,
-                target_directory: targetDir,
-                agent: requestedAgent,
-                directory_match: false,
-                agent_match: agentMatches(resolvedSession, requestedAgent),
-                error: "ambiguous_target",
-                manualRecovery: manualRecoveryCurl(sessionID, targetDir || ""),
-              });
-            }
+            resolvedSession = { id: sessionID, directory: directory || null };
+            targetDir = directory || null;
           } else {
             // directory-mode resolve. Caller may opt into scoped listing by passing
             // scope:"directory" + directory; default is unfiltered.

@@ -180,6 +180,20 @@ if ! grep -q "EVENTUAL_CONSISTENCY_RETRY" /tmp/sm_notify_block.$$ 2>/dev/null; t
   ERR=1
 fi
 rm -f /tmp/sm_notify_block.$$
+# session_notify's sessionID branch must NOT re-list against the unscoped /session endpoint.
+# That over-validation was the source of the false-404 against worktree-bound sessions
+# (the unscoped list doesn't always include them; the subagent already proved presence via
+# the scoped list at kickoff step 2-4). Guard: no `listWithRetry({ method: "GET" })` call
+# between the `if (sessionID)` keyword and the matching `} else {`.
+# Fragility note: this keys off `if (sessionID)` and `} else {` token occurrences — if a
+# future refactor adds another `if (sessionID)` block above execute() (e.g. inside a
+# helper), the awk window could match wrong lines. Today's code has exactly one of each.
+extract_tool_block plugins/session-manager.js session_notify /tmp/sm_notify_block.$$
+if awk '/if \(sessionID\)/{f=1; next} f && /^[[:space:]]*\} else \{/{f=0} f' /tmp/sm_notify_block.$$ | grep -qE "listWithRetry\(\{ method: ['\"]GET['\"] \}\)"; then
+  echo "  REGRESSION: session_notify sessionID branch re-lists (false-404 against worktree-bound sessions)"
+  ERR=1
+fi
+rm -f /tmp/sm_notify_block.$$
 # session_delete args must include force (orphan-cleanup path). Scope to the args block
 # (the session_delete tool body, not the whole module).
 extract_tool_block plugins/session-manager.js session_delete /tmp/sm_delete_block.$$
