@@ -20,8 +20,7 @@ permission:
     ux-dev: allow
     code-review: allow
     senior-dev: allow
-    preflight: allow
-    worktree-env: allow
+    worktree-sandbox: allow
     kilo-fallback: allow
     openrouter-fallback: allow
     worktree-manager: deny
@@ -67,7 +66,7 @@ When a stage exhausts its 2-NEEDS_CHANGES retry budget, or the stage is marked h
 ## Hard Rules
 
 1. **One terminal report.** Either `READY_FOR_HUMAN_REVIEW` or `BLOCKED`. Do not return success after each stage; do not hand off mid-ticket.
-2. **Silent preflight.** `worktree-env` + `preflight` once, silently, with one auto-repair pass. Surface only on `Status: Blocked` after that single repair.
+2. **Silent preflight.** `worktree-sandbox` (mode: probe_and_create) once, silently, with one build+warm pass. Surface only on `blocker_code` after that single pass.
 3. **Stay on `opencode/ticket-<issue>-<slug>-<abbrev>`.** Do not switch branches, do not push to `develop` or `opencode/feat-<slug>` directly — only to your own ticket branch.
 4. **Never delete remote branches.** `git push origin --delete` is owned exclusively by the develop orchestrator (delegated to `developer`). You push your ticket branch only.
 5. **One sub-PR per ticket.** Sub-PR is `head=opencode/ticket-<issue>-<slug>-<abbrev>`, `base=opencode/feat-<slug>`. No additional PRs.
@@ -80,6 +79,7 @@ When a stage exhausts its 2-NEEDS_CHANGES retry budget, or the stage is marked h
 12. **Cross-ticket review comments are not yours to fix.** If `pr-stabilize-watch.sh` returns comments whose fix touches another ticket's branch files, return `BLOCKED: CROSS_TICKET_REVIEW`.
 13. **Skill load failure is fatal.** `SKILL_UNAVAILABLE: <skill>` halts the ticket — never substitute implementer output for a missing required skill.
 14. **CodeRabbit runs inside your sessions, dispatched via `code-review`.** Ticket mode: the **local CodeRabbit pre-flight** (`execution_mode: ticket_coderabbit_preflight`) runs after the final-gate full suite and before the sub-PR opens — scope is correctness, obvious bugs, and risky changes; findings are fix-now suggestions you apply in-worktree (`ticket-lifecycle` §3). Feature mode: the **PR-side CodeRabbit gate** runs once (`execution_mode: feature_coderabbit_gate`, medium/hard) inside `feature-review` §2 — the policy gate before the feature PR is ready for review. The develop orchestrator never dispatches CodeRabbit and never checks its verdict.
+15. **Compose-test backend is the plugin.** Per-stage test execution (RED / GREEN / replay / final-gate) is the **`sandbox_run_test` plugin tool** from `plugins/sandbox.js` — never re-invent a `docker compose` invocation. `worktree-sandbox` owns entry/exit (`probe_and_create` / `teardown`); `code-review` / `developer` / `frontend-dev` / `ux-dev` / `test-writer` / `senior-dev` call `sandbox_run_test` directly with the canonical handles from §0.3.
 
 ## Lifecycle Log (in-session, not an artifact)
 
@@ -110,7 +110,7 @@ When all stages are `APPROVED` and the final-gate full-suite compose run is gree
 
 1. Post the terminal comment — `ticket_report:` on the issue (ticket mode) or `feature_report:` on the PRD parent (feature mode) — mandatory durable channel.
 2. Dispatch `session-manager.notify` with the same pointer (best-effort). The `develop_session_id` was supplied in the kickoff message; pass it as `sessionID` so the injection lands in the develop orchestrator's session.
-3. Tear down the compose test backend (lifecycle-aware destroy, `docker-sandbox` §5).
+3. Tear down the compose test backend — dispatch `worktree-sandbox` (mode: teardown) with the `sandbox_id` + `compose_test_file` from §0.3 (lifecycle-aware destroy via the plugin `sandbox_destroy`).
 4. End your turn. The implementer Hard Rules' post-completion guard fires after this terminal report.
 
 The ticket sub-PR + stabilization + terminal-report procedure (including the comment shape, the BLOCKED envelope, the `session-manager.notify` fallback when `develop_session_id` is stale, and the **local CodeRabbit pre-flight** before push) lives in `ticket-lifecycle` §3–§6. The feature-mode procedure (full-suite + **PR-side CodeRabbit** + difficulty gates + docs + `state:done` + feature PR + stabilization + `feature_report:`) lives in `feature-review` §1–§9.

@@ -4,6 +4,7 @@
   "plugin": [
     "./plugins/worktree.js",
     "./plugins/session-manager.js",
+    "./plugins/sandbox.js",
     "./plugins/localhost-to-docker-host.js",
     "./plugins/rewrite-worktree-gitdirs.js"
   ],
@@ -373,10 +374,10 @@
       "model": "opencode-gpt/gpt-5-nano",
       "steps": 15
     },
-    "worktree-env": {
+    "worktree-sandbox": {
       "mode": "subagent",
       "model": "opencode-gpt/gpt-5-nano",
-      "steps": 10
+      "steps": 20
     },
     "worktree-manager": {
       "mode": "subagent",
@@ -384,11 +385,6 @@
       "steps": 20
     },
     "session-manager": {
-      "mode": "subagent",
-      "model": "opencode-gpt/gpt-5-nano",
-      "steps": 15
-    },
-    "preflight": {
       "mode": "subagent",
       "model": "opencode-gpt/gpt-5-nano",
       "steps": 15

@@ -271,28 +271,84 @@ if ! grep -q 'sandbox_id' agents/code-review.md; then
   ERR=1
 fi
 
-echo "Checking worktree-env / preflight bootstrap scripts..."
-for f in scripts/worktree-env.sh scripts/preflight-worktree-verify.sh scripts/preflight-runtime.sh; do
-  if [[ ! -f "$f" ]]; then
-    echo "  MISSING: $f"
-    ERR=1
-  elif [[ ! -x "$f" ]]; then
-    echo "  NOT EXECUTABLE: $f"
+echo "Checking worktree-sandbox plugin + agent wiring..."
+if [[ ! -f plugins/sandbox.js ]]; then
+  echo "  MISSING: plugins/sandbox.js"
+  ERR=1
+elif ! node --check plugins/sandbox.js >/dev/null 2>&1; then
+  echo "  FAIL: plugins/sandbox.js syntax check"
+  ERR=1
+fi
+for tool in sandbox_probe env_copy sandbox_create sandbox_build sandbox_warm sandbox_run_test sandbox_status sandbox_destroy; do
+  if ! grep -qE "^[[:space:]]*${tool}:[[:space:]]*\{" plugins/sandbox.js 2>/dev/null; then
+    echo "  MISSING: $tool registration in plugins/sandbox.js"
     ERR=1
   fi
 done
-if ! grep -q 'scripts/worktree-env.sh' agents/worktree-env.md skills/worktree-env/SKILL.md 2>/dev/null; then
+if ! grep -q "\[sandbox-plugin\] compose-test backend tools loaded" plugins/sandbox.js 2>/dev/null; then
+  echo "  MISSING: sandbox-plugin boot log line in plugins/sandbox.js"
+  ERR=1
+fi
+if [[ ! -f agents/worktree-sandbox.md ]]; then
+  echo "  MISSING: agents/worktree-sandbox.md"
+  ERR=1
+fi
+if [[ ! -f skills/worktree-sandbox/SKILL.md ]]; then
+  echo "  MISSING: skills/worktree-sandbox/SKILL.md"
+  ERR=1
+fi
+if ! grep -q '"worktree-sandbox"' opencode.json 2>/dev/null; then
+  echo "  MISSING: worktree-sandbox agent entry in opencode.json"
+  ERR=1
+fi
+if ! grep -q 'worktree-sandbox: allow' agents/coder.md 2>/dev/null; then
+  echo "  MISSING: worktree-sandbox in coder task allow-list"
+  ERR=1
+fi
+if ! grep -q 'worktree-sandbox: allow' agents/orchestrate.md 2>/dev/null; then
+  echo "  MISSING: worktree-sandbox in orchestrate task allow-list"
+  ERR=1
+fi
+if ! grep -q 'sandbox_run_test' skills/ticket-lifecycle/SKILL.md 2>/dev/null; then
+  echo "  MISSING: sandbox_run_test reference in skills/ticket-lifecycle/SKILL.md"
+  ERR=1
+fi
+if ! grep -q 'sandbox_run_test' skills/feature-review/SKILL.md 2>/dev/null; then
+  echo "  MISSING: sandbox_run_test reference in skills/feature-review/SKILL.md"
+  ERR=1
+fi
+echo "Checking legacy worktree-env / preflight scripts removed..."
+for f in scripts/worktree-env.sh scripts/preflight-worktree-verify.sh scripts/preflight-runtime.sh; do
+  if [[ -f "$f" ]]; then
+    echo "  ERROR: legacy script must be removed: $f (replaced by plugins/sandbox.js env_copy)"
+    ERR=1
+  fi
+done
+for f in agents/worktree-env.md agents/preflight.md skills/worktree-env/SKILL.md skills/preflight/SKILL.md; do
+  if [[ -f "$f" ]]; then
+    echo "  ERROR: legacy agent/skill must be removed: $f (replaced by agents/worktree-sandbox.md + skills/worktree-sandbox/SKILL.md)"
+    ERR=1
+  fi
+done
+if ! grep -q 'worktree-env.sh' agents/worktree-env.md skills/worktree-env/SKILL.md 2>/dev/null; then
+  : # legacy agent/skill already gone — gate satisfied
+elif ! grep -q 'scripts/worktree-env.sh' agents/worktree-env.md skills/worktree-env/SKILL.md 2>/dev/null; then
   echo "  MISSING: worktree-env.sh reference in worktree-env agent/skill"
   ERR=1
 fi
 if ! grep -q 'scripts/preflight-worktree-verify.sh' agents/preflight.md skills/preflight/SKILL.md 2>/dev/null; then
+  : # legacy agent/skill already gone — gate satisfied
+elif ! grep -q 'scripts/preflight-worktree-verify.sh' agents/preflight.md skills/preflight/SKILL.md 2>/dev/null; then
   echo "  MISSING: preflight-worktree-verify.sh reference in preflight agent/skill"
   ERR=1
 fi
 if ! grep -q 'scripts/preflight-runtime.sh' agents/preflight.md skills/preflight/SKILL.md 2>/dev/null; then
+  : # legacy agent/skill already gone — gate satisfied
+elif ! grep -q 'scripts/preflight-runtime.sh' agents/preflight.md skills/preflight/SKILL.md 2>/dev/null; then
   echo "  MISSING: preflight-runtime.sh reference in preflight agent/skill"
   ERR=1
 fi
+
 
 echo "Checking worktree-manager + worktree plugin wiring..."
 if [[ ! -f plugins/worktree.js ]]; then
@@ -380,8 +436,8 @@ if ! grep -q 'recover' skills/orchestrate/SKILL.md 2>/dev/null; then
   echo "  MISSING: recover action in skills/orchestrate/SKILL.md"
   ERR=1
 fi
-if ! grep -q 'do not recommend upgrading the Docker/base Node' scripts/preflight-runtime.sh 2>/dev/null; then
-  echo "  MISSING: Docker/image Node policy note in preflight-runtime.sh"
+if ! grep -q 'do not recommend upgrading the Docker/base Node' docs/RUNBOOK.md skills/docker-sandbox/SKILL.md 2>/dev/null; then
+  echo "  MISSING: Docker/image Node policy note in docs/RUNBOOK.md or skills/docker-sandbox/SKILL.md"
   ERR=1
 fi
 

@@ -15,6 +15,7 @@ permission:
   task:
     "*": deny
     worktree-manager: allow
+    worktree-sandbox: allow
     session-manager: allow
     developer: allow
     kilo-fallback: allow

@@ -38,6 +38,7 @@ The coder MUST set exactly one `execution_mode` on every Task:
   - Failure evidence or blocker scope is ambiguous.
   - Multi-file or cross-cutting blocker.
   - Escalation context is new in this session (first senior-dev Task for this incident).
+  - Stage carries `test_commands` or a `compose_test_file` (load **`docker-sandbox`**; use the **`sandbox_run_test` plugin tool** from `plugins/sandbox.js` — never write `docker compose` invocations yourself).
 - Skill load never blocks completion. If load fails, report `SKILL_UNAVAILABLE: senior-dev` and stop unless the parent tells you to proceed without the skill.
 
 ## Your Responsibilities

@@ -33,9 +33,20 @@ Runs automatically on every fresh session, before the work-selection menu. Never
 
    Require `status: ok`, repo root, branch, worktree status, main checkout root, protected-branch status, head SHA, and branch policy. Capture `is_linked_worktree` and `branch_policy` — §1 uses them to pick the menu. Expected: branch `develop` in the main checkout (→ Menu A) or a linked worktree branch (→ §1 worktree routing). On mismatch, surface `CHECKOUT_CONTRACT_FAILED` verbatim and stop — do not present the menu and do not offer improvised alternatives.
 
-2. **Claude Context readiness.** If the `claude-context` MCP tools are available, check indexing status for the workspace path; if unavailable or indexing fails, record `MCP_FALLBACK` (discovery-heavy children enforce their own readiness gate).
+2. **Linked-worktree env copy (only when `is_linked_worktree: true`).** When the orchestrator is itself running inside a linked worktree, dispatch ONE `worktree-sandbox` Task with `load: minimal` to copy `.env` / `.env.local` from the main checkout into the worktree. The agent drives the plugin tool `env_copy` from `plugins/sandbox.js`; it never writes bash. Skip when `is_linked_worktree: false` (the orchestrator's main-checkout path is already the source of truth).
 
-3. Present the work-selection menu (§1) — task-oriented options only. Never surface lifecycle states, skill names, or routing rows as user-facing options.
+   ```text
+   Task worktree-sandbox load: minimal
+   mode: env_copy
+   worktree_path: <orchestrator cwd — absolute>
+   main_path: <main checkout root from checkout-contract.sh>
+   ```
+
+   On `status: blocked` with `blocker_code: ENV_BLOCKED` — surface `recommended_env_fix` verbatim and stop. On `status: ok` — record `worktree_env_evidence` in the lifecycle log; do not dispatch again until the orchestrator is back in a different worktree.
+
+3. **Claude Context readiness.** If the `claude-context` MCP tools are available, check indexing status for the workspace path; if unavailable or indexing fails, record `MCP_FALLBACK` (discovery-heavy children enforce their own readiness gate).
+
+4. Present the work-selection menu (§1) — task-oriented options only. Never surface lifecycle states, skill names, or routing rows as user-facing options.
 
 ## §1 Work-selection menu (branch-aware)
 

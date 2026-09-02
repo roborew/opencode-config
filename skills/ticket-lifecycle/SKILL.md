@@ -20,7 +20,7 @@ roleReminder: "Load on the first message of any coder session whose cwd is a tic
 9. **Cross-ticket review comments are not yours to fix.** If `pr-stabilize-watch.sh` returns comments whose fix would touch files in another ticket's branch, return `BLOCKED: CROSS_TICKET_REVIEW` so the develop orchestrator routes it to the feature coder's remediation flow.
 10. **Issue state transitions** (`state:in-progress` on entry, `state:ready-for-review` when the sub-PR opens) are yours; use `scripts/issue-state-transition.sh` via a delegated `developer` Task.
 11. **You are the auto-started GUI session for this worktree.** The develop orchestrator does **not** dispatch you via `task` (cwd inheritance would put you on `develop`); you are reached via the kickoff message injected by `session-manager` (which calls `session.promptAsync`) or via any user message. You must self-bootstrap from your **most recent user message** + the branch + GitHub — there is no brief file written; the kickoff message IS the contract.
-12. **Verification backend is containerized only.** Every RED/GREEN/final-gate test run goes through `docker-compose.test.yml` via `sandbox exec` (opencode-server) or direct `docker compose` (local dev) — **never** host-local suite setup. `compose_test_file: none` → `ENV_BLOCKED` with `recommended_env_fix: add docker-compose.test.yml from templates/project-stub/`. No host npm/pip installs to "get tests running".
+12. **Verification backend is containerized only.** Every RED/GREEN/final-gate test run goes through `docker-compose.test.yml` via `sandbox_run_test` from `plugins/sandbox.js` (sandbox exec on opencode-server, or direct `docker compose` on local dev) — **never** host-local suite setup. `compose_test_file: none` after `probe_and_create` → `ENV_BLOCKED` with `recommended_env_fix: add docker-compose.test.yml from templates/project-stub/`. No host npm/pip installs to "get tests running".
 
 ## §0 Bootstrap (must run before any stage work)
 
@@ -111,32 +111,20 @@ Return JSON:
 
 Use the returned JSON as your kickoff pointer. If `develop_session_id` is `null`, the durable `ticket_report:` issue comment is the only wake channel (no `session-manager.notify` target); record this and continue — §6c handles the missing-id case.
 
-### §0.3 Verification backend (silent preflight — delegated)
+### §0.3 Verification backend (silent — delegated to worktree-sandbox)
 
-After the brief is in hand, delegate ONE `preflight` Task with `load: minimal` to resolve the verification backend. The preflight already reports `compose_test_file`, `docker`, `sandbox`, `verification_gap`. **Hard rule:** `compose_test_file: none` → stop with `BLOCKED: ENV_BLOCKED` + `recommended_env_fix: "Add docker-compose.test.yml (test-suite-sufficient) from templates/project-stub/ at the impl repo root"`. **Never** fall back to host-local test runners — do not install npm/pip/etc. on the host to "get tests running".
-
-After preflight passes, the coder **delegates one `developer` Task** to bring the backend up once before stage 1:
+After the brief is in hand, delegate ONE `worktree-sandbox` Task with `load: minimal` and `mode: probe_and_create`. The plugin (`plugins/sandbox.js`) reports `sandbox_id`, `backend` (`sandbox` | `docker`), `compose_test_file`, `build_seconds`, `warm_run_seconds`. **Hard rule:** `compose_test_file: none` after `probe_and_create` → stop with `BLOCKED: ENV_BLOCKED` + `recommended_env_fix: "Add docker-compose.test.yml (test-suite-sufficient) from templates/project-stub/ at the impl repo root"`. **Never** fall back to host-local test runners — do not install npm/pip/etc. on the host to "get tests running".
 
 ```text
-Task developer load: minimal
-Bring up the verification backend for this ticket worktree.
-
+Task worktree-sandbox load: minimal
+mode: probe_and_create
 cwd: <worktree absolute path>
-compose_test_file: <absolute path to docker-compose.test.yml>
-sandbox_enabled: true|false
-
-if sandbox_enabled:
-  load skill docker-sandbox
-  sandbox exec --cwd <worktree absolute path> -- docker compose -f <compose_test_file> build
-else:
-  docker compose -f <compose_test_file> build
-
-Return: { "ok": true, "compose_test_file": <path>, "compose_built": true, "test_command": <canonical docker compose test invocation> }
+sandbox_id: <id>            # optional; if absent, agent derives from worktree basename (DNS-label)
 ```
 
-Subsequent test execution (test-writer RED, developer GREEN, code-review per-stage focused checks, final-gate full suite) uses the same backend. `opencode-task-yaml` `test_commands` execute **inside/through** the compose test service.
+The returned `sandbox_id` + `compose_test_file` are the canonical handles every later dispatch uses. Compose-test-backend bring-up is no longer a developer concern — it lives in the plugin. `worktree-sandbox` is entry/exit only; it does not run per-stage tests.
 
-Implementer/code-review Tasks **load `docker-sandbox`** when compose applies — the existing RUNBOOK routing is preserved.
+Subsequent test execution (test-writer RED, developer GREEN, code-review per-stage focused checks, final-gate full suite) uses the same backend. `opencode-task-yaml` `test_commands` execute **inside/through** the compose test service via the plugin tool **`sandbox_run_test`** (registered by `plugins/sandbox.js`). Stage implementers and `code-review` call `sandbox_run_test` **directly** from the plugin — they do not write `docker compose` invocations themselves, and they do not route through `worktree-sandbox` for per-stage runs. The `docker-sandbox` skill remains the canonical Sysbox-vs-direct-Docker reference for the plugin's fallback logic, not for agents writing bash.
 
 ### §0.4 Other bootstrap steps
 
@@ -174,15 +162,15 @@ If the kickoff message is missing but the branch + repo reconstruct cleanly, pro
 
 ### 1. Silent preflight
 
-Already done in §0.3 — compose-backend resolved + built. Skip if you trust that preflight returned `ok: true`. If you re-run for any reason, run **`worktree-env`** with `load: full` and **`preflight`** with `load: full`, repair-first, **silently**. Surface only if preflight reports `Status: Blocked` after one repair pass.
+Already done in §0.3 — compose-backend resolved + built + warmed via the `worktree-sandbox` agent. Skip if you trust that report. If you re-run for any reason, dispatch ONE `worktree-sandbox` Task (`mode: probe_and_create`) silently. Surface only if `probe_and_create` returns `blocker_code` after one build+warm pass.
 
 ### 2. Loop every `opencode_meta.stages[]` entry
 
 For each `stage` in `opencode_meta.stages` (in order, **starting from `last_approved_stage_index + 1`** on resume):
 
-1. **RED** — dispatch `test-writer` (or implementer RED for non-test stages) with the stage scope; capture `red_phase` proof of RED from the compose-backend test run (test identifier + failure output). RED evidence is the test-run output, not claims.
-2. **GREEN** — execute the stage as `Owner` (developer | frontend-dev | ux-dev) per `stage.owner`. The Owner implements, then **runs the same compose-backend test as part of red→green** and confirms green **before** reporting. Capture `green_phase` and `assertion_delta`. GREEN evidence is the compose test output, not claims.
-3. **`code-review` (ticket mode)** — dispatch `code-review` with `load: full`, the stage's `diff_base`, `files_changed`, `red_phase` + `green_phase` evidence, and the issue's acceptance mapping. Focused per-stage checks (design, correctness, stage scope, RED/GREEN replay). **No full regression per stage.**
+1. **RED** — dispatch `test-writer` (or implementer RED for non-test stages) with the stage scope; capture `red_phase` proof of RED from the compose-backend test run (test identifier + failure output). RED evidence is the **plugin `sandbox_run_test` output**, not claims — `test-writer` calls `sandbox_run_test` from `plugins/sandbox.js` directly with `sandbox_id` + `compose_test_file` from §0.3.
+2. **GREEN** — execute the stage as `Owner` (developer | frontend-dev | ux-dev) per `stage.owner`. The Owner implements, then **runs the same compose-backend test via `sandbox_run_test` as part of red→green** and confirms green **before** reporting. Capture `green_phase` and `assertion_delta`. GREEN evidence is the plugin tool output, not claims.
+3. **`code-review` (ticket mode)** — dispatch `code-review` with `load: full`, the stage's `diff_base`, `files_changed`, `red_phase` + `green_phase` evidence, and the issue's acceptance mapping. Focused per-stage checks (design, correctness, stage scope, RED/GREEN replay). **No full regression per stage.** `code-review` reuses the built images via `sandbox_run_test`; destroys the sandbox after `APPROVED` or `ENV_BLOCKED`, keeps alive on `BLOCKED` (per `docker-sandbox` §5 — still applies; the destroy now goes through `sandbox_destroy` from the plugin, not bash).
    - On `APPROVED` → stage done. Compact context, retain only gate summary.
    - On `NEEDS_CHANGES` → fix in-worktree (TDD), re-run code-review (max 2 stage retries).
    - On `BLOCKED` → return `BLOCKED` from the ticket (cross-cutting blocker).
@@ -271,7 +259,16 @@ Emit the terminal report (in-session, normal prose), **post the `ticket_report:`
 
 #### §0-completion: tear down the verification backend
 
-Before stopping, lifecycle-aware destroy of the compose test backend (`docker-sandbox` §5 — `sandbox destroy` when the server sandbox is enabled, or `docker compose -f <compose_test_file> down` on local dev). Delegated `developer` Task with `load: minimal`.
+Before stopping, lifecycle-aware destroy of the compose test backend. Dispatch ONE `worktree-sandbox` Task with `load: minimal`:
+
+```text
+Task worktree-sandbox load: minimal
+mode: teardown
+sandbox_id: <from §0.3 report>
+compose_test_file: <from §0.3 report>   # optional; plugin runs docker compose down on direct-Docker backend
+```
+
+The agent calls `sandbox_status` (confirm idle) then `sandbox_destroy` from the plugin (unexpose first by default). `worktree-sandbox` is the only owner of the **ticket terminal teardown**; `code-review` still owns its own destroy on `APPROVED` / `ENV_BLOCKED` per `docker-sandbox` §5 (the per-stage and final-gate path is unchanged).
 
 #### 6a. Post the `ticket_report:` comment (mandatory)
 
@@ -380,8 +377,9 @@ Final `all_stages: true` gate (before `state:ready-for-review`): same grading, p
 - `agents/senior-dev.md` + `skills/senior-dev/SKILL.md` — escalation_fix returns `HANDOFF_TO_DEVELOPER` to resume the wrapping coder.
 - `agents/kilo-fallback.md`, `agents/openrouter-fallback.md` — provider fallback for failed children (never replaces the coder).
 - `skills/code-review/SKILL.md` — the verification contract: per-stage focused checks, final-gate full suite, local CodeRabbit pre-flight (`ticket_coderabbit_preflight`).
-- `skills/docker-sandbox/SKILL.md` — `sandbox exec` vs direct compose matrix + lifecycle-aware destroy.
-- `skills/preflight/SKILL.md` — silent preflight, `compose_test_file`/`verification_gap` reporting.
+- `skills/docker-sandbox/SKILL.md` — `sandbox exec` vs direct compose matrix + lifecycle-aware destroy contract (referenced by `plugins/sandbox.js`, not by agent bash).
+- `skills/worktree-sandbox/SKILL.md` — the subagent that owns §0.3 / §0-completion. Mode matrix + plugin-tool reference.
+- `plugins/sandbox.js` — the 8 fine-grained plugin tools (`sandbox_probe` / `env_copy` / `sandbox_create` / `sandbox_build` / `sandbox_warm` / `sandbox_run_test` / `sandbox_status` / `sandbox_destroy`).
 - `scripts/issue-state-transition.sh`, `scripts/pr-stabilize-watch.sh`, `scripts/dev-loop-watch.sh`, `scripts/checkout-contract.sh` — moved lib scripts.
 - `plugins/worktree.js` — `worktree_create_ticket` is the sibling tool that creates this worktree.
 - `plugins/session-manager.js` — `session_notify` is the underlying tool `session-manager.notify` dispatches for the terminal wake injection.

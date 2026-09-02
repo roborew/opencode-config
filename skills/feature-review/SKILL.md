@@ -103,28 +103,20 @@ git rev-parse --abbrev-ref HEAD                  # expect opencode/feat-<slug>
 git merge-base --is-ancestor origin/opencode/feat-<slug> HEAD   # expect success (feat branch contains its own history)
 ```
 
-### §0.3 Verification backend (silent preflight — delegated)
+### §0.3 Verification backend (silent — delegated to worktree-sandbox)
 
-After the pointer is in hand, delegate ONE `developer` Task with `load skill: docker-sandbox` to bring the compose test backend up once. The preflight reports `compose_test_file`, `docker`, `sandbox`, `verification_gap`. **Hard rule:** `compose_test_file: none` → stop with `BLOCKED: ENV_BLOCKED` + `recommended_env_fix`. **Never** fall back to host-local test runners.
+After the pointer is in hand, delegate ONE `worktree-sandbox` Task with `load: minimal` and `mode: probe_and_create`. The plugin (`plugins/sandbox.js`) reports `sandbox_id`, `backend` (`sandbox` | `docker`), `compose_test_file`, `build_seconds`, `warm_run_seconds`. **Hard rule:** `compose_test_file: none` after `probe_and_create` → stop with `BLOCKED: ENV_BLOCKED` + `recommended_env_fix`. **Never** fall back to host-local test runners.
 
 ```text
-Task developer load: minimal
-load skill: docker-sandbox
-Bring up the verification backend for this feature worktree.
-
+Task worktree-sandbox load: minimal
+mode: probe_and_create
 cwd: <feature worktree absolute path>
-compose_test_file: <absolute path to docker-compose.test.yml>
-sandbox_enabled: true|false
-
-if sandbox_enabled:
-  sandbox exec --cwd <feature worktree absolute path> -- docker compose -f <compose_test_file> build
-else:
-  docker compose -f <compose_test_file> build
-
-Return: { "ok": true, "compose_test_file": <path>, "compose_built": true, "test_command": <canonical docker compose test invocation> }
+sandbox_id: <id>            # optional; if absent, agent derives from worktree basename (DNS-label)
 ```
 
-Subsequent full-suite / e2e / per-stage code-review runs use the same backend.
+The returned `sandbox_id` + `compose_test_file` are the canonical handles every later dispatch uses. Compose-test-backend bring-up is no longer a developer concern — it lives in the plugin. `worktree-sandbox` is entry/exit only; it does not run per-stage tests.
+
+Subsequent full-suite / e2e / per-stage code-review runs use the same backend via the plugin tool **`sandbox_run_test`** (registered by `plugins/sandbox.js`). Stage implementers and `code-review` call `sandbox_run_test` **directly** from the plugin — they do not write `docker compose` invocations themselves, and they do not route through `worktree-sandbox` for per-suite runs. The `docker-sandbox` skill remains the canonical Sysbox-vs-direct-Docker reference for the plugin's fallback logic, not for agents writing bash.
 
 ### §0.4 Reconstruct feature state
 
@@ -150,12 +142,12 @@ If the kickoff pointer is missing but the branch + GitHub reconstruct cleanly, p
 
 ### 1. Feature-mode `code-review` (full suite)
 
-Dispatch `code-review` (`load: full`) with the full diff vs `develop` (delegated `developer` to capture `git diff origin/develop...HEAD --stat` and the per-ticket merged-PR list), the rolled-up acceptance mapping (every ticket's acceptance criteria, every per-ticket `code_review_gate: APPROVED`), and the compose test backend. The feature-mode gate runs the **full regression, integration, and e2e** suite via the compose backend (the per-stage focused gate already passed during each ticket's inner loop).
+Dispatch `code-review` (`load: full`) with the full diff vs `develop` (delegated `developer` to capture `git diff origin/develop...HEAD --stat` and the per-ticket merged-PR list), the rolled-up acceptance mapping (every ticket's acceptance criteria, every per-ticket `code_review_gate: APPROVED`), and the compose test backend handles from §0.3 (`sandbox_id`, `compose_test_file`). The feature-mode gate runs the **full regression, integration, and e2e** suite via the plugin tool **`sandbox_run_test`** (the per-stage focused gate already passed during each ticket's inner loop). `code-review` calls `sandbox_run_test` directly — `worktree-sandbox` is not in this path.
 
 - On `APPROVED` → compact, retain only the verdict + commit refs + full-suite evidence summary. Continue.
 - On `NEEDS_CHANGES` → fix in this feature worktree (TDD), re-run `code-review`. Max 2 retries, then `BLOCKED: FEATURE_REMEDIATION`.
 - On `BLOCKED` (cross-cutting blocker) → return `BLOCKED` (cross-ticket / cross-cutting).
-- `code-review` destroys the sandbox after `APPROVED` or `ENV_BLOCKED`, keeps alive on `BLOCKED`.
+- `code-review` destroys the sandbox after `APPROVED` or `ENV_BLOCKED` (via the plugin `sandbox_destroy`), keeps alive on `BLOCKED`.
 
 ### 2. PR-side CodeRabbit gate (medium / hard only)
 
@@ -234,7 +226,16 @@ Emit the terminal report (in-session, normal prose), **post the `feature_report:
 
 #### §9-completion: tear down the verification backend
 
-Before stopping, lifecycle-aware destroy of the compose test backend (`docker-sandbox` §5 — `sandbox destroy` when the server sandbox is enabled, or `docker compose -f <compose_test_file> down` on local dev). Delegated `developer` Task with `load: minimal`.
+Before stopping, lifecycle-aware destroy of the compose test backend. Dispatch ONE `worktree-sandbox` Task with `load: minimal`:
+
+```text
+Task worktree-sandbox load: minimal
+mode: teardown
+sandbox_id: <from §0.3 report>
+compose_test_file: <from §0.3 report>   # optional; plugin runs docker compose down on direct-Docker backend
+```
+
+The agent calls `sandbox_status` (confirm idle) then `sandbox_destroy` from the plugin (unexpose first by default). `worktree-sandbox` is the only owner of the **feature terminal teardown**; `code-review` still owns its own destroy on `APPROVED` / `ENV_BLOCKED` per `docker-sandbox` §5 (the full-suite and PR-side gate path is unchanged).
 
 #### 9a. Post the `feature_report:` comment (mandatory)
 
@@ -329,7 +330,9 @@ Emit the terminal report and stop. The coder agent Hard Rules' post-completion g
 - `agents/developer.md`, `agents/frontend-dev.md`, `agents/ux-dev.md`, `agents/code-review.md`, `agents/senior-dev.md`, `agents/document.md`, `agents/scribe.md` — bounded children.
 - `skills/ticket-lifecycle/SKILL.md` — the per-ticket inner loop whose `code_review_gate: all_stages: true APPROVED` outputs feed step 1's rolled-up acceptance.
 - `skills/code-review/SKILL.md` — feature-mode verification contract: full suite, PR-side CodeRabbit gate (`feature_coderabbit_gate`), medium completion summary.
-- `skills/docker-sandbox/SKILL.md` — `sandbox exec` vs direct compose matrix + lifecycle-aware destroy.
+- `skills/docker-sandbox/SKILL.md` — `sandbox exec` vs direct compose matrix + lifecycle-aware destroy contract (referenced by `plugins/sandbox.js`, not by agent bash).
+- `skills/worktree-sandbox/SKILL.md` — the subagent that owns §0.3 / §9-completion. Mode matrix + plugin-tool reference.
+- `plugins/sandbox.js` — the 8 fine-grained plugin tools (`sandbox_probe` / `env_copy` / `sandbox_create` / `sandbox_build` / `sandbox_warm` / `sandbox_run_test` / `sandbox_status` / `sandbox_destroy`).
 - `skills/to-tickets/SKILL.md` — `remediation:` issue publishing (`--parent-issue`).
 - `scripts/issue-state-transition.sh`, `scripts/feature-finish-pr.sh`, `scripts/dev-loop-watch.sh` — shared lib scripts.
 - `plugins/worktree.js` — `worktree_create_feature` is the sibling tool that creates this worktree.

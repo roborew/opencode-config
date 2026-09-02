@@ -2,7 +2,7 @@
 name: docker-sandbox
 description: "Sysbox sibling sandboxes via opencode-server sandbox CLI: self-contained Compose build/test backend for ticket + feature coder loops. Load when stages need Docker Compose."
 modelTier: "fast"
-roleReminder: "Probe + env gate first. Lifecycle-aware destroy: code-review destroys after APPROVED, keeps alive on BLOCKED. Host cloudflared only — never cloudflared-in-compose. No .env.example."
+roleReminder: "Probe + env gate first. Lifecycle-aware destroy: code-review destroys after APPROVED, keeps alive on BLOCKED. Host cloudflared only — never cloudflared-in-compose. No .env.example. Agents call sandbox_run_test from plugins/sandbox.js — never write docker compose invocations themselves."
 ---
 
 ## Skill reference (optional load)
@@ -11,7 +11,7 @@ Load when a stage needs Docker Compose build/test. Follow agent Hard Rules first
 
 **Not** Cloudflare Workers Sandbox (`skills/cloudflare/references/sandbox/` — Durable Object / `@cloudflare/sandbox`). This skill is only the opencode-server Sysbox sibling CLI (`sandbox probe|create|exec|…`).
 
-Loaded by `developer` / `frontend-dev` / `code-review` children dispatched from the **ticket coder** (`ticket-lifecycle` §0.3) and the **feature coder** (`feature-review` §0.3). The orchestrator never loads this skill — it passes `sandbox: preferred|required` and load instructions to its children.
+Loaded by `developer` / `frontend-dev` / `code-review` / `senior-dev` **and by `worktree-sandbox` via the `plugins/sandbox.js` plugin tools**. The orchestrator never loads this skill — it passes `sandbox: preferred|required` and load instructions to its children. **Agents call `sandbox_run_test` from the plugin; they do not write `docker compose` invocations.** The plugin's fallback logic reads this skill as the canonical Sysbox-vs-direct-Docker matrix.
 
 ## Host contract
 
@@ -35,6 +35,7 @@ Names: sibling `opencode-sandbox-<slug>`, publish helper `opencode-sandbox-route
 5. **Lifecycle-aware destroy.** Per-ticket TDD loop: developer creates the sandbox and keeps it alive after GREEN (does not destroy); code-review reuses via `sandbox status --id <sandbox_id>` and destroys after `APPROVED` or `ENV_BLOCKED`, keeps alive on `BLOCKED` for developer retry. Feature coder loop (`feature-review`): same reuse/destroy contract — `code-review` destroys after `APPROVED`/`ENV_BLOCKED`, keeps alive on `BLOCKED`. `destroy` unexposes first.
 6. Never mount host `docker.sock` into nested app compose; never GPU/CUDA sandboxes.
 7. Server Infisical ≠ app Infisical.
+8. **do not recommend upgrading the Docker/base Node** to silence `engines.node` warnings — Host/PATH Node may stay on the OpenCode image Node (often 22) for MCP. Use the project toolchain (mise/asdf/fnm/nvm/volta) for installs and builds.
 
 ## ID hygiene
 

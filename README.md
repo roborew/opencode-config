@@ -355,8 +355,7 @@ Optional same-session path after a short HANDOFF block: `/compact` then switch a
 | Project automation (fanout, issue-expand, feature-check) | `opencode-run` — see [bin/opencode-run](bin/opencode-run) |
 | Stack cleanup (remove legacy copied bin/) | `opencode-assess-stack` |
 | Git / SQL guardrails (scripts)                                | [scripts/block-dangerous-git.sh](scripts/block-dangerous-git.sh), [scripts/preflight-git.sh](scripts/preflight-git.sh) |
-| Worktree env copy / verify (scripts)                          | [scripts/worktree-env.sh](scripts/worktree-env.sh), [scripts/preflight-worktree-verify.sh](scripts/preflight-worktree-verify.sh) |
-| Project vs host Node (preflight)                              | [scripts/preflight-runtime.sh](scripts/preflight-runtime.sh) |
+| Worktree env copy / verify (plugin tools)                     | `plugins/sandbox.js` — `env_copy` tool (replaces legacy `scripts/worktree-env.sh` + `scripts/preflight-worktree-verify.sh` + `scripts/preflight-runtime.sh`) |
 
 
 ---

@@ -1,6 +1,6 @@
-# Preflight bootstrap — validation harness
+# Worktree-sandbox bootstrap — validation harness
 
-Run after changing preflight / worktree-env / orchestrate bootstrap rules. Validates config integrity and documents manual smoke scenarios for linked-worktree repair-first bootstrap.
+Run after changing `worktree-sandbox` / `plugins/sandbox.js` / orchestrate bootstrap rules. Validates config integrity and documents manual smoke scenarios for the linked-worktree compose-test-backend bring-up flow.
 
 ## Config integrity (local)
 
@@ -12,11 +12,11 @@ bash scripts/validate-opencode-config.sh
 
 **Pass criteria:** exit 0 from both scripts.
 
-## Manual smoke — preflight declined, checkout identity still captured
+## Manual smoke — verification backend declined, checkout identity still captured
 
-**Setup:** Open a session on a **feature/topic branch** (primary checkout or linked worktree). Ensure env is already usable (or accept that skipped preflight means no auto-repair).
+**Setup:** Open a session on a **feature/topic branch** (primary checkout or linked worktree). Ensure env is already usable (or accept that skipped worktree-sandbox means no auto-repair).
 
-**Run:** New OpenCode session → **`orchestrate`** → answer **no** to preflight → choose GitHub backlog or provide `feature:<slug>`.
+**Run:** New OpenCode session → **`orchestrate`** → choose GitHub backlog or provide `feature:<slug>`.
 
 **Pass criteria:**
 1. Orchestrate still runs **`checkout-contract.sh`** (via **`developer`** `load: minimal`) before work selection or issue transition.
@@ -41,15 +41,15 @@ rm -f .env .env.local 2>/dev/null || true
 rm -rf node_modules
 ```
 
-**Run:** New OpenCode session in the worktree → **`orchestrate`** → answer **yes** to preflight.
+**Run:** New OpenCode session in the worktree → **`orchestrate`** → answer **yes** to bootstrap.
 
 **Pass criteria (first run):**
-1. **`worktree-env`** runs once; report includes `wt_root`, `main_root`, per-file `is_regular_file`; `worktree_env: ok`.
-2. **`preflight`** agent runs repair pass if needed (`mise exec -- pnpm install`, indexing).
-3. `Status: Ready`; `env_gate_passed`; work menu **(1)–(5)** appears.
+1. Orchestrate runs `worktree-sandbox` `mode: env_copy` once; report includes `wt_root`, `main_root`, per-file `is_regular_file`; `worktree_env: ok`.
+2. Coder session (when kicked) runs `worktree-sandbox` `mode: probe_and_create` silently — `sandbox_id`, `backend`, `compose_test_file`, `build_seconds`, `warm_run_seconds` populated.
+3. `Status: Ready`; `env_gate_passed`; work menu **(1)–(4)** appears.
 4. No `(a)/(b)/(c)` option menu for routine setup.
 
-**Pass criteria (second run — idempotency):** Same session or new session with env copies and `node_modules` already present → preflight reports `ok_existing` / skips repair; **`worktree-env` not invoked again** when `worktree_env_checked` is set from prior success in same bootstrap (or on rerun after user requests, copies show `ok_existing`).
+**Pass criteria (second run — idempotency):** Same session or new session with env copies and `node_modules` already present → `worktree-sandbox` `mode: env_copy` reports `ok_existing` for every file; `mode: probe_and_create` reuses an existing sandbox via `sandbox status` and re-warms without rebuilding from scratch.
 
 ## Manual smoke — customized env copy preserved
 
@@ -57,15 +57,15 @@ In a linked worktree with an existing env copy, customize a setting (e.g. a sepa
 
 ```bash
 cd /path/to/worktree
-# After first preflight bootstrap created .env from main checkout:
+# After first worktree-sandbox env_copy created .env from main checkout:
 echo "DATABASE_URL=postgres://localhost/my_worktree_db" >> .env
 ```
 
-**Run:** Preflight bootstrap again (new session or rerun).
+**Run:** Worktree-sandbox env_copy again (new session or rerun).
 
 **Pass criteria:**
-- **`worktree-env`** reports `ok_existing` for `.env` — does **not** overwrite the customized file.
-- Preflight verifies `.env` is a regular file (`is_regular_file: true`).
+- `mode: env_copy` reports `ok_existing` for `.env` — does **not** overwrite the customized file.
+- The plugin's per-file `is_regular_file: true` for `.env`.
 
 ## Manual smoke — legacy symlink migration
 
@@ -76,27 +76,18 @@ cd /path/to/worktree
 ln -sf /path/to/main-checkout/.env .env
 ```
 
-**Run:** Preflight bootstrap.
+**Run:** Worktree-sandbox env_copy.
 
 **Pass criteria:**
-- **`worktree-env`** replaces symlink with a regular-file copy from main checkout (`worktree_env: ok`).
+- `mode: env_copy` replaces symlink with a regular-file copy from main checkout (`worktree_env: ok`, `status: ok_replaced_symlink`).
 - Post-check: `test -f .env && test ! -L .env`.
 
 ## Canonical verification commands (operator)
 
-Prefer the scripts (same JSON agents return):
+The plugin (`plugins/sandbox.js`) replaces the legacy scripts. To invoke a single tool manually for ground truth, use `node -e` against the plugin, or run the equivalent sandbox / docker CLI directly:
 
 ```bash
-bash ~/.config/opencode/scripts/worktree-env.sh              # copy + report (linked worktree only)
-bash ~/.config/opencode/scripts/preflight-worktree-verify.sh # read-only verify
-bash ~/.config/opencode/scripts/preflight-runtime.sh         # host vs project Node + engines
-```
-
-**Runtime policy:** Compare `engines.node` to **project** Node (`mise` / `asdf` / `fnm` / `nvm` / `volta` / pin files). Host/PATH Node may be OpenCode image Node 22 for MCP — do **not** treat that as “upgrade Docker to Node 24.”
-
-Or validate ground truth without agents:
-
-```bash
+# env_copy ground truth
 wt_root="$(git rev-parse --show-toplevel)"
 common="$(git rev-parse --path-format=absolute --git-common-dir)"
 main_root="$(dirname "$common")"
@@ -105,28 +96,28 @@ for f in .env .env.local; do
   echo "=== $f ==="
   test -f "$wt_root/$f" && test ! -L "$wt_root/$f" && echo "regular file: yes" || echo "regular file: NO"
 done
-bash ~/.config/opencode/scripts/preflight-runtime.sh | jq '{host: .host_node.version, project: .project_node.version, via: .project_node.via, engines_status}'
-test -d node_modules && echo "node_modules: present" || echo "node_modules: MISSING"
+
+# sandbox_status ground truth
+sandbox status --id <sandbox_id> || docker compose -f docker-compose.test.yml ps
+
+# sandbox_run_test ground truth (per-stage)
+sandbox exec --id <sandbox_id> -- docker compose -f docker-compose.test.yml run --rm test
+# OR direct docker compose on local dev:
+docker compose -f docker-compose.test.yml run --rm test
 ```
 
-## agent-run.zsh mise detection
+**Runtime policy:** Compare `engines.node` to **project** Node (`mise` / `asdf` / `fnm` / `nvm` / `volta` / pin files). Host/PATH Node may be OpenCode image Node 22 for MCP — do **not** treat that as "upgrade Docker to Node 24."
 
-```bash
-~/.config/opencode/scripts/agent-run.zsh 'command -v mise; mise exec -- node -v 2>/dev/null || node -v'
-```
-
-**Pass criteria:** `mise` resolves (Homebrew or `~/.local/bin`) and `node -v` matches project `.mise.toml` when present.
-
-## Manual smoke — preflight permission posture (no .env prompts)
+## Manual smoke — worktree-sandbox permission posture (no .env prompts)
 
 **Setup:** Start a session in a linked worktree whose main checkout has `.env` / `.env.local` at repo root. Ensure global `opencode.json` `permission.edit` still has `.env: deny`, `.env.*: deny`, `**/.env: deny`, `**/.env.*: deny`.
 
-**Run:** New OpenCode session → **`orchestrate`** → answer **yes** to preflight.
+**Run:** New OpenCode session → **`orchestrate`** → bootstrap.
 
 **Pass criteria:**
-1. Neither **`worktree-env`** nor **`preflight`** raises a permission prompt for `.env` / `.env.local` (read, write, edit, or bash `cp` / `test -f` against them).
-2. `preflight-worktree-verify.sh` runs and returns JSON without prompting.
-3. `worktree-env.sh` completes the copy (or `ok_existing`) without prompting.
-4. If `sandbox` is ready, preflight's optional `.env` / Infisical key-name presence notes complete via bash only (`grep -l`, `awk`, `test -e`) without a permission prompt.
-5. **Validation of the agent-level override:** `agents/preflight.md` and `agents/worktree-env.md` contain `tools.read: false`, `permission.edit` with `".env": "allow"` / `".env.*": "allow"` / `"**/.env": "allow"` / `"**/.env.*": "allow"`, and `permission.external_directory: { "*": "allow" }`. The `permission.bash` block mirrors the dangerous denies from global `opencode.json` (`rm -rf /*`, `sudo *`, etc.) and has `"*": "allow"`.
-6. **Negative check:** No agent outside `preflight` / `worktree-env` inherits those `.env` allows — global `opencode.json` still denies `.env` for everyone else (developer, frontend-dev, code-review, etc.).
+1. `worktree-sandbox` `mode: env_copy` raises no permission prompt for `.env` / `.env.local` — the agent holds no `read` / `edit` / `write` / `bash` tools; the `env_copy` plugin tool uses `fs.copyFile` and never touches `~/.config/opencode/**`.
+2. `env_copy` returns its structured envelope without prompting.
+3. `mode: probe_and_create` completes env-gate (`sandbox_create` reads `fs.stat` on `.env` for presence, no values, no edits).
+4. If `sandbox` is ready, the plugin's optional `.env` / Infisical key-name presence checks run via `fs` only — no permission prompt.
+5. **Validation of the agent-level posture:** `agents/worktree-sandbox.md` enables `write: false`, `edit: false`, `read: false`, `bash: false`, and `permission.edit: { "*": "deny" }` — the agent is plugin-tools-only. The `permission.bash` block is absent (no `bash` tool to gate).
+6. **Negative check:** No agent outside `worktree-sandbox` reaches `.env` via the plugin — global `opencode.json` still denies `.env` for everyone else (developer, frontend-dev, code-review, etc.); they use the plugin's `sandbox_run_test` for test execution.
