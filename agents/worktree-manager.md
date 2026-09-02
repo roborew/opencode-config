@@ -79,8 +79,8 @@ The orchestrator calls you with a JSON-shaped `prompt`. Parse it and execute **o
 | `action`     | Extra fields                                                                                                |
 | ------------ | ----------------------------------------------------------------------------------------------------------- |
 | `create_feature` | `slug` (required), `base` (optional, default `"develop"`)                                                |
-| `create_ticket`  | `issue` (required, integer), `slug` (required), `feature_branch` (required, must match `^opencode/feat-`), `title` (optional, used to derive `<abbrev>`; if absent, fetched via `gh issue view <issue> --json title`), `auto_spawn` (optional boolean, default `false` — orchestrator-side flag echoed in the returned JSON; worktree-manager itself does not spawn anything) |
-| `kickoff`        | `directory` (required, absolute worktree dir), `agent` (optional, defaults to `coder`), `message` (required, short pointer text) |
+| `create_ticket`  | `issue` (required, integer), `slug` (required), `feature_branch` (required, must match `^opencode/feat-`), `title` (optional, used to derive `<abbrev>`; if absent, fetched via `gh issue view <issue> --json title`), `repo` (optional, `OWNER/REPO`; if absent the preflight `developer` Task falls back to `gh repo view --json nameWithOwner`), `auto_spawn` (optional boolean, default `false` — orchestrator-side flag echoed in the returned JSON; worktree-manager itself does not spawn anything) |
+| `kickoff`        | `directory` (required, absolute worktree dir), `agent` (optional, defaults to `coder`), `message` (required, short pointer text), `issue` (optional, integer — when present enables the `KICKOFF_ALREADY_DELIVERED` precondition check), `repo` (optional, `OWNER/REPO`; if absent the precondition-check `developer` Task falls back to `gh repo view`), `session_create_attempts` (optional, integer — echoed back in the envelope for orchestrator-side lifecycle-log correlation) |
 | `delete`         | `directory` (required, absolute worktree dir)                                                              |
 | `list`           | —                                                                                                          |
 | `reset`          | `directory` (required)                                                                                     |
@@ -126,6 +126,17 @@ The orchestrator calls you with a JSON-shaped `prompt`. Parse it and execute **o
 6. On success: `directory = body.body.directory`.
 7. **Primary design — post-create reset** is owned by the coder session (§0.0 Handshake dispatches `developer` to run `git fetch origin "$feature_branch"` and `git reset --hard "origin/$feature_branch"` inside the worktree). worktree-manager does NOT run git here.
 8. Verify the branch + ancestor relationship via ONE `developer load: minimal` Task returning `{ "rev_parse_HEAD": <branch>, "merge_base_is_ancestor": true }`. Mismatch → `BLOCKED: CHECKOUT_CONTRACT_FAILED` (surface the developer envelope verbatim).
+8.5 **Preflight check** (delegated `developer load: minimal` Task — read-only shell, NOT a `preflight` Task dispatch: the orchestrator is forbidden from invoking `preflight`/`worktree-env` and this step is the in-worktree-manager gate that catches an out-of-sync worktree before it costs a session). Required fields in the response: `reachable_from_loopback`, `writable`, `branch_local_head_sha`, `branch_local_up_to_date`, `parent_branch_merged`. Implementation (single Task, return JSON verbatim):
+   ```bash
+   cd <directory>
+   [ -d .git ] && pwd || echo NOT_INSIDE_WORKTREE   # reachable_from_loopback
+   [ -w . ] && (touch .write_test && rm .write_test && echo writable) || echo not_writable
+   git -C <directory> rev-parse HEAD                 # branch_local_head_sha
+   git fetch origin "<branch>"                       # safe — branch is the worktree branch
+   [ "$(git -C <directory> rev-parse HEAD)" = "$(git -C <directory> rev-parse "origin/<branch>")" ] && echo up_to_date || echo stale
+   git -C <directory> merge-base --is-ancestor "origin/<feature_branch>" HEAD && echo parent_merged || echo parent_not_merged
+   ```
+   Hard stop with `BLOCKED: WORKTREE_PREFLIGHT_FAILED` if `reachable_from_loopback === false` OR `writable === false` OR `branch_local_up_to_date === false` OR `parent_branch_merged === false`. Surface the developer's `manualRecovery` verbatim (and the captured `branch_local_head_sha` + `origin/<branch>` SHA in the message so the operator can see the drift). This is the tripwire that would have caught the latent #245 bug where the feature worktree sat on `develop` — the preflight's `branch_local_up_to_date === false` is the canonical signal that the worktree was reset to the wrong ref.
 9. Return:
    ```json
    {
@@ -185,11 +196,35 @@ The orchestrator calls you with a JSON-shaped `prompt`. Parse it and execute **o
 Used to retry ticket kickoff after a `KICKOFF_FAILED` advisory (the orchestrator's §5a dispatch failed) or after a server restart + `reset` (the GUI session list is empty until the auto-start re-fires). This action no longer talks to the session API directly — it routes through the `session-manager` subagent.
 
 1. Validate `directory` and `message` are present strings.
-2. Dispatch `session-manager.kickoff { directory, agent: agent || "coder", message }`.
+2a. **Precondition: `KICKOFF_ALREADY_DELIVERED` check.** If the input includes `issue: <n>`, dispatch ONE `developer load: minimal` Task that runs:
+   ```bash
+   REPO="${REPO:-}"
+   if [[ -z "$REPO" ]]; then
+     REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
+   fi
+   gh issue view <n> --repo "$REPO" --comments --json comments \
+     -q '.comments[] | select(.body | test("^ticket_report:")) | .id' \
+     | head -n1
+   ```
+   If a comment id is returned, the coder already finished — return **hard-stop** (no `manualRecovery` retry hint, retrying is exactly what we're trying to prevent):
+   ```json
+   {
+     "ok": false,
+     "action": "kickoff",
+     "blocker_code": "KICKOFF_ALREADY_DELIVERED",
+     "issue": <n>,
+     "directory": "<dir>",
+     "message": "ticket_report: comment already on issue <n> (comment id <id>); session_manager.kickoff would re-create an orphan. Inspect the comment and resume from ticket-lifecycle §0 if the coder is alive."
+   }
+   ```
+   and stop. The orchestrator passes the blocker through verbatim per Global Invariant #10/#12 surface semantics — no advisory, no retry, no re-dispatch.
+2b. Dispatch `session-manager.kickoff { directory, agent: agent || "coder", message }`.
+2c. In the returned envelope, surface `session_create_attempts: <int>` echoed from the orchestrator's input (the orchestrator tracks the counter in its lifecycle log and is the only actor with persistent state — see `agents/orchestrate.md` Global Invariant #11). The echo lets the orchestrator correlate the kickoff envelope with its lifecycle-log entry without a second round-trip.
 3. Return:
-   - On `{ ok: true, admitted: true }` → `{ ok: true, action: "kickoff", directory, session_id, session_source, agent }`.
+   - On `{ ok: true, admitted: true }` → `{ ok: true, action: "kickoff", directory, session_id, session_source, agent, session_create_attempts: <echoed from input> }`.
    - On `{ ok: false, blocker_code: "NO_SESSION_FOR_WORKTREE" | "SESSION_API_FAILED" }` → surface the envelope verbatim to the parent, including `manualRecovery`. `NO_SESSION_FOR_WORKTREE` only fires when the orchestrator passed `create_if_absent: false` (the explicit opt-in). The kickoff message is the contract; the coder can still bootstrap from the branch + GitHub via `ticket-lifecycle` §0, or the user can open the GUI session and type any message.
    - On `SESSION_TOOLS_NOT_REGISTERED` → surface verbatim; the orchestrator routes to deploy `plugins/session-manager.js` and restart the server.
+   - On `KICKOFF_ALREADY_DELIVERED` (returned from step 2a) → surface verbatim; orchestrator passes it through as a hard stop per Global Invariant #12 surface semantics.
 4. **Never delete or recreate the worktree on a failed kickoff.** The worktree exists; only the message injection failed. Do not retry by re-running `create_ticket` (Hard Rule 4 name collision would suffix `-2`).
 
 ### `reset`
@@ -221,7 +256,7 @@ Every parent-facing report is JSON-shaped with these fields when failing:
 ```json
 {
   "ok": false,
-    "blocker_code": "WORKTREE_API_FAILED" | "WORKTREE_TOOLS_NOT_REGISTERED" | "WORKTREE_NAME_COLLISION" | "WORKTREE_NOT_CLEAN_OR_PUSHED" | "BASE_NOT_PUSHED" | "PROTECTED_PROJECT_ROOT" | "NOT_A_GIT_WORKTREE" | "WORKTREE_RECOVERY_FAILED" | "KICKOFF_FAILED" | "HANDSHAKE_PUSH_FAILED" | "HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED" | "TICKET_NOT_FORKED_FROM_FEATURE",
+    "blocker_code": "WORKTREE_API_FAILED" | "WORKTREE_TOOLS_NOT_REGISTERED" | "WORKTREE_NAME_COLLISION" | "WORKTREE_NOT_CLEAN_OR_PUSHED" | "WORKTREE_PREFLIGHT_FAILED" | "BASE_NOT_PUSHED" | "PROTECTED_PROJECT_ROOT" | "NOT_A_GIT_WORKTREE" | "WORKTREE_RECOVERY_FAILED" | "KICKOFF_FAILED" | "KICKOFF_ALREADY_DELIVERED" | "HANDSHAKE_PUSH_FAILED" | "HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED" | "TICKET_NOT_FORKED_FROM_FEATURE",
   "tool": "worktree_create_feature" | "worktree_create_ticket" | "worktree_delete" | "worktree_list" | "worktree_reset" | "session-manager.kickoff",
   "status": <http status>,
   "body": <tool body or stderr>,

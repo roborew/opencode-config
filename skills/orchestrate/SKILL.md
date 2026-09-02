@@ -135,33 +135,60 @@ while true:
     # 5a-i. Create ticket worktree (forked off the feature branch captured at §4)
     #       Pure JSON envelope — worktree-manager owns the procedure. Do NOT include
     #       verification commands or invented blocker_code in the prompt; surface the
-    #       envelope verbatim on failure.
+    #       envelope verbatim on failure. `repo` is the OWNER/REPO from entry and is
+    #       passed through so worktree-manager's in-step-8.5 readiness check and the
+    #       KICKOFF_ALREADY_DELIVERED precondition in kickoff step 2a can run
+    #       `gh issue view` / `gh repo view` without re-deriving the repo.
     dispatch worktree-manager create_ticket {
       issue: ticket,
       slug,
       feature_branch: <captured wr_feat.body.branch from lifecycle log>,
       title,
+      repo: entry.repo,
       auto_spawn: true,
     }
     if not response.ok:
       surface blocker_code verbatim, continue to next entry (advisory — do not pause the batch)
       record { directory: null, branch: branch_name, abbrev, kickoff: "no_directory" }
 
+    # Tripwire per Global Invariants #12: the readiness check (worktree-manager step 8.5)
+    # must have returned reachable + writable + branch_local_up_to_date + parent_merged.
+    # The blocker_code is WORKTREE_PREFLIGHT_FAILED; surface verbatim and pause the batch
+    # — do NOT retry by re-running create_ticket (Hard Rule 4 would suffix -2 and create
+    # a sibling worktree).
+
     # 5a-ii. Compose the kickoff message (orchestrator owns this — it's the brief)
     kickoff_message = compose_kickoff_message(
         issue=entry, feature_slug=slug, branch=branch_name,
         worktree_dir=directory, develop_session_id=<ctx.sessionID>)
+
+    # Cap gate per Global Invariants #11: read the lifecycle-log entry for this ticket;
+    # if session_create_attempts >= session_create_cap (default 3), surface
+    # BLOCKED: WORKTREE_SESSION_ATTEMPTS_EXCEEDED verbatim and pause the batch.
 
     # 5a-iii. Kick the coder session via session-manager (one atomic action: scoped-list-then-reuse-or-create-then-inject)
     # Resolution policy (locked): session_list({scope:"directory", directory}) → reuse if matching,
     # create otherwise. No global-list fallback in kickoff (see Global Invariants #8 in agents/orchestrate.md).
     # Default `create_if_absent: true` preserves current behavior; pass `create_if_absent: false` to opt
     # out of the auto-create (returns `NO_SESSION_FOR_WORKTREE`).
+    # Pass `issue: ticket` and `repo: entry.repo` so worktree-manager.kickoff can run its
+    # step 2a KICKOFF_ALREADY_DELIVERED precondition check (gh issue view against the
+    # ticket_report: comment). Pass `session_create_attempts` from the lifecycle log so
+    # the envelope echoes it back for correlation.
     ks = dispatch session-manager kickoff {
       directory,
       agent: "coder",
       message: kickoff_message,
+      issue: ticket,
+      repo: entry.repo,
+      session_create_attempts: <read from lifecycle log entry>,
     }
+    # Increment the lifecycle-log session_create_attempts counter for this ticket on
+    # EVERY session_create dispatched by the develop loop, regardless of subsequent
+    # session_notify outcome — the orphan is created at session_create time, not at
+    # notify time. (Per Global Invariants #11; under-counting is the failure mode the
+    # operator just hit with 5 orphans against ticket #246.)
+    increment session_create_attempts in lifecycle log entry for <ticket>
     # Tripwire: kickoff must never resolve to the orchestrator's own session.
     if ks.session_id == <ctx.sessionID>:
       surface "BLOCKED: KICKOFF_RESOLVED_TO_SELF" verbatim
@@ -176,11 +203,20 @@ while true:
     if not ks.agent_match:
       surface "BLOCKED: KICKOFF_AGENT_BIND_MISMATCH" verbatim (ks.manualRecovery or the envelope's curl snippet)
       pause the batch
+    # Newly-issued kickoff can also surface KICKOFF_ALREADY_DELIVERED from worktree-manager
+    # step 2a (durable ticket_report: comment exists on the issue). Hard stop per
+    # worktree-manager contract — surface verbatim and pause the batch. Do NOT retry
+    # the kickoff (that is exactly what the check exists to prevent); inspect the
+    # ticket_report: comment and resume from §5c's PR-approval gate if the coder merged.
+    if ks.blocker_code == "KICKOFF_ALREADY_DELIVERED":
+      surface "BLOCKED: KICKOFF_ALREADY_DELIVERED" verbatim
+      pause the batch
     record {
       directory, branch: branch_name, abbrev,
       session_id: ks.session_id, session_source: ks.session_source, resolution: ks.resolution,
       directory_match: ks.directory_match, agent_match: ks.agent_match,
-      kickoff: ks.admitted ? "admitted" : "failed"
+      kickoff: ks.admitted ? "admitted" : "failed",
+      session_create_attempts: <incremented value>,
     }
     # Envelope shape (informational; admitted: true is the only success gate):
     #   { ok, action: "kickoff", session_id, session_source: reused|created, resolution: reused|created,
@@ -286,6 +322,9 @@ The coder session owns `state:in-progress` (set during `ticket-lifecycle` §0 Bo
 | `session-manager.kickoff` returns `directory_match: false` (`BLOCKED: KICKOFF_DIRECTORY_BIND_FAILED`) | develop orchestrator loop (tripwire per Global Invariants #9; hard stop, not advisory) | Pause the batch and surface `BLOCKED: KICKOFF_DIRECTORY_BIND_FAILED` verbatim along with the envelope's `manualRecovery` curl snippet. The kickoff landed the coder in the wrong cwd — `scripts/checkout-contract.sh --verify` would reject it. Indicates `plugins/session-manager.js` `session_create` returned a stored `directory` that did not match the requested worktree dir (server ignored `?directory=`, or the create response itself is the only synchronous evidence available — a follow-up list race is no longer in the picture). Investigate `plugins/session-manager.js` and re-run the `session_create({directory: ...})` verification recipe in the plan before retrying. Should never fire post-fix. |</oldString>
 | `session-manager.kickoff` returns `agent_match: false` (`BLOCKED: KICKOFF_AGENT_BIND_MISMATCH`) | develop orchestrator loop (tripwire per Global Invariants #9; hard stop, not advisory) | Pause the batch and surface `BLOCKED: KICKOFF_AGENT_BIND_MISMATCH` verbatim along with the envelope's `manualRecovery` curl snippet. The new session was bound to a different agent than requested (the coder would load the wrong agent prompt). Investigate `plugins/session-manager.js` `session_create` body before retrying. Should never fire post-fix. |
 | `session_report:` arrives without `bind_failed: false` for that `session_id` in the lifecycle log (`BLOCKED: KICKOFF_BIND_CONFIRMATION_MISSING`) | develop orchestrator loop (Global Invariant #10) | Pause the batch and surface verbatim. The kickoff silently admitted without bind evidence; the coder may be in the wrong cwd. Inspect the kickoff envelope and the develop-loop-watch output, then dispatch a `developer` Task to re-run `scripts/checkout-contract.sh --verify` against the worktree before retrying. |
+| `worktree-manager.create_ticket` step 8.5 readiness check fails (`BLOCKED: WORKTREE_PREFLIGHT_FAILED`) — worktree not reachable / not writable / `branch_local_up_to_date === false` / `parent_branch_merged === false` | develop orchestrator loop (Global Invariant #12; hard stop, not advisory) | Pause the batch and surface `BLOCKED: WORKTREE_PREFLIGHT_FAILED` verbatim along with the captured `branch_local_head_sha` vs `origin/<branch>` SHAs and the envelope's `manualRecovery`. **Do not retry by re-running `create_ticket`** — Hard Rule 4 would suffix `-2` on the worktree name and create a sibling. Inspect the worktree (likely a wrong-ref reset that left the worktree on `develop`/`main` instead of the feature branch; or the feature branch has not been pushed yet). If the branch is stale, dispatch a `developer` Task (`load: minimal`) to `git fetch origin "<branch>" && git -C <dir> reset --hard "origin/<branch>"`; if the parent is unmerged, the upstream ticket likely needs to merge first. The `branch_local_up_to_date === false` branch is the canonical signal of the latent #245 reset-to-wrong-ref bug. |
+| `worktree-manager.kickoff` returns `blocker_code: "KICKOFF_ALREADY_DELIVERED"` (issue already has a `ticket_report:` comment) | develop orchestrator loop (worktree-manager hard-stop surface from step 2a) | Pause the batch and surface verbatim. The coder already finished and posted the durable terminal report; re-kicking would create an orphan. Inspect the `ticket_report:` comment on the issue and resume from `ticket-lifecycle` §0 if the coder is alive (or treat the ticket as done and move to PR-approval if the coder has merged). Do not retry the kickoff — that is exactly what this check exists to prevent. |
+| `worktree-manager.kickoff` returns `session_create_attempts >= session_create_cap` from the lifecycle-log echo (or the develop-loop observes a runaway counter) (`BLOCKED: WORKTREE_SESSION_ATTEMPTS_EXCEEDED`) | develop orchestrator loop (Global Invariant #11; hard stop, not advisory) | Pause the batch and surface verbatim. The develop loop has hit the per-worktree session-create ceiling (default `3`, configurable via `session_create_cap`). The worktree likely has orphaned sessions registered against it from prior kickoff storms (this is the failure mode the operator hit — 5 orphans against ticket #246 before the loop paused). Operator intervention is required: dispatch `worktree-manager.recover { directory }` to deregister the orphan sessions via the sanctioned `rewrite-worktree-gitdirs.py` + `session-manager.delete` flow, then either raise `session_create_cap` in the lifecycle log or skip the offending ticket. Do not retry the kickoff automatically. |
 | `scripts/dev-loop-batch.sh` exits 1 | develop orchestrator loop | All tickets done → exit loop, go to §8. |
 | `scripts/dev-loop-batch.sh` exits 2 | develop orchestrator loop | gh/API failure — surface stderr verbatim, stop. Never treat as "all tickets done" (an empty lifecycle log + exit 2 is a transport failure, not completion). |
 | Ticket `BLOCKED: ENV_BLOCKED` after one repair | coder session → develop orchestrator | Surface `recommended_env_fix`, pause batch. |

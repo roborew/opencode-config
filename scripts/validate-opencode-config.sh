@@ -186,7 +186,7 @@ fi
 rm -f /tmp/sm_delete_block.$$
 
 echo "Checking session-manager blocker_code allowlist + obsolete NO_SESSION_IN_DIRECTORY sweep..."
-SESSION_KNOWN_BLOCKER_CODES='SESSION_TOOLS_NOT_REGISTERED|SESSION_API_FAILED|NO_SESSION_FOR_WORKTREE|SESSION_NOT_FOUND|LIST_SCOPE_INCOMPLETE|AMBIGUOUS_TARGET|CREATE_BIND_MISMATCH|KICKOFF_FAILED|KICKOFF_DIRECTORY_BIND_FAILED|KICKOFF_AGENT_BIND_MISMATCH|KICKOFF_BIND_CONFIRMATION_MISSING|KICKOFF_RESOLVED_TO_SELF|WORKTREE_API_FAILED|WORKTREE_TOOLS_NOT_REGISTERED|WORKTREE_NAME_COLLISION|WORKTREE_NOT_CLEAN_OR_PUSHED|BASE_NOT_PUSHED|PROTECTED_PROJECT_ROOT|NOT_A_GIT_WORKTREE|WORKTREE_RECOVERY_FAILED|HANDSHAKE_PUSH_FAILED|HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED|TICKET_NOT_FORKED_FROM_FEATURE|directory_bind_failed|agent_bind_mismatch|no_session_in_directory|session_not_found|ambiguous_target|list_scope_incomplete'
+SESSION_KNOWN_BLOCKER_CODES='SESSION_TOOLS_NOT_REGISTERED|SESSION_API_FAILED|NO_SESSION_FOR_WORKTREE|SESSION_NOT_FOUND|LIST_SCOPE_INCOMPLETE|AMBIGUOUS_TARGET|CREATE_BIND_MISMATCH|KICKOFF_FAILED|KICKOFF_DIRECTORY_BIND_FAILED|KICKOFF_AGENT_BIND_MISMATCH|KICKOFF_BIND_CONFIRMATION_MISSING|KICKOFF_ALREADY_DELIVERED|KICKOFF_RESOLVED_TO_SELF|WORKTREE_API_FAILED|WORKTREE_TOOLS_NOT_REGISTERED|WORKTREE_NAME_COLLISION|WORKTREE_NOT_CLEAN_OR_PUSHED|WORKTREE_PREFLIGHT_FAILED|WORKTREE_SESSION_ATTEMPTS_EXCEEDED|BASE_NOT_PUSHED|PROTECTED_PROJECT_ROOT|NOT_A_GIT_WORKTREE|WORKTREE_RECOVERY_FAILED|HANDSHAKE_PUSH_FAILED|HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED|TICKET_NOT_FORKED_FROM_FEATURE|directory_bind_failed|agent_bind_mismatch|no_session_in_directory|session_not_found|ambiguous_target|list_scope_incomplete'
 SESSION_FILES="agents/session-manager.md agents/worktree-manager.md skills/orchestrate/SKILL.md skills/ticket-lifecycle/SKILL.md skills/feature-review/SKILL.md"
 for f in $SESSION_FILES; do
   [[ -f "$f" ]] || continue
@@ -332,6 +332,26 @@ if ! grep -q 'recover' agents/worktree-manager.md 2>/dev/null; then
 fi
 if ! grep -q 'WORKTREE_RECOVERY_FAILED' agents/worktree-manager.md 2>/dev/null; then
   echo "  MISSING: WORKTREE_RECOVERY_FAILED blocker code in agents/worktree-manager.md"
+  ERR=1
+fi
+# Readiness check gate (Global Invariant #12) lives inside worktree-manager's create_ticket
+# step 8.5. The needle is the literal step header so any future rename is caught here.
+if ! grep -q 'Preflight check' agents/worktree-manager.md 2>/dev/null; then
+  echo "  MISSING: Preflight check step 8.5 in agents/worktree-manager.md"
+  ERR=1
+fi
+# KICKOFF_ALREADY_DELIVERED precondition lives in worktree-manager.kickoff step 2a —
+# the literal must appear in the failure-reporting contract so the validator's
+# blocker_code allowlist sweep picks it up.
+if ! grep -q 'KICKOFF_ALREADY_DELIVERED' agents/worktree-manager.md 2>/dev/null; then
+  echo "  MISSING: KICKOFF_ALREADY_DELIVERED precondition literal in agents/worktree-manager.md"
+  ERR=1
+fi
+# Global Invariant #11's per-worktree session-create cap lives in the orchestrator's
+# lifecycle-log entry shape — the counter field name must appear in agents/orchestrate.md
+# so a future rename is caught before a runaway kickoff storm.
+if ! grep -q 'session_create_attempts' agents/orchestrate.md 2>/dev/null; then
+  echo "  MISSING: session_create_attempts counter in agents/orchestrate.md lifecycle log"
   ERR=1
 fi
 if ! grep -q 'rewrite-worktree-gitdirs.py' agents/worktree-manager.md 2>/dev/null; then
