@@ -1,10 +1,10 @@
 ---
 description: Markdown and docs writer (write-only). PRD, docs, registry, delivery records.
 mode: subagent
-model: opencode/deepseek-v4-flash
+model: opencode-gpt/gpt-5-nano
 tools:
   write: true
-  edit: false
+  edit: true
   read: true
   bash: true
   skill: true

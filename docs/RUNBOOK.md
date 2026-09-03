@@ -150,9 +150,10 @@ Provider-level `timeout` (e.g. 300000ms) and per-model **`temperature` / `top_p`
 
 | Layer | Agents | Primary model | Fallback |
 | --- | --- | --- | --- |
+| Agent tool gotcha | — | — | `tools.edit: false` strips the entire write/edit family; `write: true` alone is silently ineffective. Declare `edit: true` and forbid `edit` in prompt. |
 | High-volume execution | `developer`, `frontend-dev`, `coder`, `orchestrate`, `helper`, `debugger`, `refactor`, `review` | `opencode-go/deepseek-v4-flash` (developer/frontend-dev/helper/debugger/refactor/review); `kilo/minimax/minimax-m3` (coder, orchestrate) | `opencode/deepseek-v4-flash` when Go quota exhausted; same model retained on Kilo when coder/orchestrate runs on Kilo |
 | Fast utility / setup | `worktree-sandbox`, `document`, `doc-reviewer`, `stack-bootstrap` | `opencode-gpt/gpt-5-nano` | `opencode-go/deepseek-v4-flash` if GPT-5 Nano fails |
-| Docs/PRD writer | `scribe` | `opencode/deepseek-v4-flash` | `opencode-go/deepseek-v4-flash` (alt route) if primary fails |
+| Docs/PRD writer | `scribe` | `opencode-gpt/gpt-5-nano` | `opencode-go/deepseek-v4-flash` if GPT-5 Nano fails |
 | Independent code-review gate | `code-review` | `kilo/minimax/minimax-m3` | `opencode/go-gpt-5.6-luna` for escalation/high-risk only |
 | Architecture assessment | `architecture-auditor` | `opencode-go/gpt-5.6-luna` (feature-impact) | `opencode-gpt/gpt-5.6-terra` for full audits |
 | Feature decomposition | `strategist` | `opencode-go/deepseek-v4-pro` | `opencode-go/gpt-5.6-luna` for hard cross-repo |

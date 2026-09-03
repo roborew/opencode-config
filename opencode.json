@@ -366,7 +366,7 @@
     },
     "scribe": {
       "mode": "subagent",
-      "model": "opencode/deepseek-v4-flash",
+      "model": "opencode-gpt/gpt-5-nano",
       "steps": 60
     },
     "stack-bootstrap": {
