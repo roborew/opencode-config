@@ -36,7 +36,7 @@ When parent passes `execution_mode: github_pr_feedback_triage`:
 
 1. **Hosted PR review comments** — CodeRabbit, Kilo, other bots, unresolved human threads.
 2. **CI / Actions** — failing or pending required checks on the PR.
-3. **Incomplete tickets** — open `feature:<slug>` issues not `state:ready-for-review` or missing code-review approval.
+3. **Incomplete tickets** — open `feature:<slug>` issues not `state:ready-for-ticket-review` or missing code-review approval.
 4. **User feedback** — explicit operator requests not yet ticketed.
 
 **Checks:**

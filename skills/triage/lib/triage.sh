@@ -13,7 +13,9 @@ state_labels=(
   state:needs-info
   state:ready-for-agent
   state:in-progress
-  state:ready-for-review
+  state:ready-for-ticket-review
+  state:ticket-reviewed
+  state:ready-for-feature-review
   state:blocked
   state:done
   state:ready-for-human

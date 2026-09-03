@@ -5,7 +5,7 @@ modelTier: "fast"
 roleReminder: "Loaded by the `coder` agent in the feature worktree after all ticket sub-PRs merge into `opencode/feat-<slug>`. Sign-off duty migrated from the deleted architect review skill."
 ---
 
-> You are operating inside a **coder** session that was kicked into the feature worktree (`opencode/feat-<slug>`) by the develop orchestrator after the last ticket sub-PR merged. The ticket inner loop has already finished for every ticket in this feature (each ticket ran its own local CodeRabbit pre-flight inside its coder session) — you own the feature-mode verification: full test suite + e2e via the compose backend, acceptance replay, the PR-side CodeRabbit gate (medium/hard), difficulty gates, docs, `state:done` on every ticket, the feature PR, bounded stabilization, and one terminal `feature_report:` (or `BLOCKED: FEATURE_REMEDIATION` with `remediation:` issues). The spec `feature-complete` skill later verifies + closes; impl feature PR merge happens in the orchestrator on your READY report + human approval — the orchestrator never re-verifies your evidence.
+> You are operating inside a **coder** session that was kicked into the feature worktree (`opencode/feat-<slug>`) by the develop orchestrator after the last ticket sub-PR merged. The ticket inner loop has already finished for every ticket in this feature (each ticket ran its own local CodeRabbit pre-flight inside its coder session) — you own the feature-mode verification: full test suite + e2e via the compose backend, acceptance replay, the PR-side CodeRabbit gate (medium/hard), difficulty gates, docs, `state:ready-for-feature-review` on every ticket (the final coder-set label), the feature PR, bounded stabilization, and one terminal `feature_report:` (or `BLOCKED: FEATURE_REMEDIATION` with `remediation:` issues). The develop orchestrator sets `state:done` after human final review and merges the feature PR — the spec `feature-complete` skill later verifies + closes; impl feature PR merge happens in the orchestrator on your READY report + human approval — the orchestrator never re-verifies your evidence.
 
 ## Hard rules
 
@@ -122,7 +122,7 @@ Subsequent full-suite / e2e / per-stage code-review runs use the same backend vi
 
 For each `feature:<slug>` issue, parse the `opencode-task-yaml` block from the issue body. Roll up acceptance criteria from every ticket. Build the per-ticket `code_review_gate:` summary from issue comments (last comment per ticket carrying `code_review_gate: ... all_stages: true ... verdict: APPROVED ... verified`). Every ticket must show:
 
-- `state:ready-for-review` (or `state:done` set by this loop) and `verified`
+- `state:ready-for-ticket-review` (or `state:ticket-reviewed` after sub-PR merge) and `verified`
 - `code_review_gate: all_stages: true verdict: APPROVED`
 - `merged_sub_prs` confirms each ticket's sub-PR is merged
 
@@ -168,15 +168,15 @@ For **easy** → skip the PR-side gate (easy features skip it; each ticket alrea
    - `docs/architecture/<slug>.md` (when in scope)
 3. Commit the docs on the feat branch via delegated `developer` (`load: minimal`) — `git add <docs paths>`, `git commit -m "docs(<slug>): changelog + guides", git push origin opencode/feat-<slug>`. Do **not** open a PR yet.
 
-### 5. `state:done` on every ticket
+### 5. `state:ready-for-feature-review` on every ticket
 
 For each `feature:<slug>` issue in this repo, dispatch a `developer` Task (`load: minimal`) to run:
 
 ```bash
-bash "$OC/scripts/issue-state-transition.sh" "<repo>" "<issue_number>" state:done
+bash "$OC/scripts/issue-state-transition.sh" "<repo>" "<issue_number>" state:ready-for-feature-review
 ```
 
-`state:done` is the final accept label. Issues **stay open** — close-at-merge is owned by spec `feature-complete`. Skip tickets already `state:done`.
+`state:ready-for-feature-review` is the final coder-set label — the human-review gate for the integrated feature PR. The **develop orchestrator** sets `state:done` after human "all reviewed" (see `skills/orchestrate/SKILL.md` §8c-i). Issues **stay open** — close-at-merge is owned by spec `feature-complete`. Skip tickets already `state:ready-for-feature-review` or `state:done`.
 
 ### 6. Open the feature PR
 
@@ -252,7 +252,7 @@ feature_report:
   docs_paths:
     - docs/changelog/<YYYY-MM-DD>-<slug>.md
     - <other paths written by scribe>
-  tickets_state_done: [<n1>, <n2>, ...]
+  tickets_state_feature_review: [<n1>, <n2>, ...]
   notify_status: admitted|failed|<reason>
 EOF
 )"
@@ -272,7 +272,7 @@ READY_FOR_HUMAN_REVIEW:
   full_suite_evidence: <compose test invocation + pass line>
   coderabbit_verdict: PASS | SKIPPED
   docs_paths: [...]
-  tickets_state_done: [<n1>, <n2>, ...]
+  tickets_state_feature_review: [<n1>, <n2>, ...]
   awaiting_human_notes: <optional list of WIP/hold comments>
   next_action_for_parent: "feature PR is open and ready for review; merge is the develop orchestrator's gate on 'all reviewed'"
 

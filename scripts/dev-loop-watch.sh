@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Per-issue watcher for the develop orchestrator. Poll-only (no server auth
 # needed) — emits a JSON array of open issues for feature:<slug> in any active
-# state label, with PR URL (if any) and the latest ticket_report: comment
-# summary. The develop orchestrator invokes this on every wake (session_notify,
-# poller, user message) to detect state changes the in-session notify missed
-# (out-of-band GitHub-UI merges, poller-disabled intervals, race retries).
+# state label, with PR URL (if any), latest ticket_report: comment summary,
+# and an `out_of_band_merged` flag set when a sub-PR has been merged via the
+# GitHub UI (state MERGED) without a prior state:ticket-reviewed transition
+# (the orchestrator treats this as an implicit human approval and sets
+# state:ticket-reviewed before running §5d cleanup).
 #
 # Usage: dev-loop-watch.sh <feature_slug_without_prefix> [--repo OWNER/REPO]
-# Output: [{number, state, title, pr_url, ticket_report_summary}, ...]
+# Output: [{number, state, title, pr_url, pr_state, ticket_report_summary, out_of_band_merged}, ...]
 # Exit 1 with empty output when there is nothing to report.
 set -euo pipefail
 SLUG="${1:?feature slug required}"
@@ -30,7 +31,8 @@ FEAT="feature:${SLUG}"
 
 ACTIVE_STATES=(
   state:in-progress
-  state:ready-for-review
+  state:ready-for-ticket-review
+  state:ticket-reviewed
   state:blocked
 )
 
@@ -54,13 +56,22 @@ while IFS= read -r stub; do
   [[ -n "$stub" ]] || continue
   state=$(printf '%s' "$stub" | jq -r .state)
   case "$state" in
-    state:in-progress|state:ready-for-review|state:blocked) ;;
+    state:in-progress|state:ready-for-ticket-review|state:ticket-reviewed|state:blocked) ;;
     *) continue ;;
   esac
   number=$(printf '%s' "$stub" | jq -r .number)
   title=$(printf '%s' "$stub" | jq -r .title)
   branch="opencode/ticket-${number}-${SLUG}-$(printf '%s' "$title" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g' | cut -c1-32)"
-  pr_url=$(gh pr list --repo "$REPO" --state all --head "$branch" --json url -q '.[0].url // ""' 2>/dev/null || true)
+  pr_json=$(gh pr list --repo "$REPO" --state all --head "$branch" --json url,state,mergedAt 2>/dev/null || true)
+  pr_url=$(printf '%s' "$pr_json" | jq -r '.[0].url // ""' 2>/dev/null || true)
+  pr_state=$(printf '%s' "$pr_json" | jq -r '.[0].state // ""' 2>/dev/null || true)
+  # Out-of-band merge detection: PR MERGED while the issue label still
+  # reports a pre-merge state. The orchestrator (§5e) treats this as an
+  # implicit human approval and sets state:ticket-reviewed before cleanup.
+  out_of_band_merged="false"
+  if [[ "$pr_state" == "MERGED" && "$state" != "state:ticket-reviewed" && "$state" != "state:ready-for-feature-review" && "$state" != "state:done" ]]; then
+    out_of_band_merged="true"
+  fi
   ticket_report=$(gh issue view "$number" --repo "$REPO" --comments --json comments -q '
     [.comments[]
       | select(.body | startswith("ticket_report:"))
@@ -76,8 +87,10 @@ while IFS= read -r stub; do
     --arg t "$title" \
     --arg st "$state" \
     --arg pu "$pr_url" \
+    --arg ps "$pr_state" \
     --arg tr "$ticket_report_summary" \
-    '{number: $n, state: $st, title: $t, pr_url: $pu, ticket_report: $tr}')
+    --argjson oob "$out_of_band_merged" \
+    '{number: $n, state: $st, title: $t, pr_url: $pu, pr_state: $ps, ticket_report: $tr, out_of_band_merged: $oob}')
   OUT=$(jq -c --argjson e "$entry" '. + [$e]' <<<"$OUT")
 done <"$STUBS_FILE"
 

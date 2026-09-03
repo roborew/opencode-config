@@ -23,8 +23,11 @@ Manage GitHub issue **state:** labels for the current repo (or `TRIAGE_REPO=owne
 | `state:needs-triage` | `state:ready-for-human` | Requires human-only work |
 | `state:needs-info` | `state:ready-for-agent` | **Human replied** with answers |
 | `state:ready-for-agent` | `state:in-progress` | Agent/orchestrate picked up |
-| `state:in-progress` | `state:ready-for-review` | Implementation complete |
-| `state:ready-for-review` | `state:done` | Feature coder accept in `feature-review` (issue stays **open) |
+| `state:in-progress` | `state:ready-for-ticket-review` | Implementation complete (sub-PR opens) |
+| `state:ready-for-ticket-review` | `state:ticket-reviewed` | Human approved the sub-PR (per-ticket) — set by develop orchestrator or coder session on "ticket reviewed" reply |
+| `state:ticket-reviewed` | (merge into feature branch) | Orchestrator or coder merges sub-PR into `opencode/feat-<slug>`; ticket stays open until spec `feature-complete` |
+| `state:ticket-reviewed` | `state:ready-for-feature-review` | Set by **feature coder** when it accepts the stack and opens the feature PR |
+| `state:ready-for-feature-review` | `state:done` | Human "all reviewed" on the feature PR; develop orchestrator transitions every ticket |
 | `state:done` (open) | issue **closed** | Spec **feature-complete** at merge only |
 | any | `state:blocked` | Dependency or env blocker |
 | any | `state:wontfix` | Explicit cancel |

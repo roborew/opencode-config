@@ -18,7 +18,7 @@ roleReminder: "Load on the first message of any coder session whose cwd is a tic
 7. **Context discipline.** Every ~10 tool iterations, compact state to 3 bullets (current stage, files touched, blockers). Discard old RED/GREEN raw outputs once `code-review` APPROVES the stage; keep only concise gate summaries.
 8. **Stabilization is bounded.** PR stabilization loop runs **at most 3 iterations**. On exhaustion, return `BLOCKED: STABILIZATION_EXHAUSTED` with the remaining fix-now items.
 9. **Cross-ticket review comments are not yours to fix.** If `pr-stabilize-watch.sh` returns comments whose fix would touch files in another ticket's branch, return `BLOCKED: CROSS_TICKET_REVIEW` so the develop orchestrator routes it to the feature coder's remediation flow.
-10. **Issue state transitions** (`state:in-progress` on entry, `state:ready-for-review` when the sub-PR opens) are yours; use `scripts/issue-state-transition.sh` via a delegated `developer` Task.
+10. **Issue state transitions** (`state:in-progress` on entry, `state:ready-for-ticket-review` when the sub-PR opens) are yours; use `scripts/issue-state-transition.sh` via a delegated `developer` Task.
 11. **You are the auto-started GUI session for this worktree.** The develop orchestrator does **not** dispatch you via `task` (cwd inheritance would put you on `develop`); you are reached via the kickoff message injected by `session-manager` (which calls `session.promptAsync`) or via any user message. You must self-bootstrap from your **most recent user message** + the branch + GitHub — there is no brief file written; the kickoff message IS the contract.
 12. **Verification backend is containerized only.** Every RED/GREEN/final-gate test run goes through `docker-compose.test.yml` via `sandbox_run_test` from `plugins/sandbox.js` (sandbox exec on opencode-server, or direct `docker compose` on local dev) — **never** host-local suite setup. `compose_test_file: none` after `probe_and_create` → `ENV_BLOCKED` with `recommended_env_fix: add docker-compose.test.yml from templates/project-stub/`. No host npm/pip installs to "get tests running".
 
@@ -146,7 +146,7 @@ Subsequent test execution (test-writer RED, developer GREEN, code-review per-sta
    bash <OC>/scripts/issue-state-transition.sh "<repo>" "<issue_number>" state:in-progress
    ```
 
-   `state:in-progress` automatically removes `verified` and adds `unverified` — the verification gate will re-arm when this ticket reaches `state:ready-for-review` again.
+   `state:in-progress` automatically removes `verified` and adds `unverified` — the verification gate will re-arm when this ticket reaches `state:ready-for-ticket-review` again.
 
 ## Required inputs (truth sources)
 
@@ -227,7 +227,7 @@ One attempt per provider per bounded Task; track `attempted_providers`. After bo
 
 1. Push your branch: `git push -u origin <expected_branch>` (delegated developer).
 2. Open the sub-PR via `gh pr create --base opencode/feat-<slug> --head <expected_branch> --title "feat(<slug>): ticket <issue> — <title>" --body <auto-body>` (delegated developer).
-3. `state:ready-for-review` on the issue via `scripts/issue-state-transition.sh` (the sub-PR is now open; the final gate + `verified` label already landed in §3).
+3. `state:ready-for-ticket-review` on the issue via `scripts/issue-state-transition.sh` (the sub-PR is now open; the final gate + `verified` label already landed in §3).
 
 ### 5. PR stabilization loop (max 3 iterations)
 
@@ -356,13 +356,15 @@ send any message to the develop orchestrator session — it runs dev-loop-watch.
 will pick up the report from there.
 ```
 
+When `notify_status` is `develop_session_id_stale` (the `session-manager.notify` envelope returned `error: "session_not_found"`, `status == 404`, or `blocker_code: "SESSION_NOT_FOUND"`), also emit the **`session-notify-fallback` markdown block** (see `skills/orchestrate/session-notify-fallback.md`) so the operator can paste one curl (or `gh issue comment` one-liner) to forward the wake immediately. Emit the block only on the `SESSION_NOT_FOUND`-shape failures above — generic `SESSION_API_FAILED` is not a fallback trigger. Do not append a second copy on retry; the block is one-shot.
+
 Emit the terminal report and stop. The implementer Hard Rules' post-completion guard now fires — any subsequent user message is answered with: "Task complete. Switch to the `orchestrate` agent to continue."
 
 ## Code-review grading gate
 
 Per-stage `code-review` (focused): APPROVED requires non-missing criterion coverage, manual criteria with evidence or accepted deviation, security resolved, complete report. Empty/malformed/step-limited report = `BLOCKED`; retry once with `load: full`, then senior-dev escalation.
 
-Final `all_stages: true` gate (before `state:ready-for-review`): same grading, plus the full-suite compose test run is green and `StageAcceptanceChecks` passed. Empty/malformed/step-limited → retry once with `load: full`, then senior-dev escalation.
+Final `all_stages: true` gate (before `state:ready-for-ticket-review`): same grading, plus the full-suite compose test run is green and `StageAcceptanceChecks` passed. Empty/malformed/step-limited → retry once with `load: full`, then senior-dev escalation.
 
 ## Anti-loop
 

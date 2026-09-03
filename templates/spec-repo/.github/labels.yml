@@ -17,15 +17,21 @@
 - name: state:in-progress
   color: fbca04
   description: Orchestrate is executing this GitHub ticket (or active local work)
-- name: state:ready-for-review
+- name: state:ready-for-ticket-review
   color: fef2c0
-  description: Code review approved; awaiting architect or human sign-off
+  description: Sub-PR is open and code-review approved; awaiting human "ticket reviewed" to merge into opencode/feat-<slug>
+- name: state:ticket-reviewed
+  color: bfdadc
+  description: Human approved the sub-PR; merge into opencode/feat-<slug> is about to happen (orchestrator or coder session owns the merge)
+- name: state:ready-for-feature-review
+  color: c5def5
+  description: Feature PR is open; every ticket is stacked in opencode/feat-<slug>; awaiting human "all reviewed" to merge into develop
 - name: state:blocked
   color: b60205
   description: Waiting on external dependency or decision
 - name: state:done
   color: 5319e7
-  description: Merged or otherwise completed
+  description: Final accept label; merged or otherwise completed (issue stays open until spec feature-complete)
 
 # Category (work type)
 - name: category:feature

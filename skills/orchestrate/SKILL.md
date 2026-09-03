@@ -57,7 +57,7 @@ The user is starting fresh with no feature worktree yet.
 ```text
 What do you want to do?
 
-(1) Start a new feature — give me the `feature:<slug>` and I'll create the feature worktree, then run every ticket end-to-end to a ready-for-review PR. (recommended)
+(1) Start a new feature — give me the `feature:<slug>` and I'll create the feature worktree, then run every ticket end-to-end to a ready-for-ticket-review PR. (recommended)
 (2) Resume a feature — reattach to a feature or ticket worktree from a previous session and continue its queue.
 (3) Remediation loop — re-check PR feedback / CI after you pushed fixes.
 (4) Something else (debug, refactor, doc review) — describe the task; I'll usually route you to `architect`.
@@ -283,15 +283,25 @@ Compose it once per ticket; pass it verbatim to `session-manager.kickoff` as `me
 For each `READY_FOR_HUMAN_REVIEW` (received via `session-manager.notify` or by parsing the latest `ticket_report:` comment from `scripts/dev-loop-watch.sh`):
 
 ```text
-notify user: "PR ready for review: <pr_url>"   # ONLY HUMAN GATE
-wait for user: "yes, happy with that ticket" (or user has already merged)
+notify user: "Ready for ticket review: <pr_url>"   # ONLY HUMAN GATE
+wait for user: "ticket reviewed" (or user has already merged, including via GitHub UI — watch script handles the state transition + cleanup, see §5e)
 ```
+
+> **Idempotency guard:** if the most recent `ticket_report:` (or poller-driven `DEV_LOOP_WAKE`) for the same `<repo>#<n>` has already been surfaced in this session, skip the notify and the wait — the operator is mid-review and the second surface is noise.
 
 ### §5d. Merge + cleanup
 
-After user approval reply:
+After user approval reply (or after out-of-band merge detection per §5e):
 
-1. **Merge the sub-PR** — delegated `developer` Task with **the exact worktree/repo directory and `cd`/`git -C` in the prompt** (fixes the inherited-cwd failures from the old task-tool dispatch path):
+1. **Mark `state:ticket-reviewed`** (delegated `developer` Task):
+
+   ```bash
+   bash "$OC/scripts/issue-state-transition.sh" "<repo>" "<issue_number>" state:ticket-reviewed
+   ```
+
+   `state:ticket-reviewed` is the explicit "human approved this sub-PR" label — `state:ready-for-ticket-review` plus `state:ticket-reviewed` are both present between human approval and the merge completing. Idempotent on re-entry.
+
+2. **Merge the sub-PR** — delegated `developer` Task with **the exact worktree/repo directory and `cd`/`git -C` in the prompt** (fixes the inherited-cwd failures from the old task-tool dispatch path):
 
    ```text
    cd <feature worktree directory>
@@ -313,11 +323,15 @@ After user approval reply:
 
 ### §5e. Out-of-band merges (GitHub UI)
 
-If the user merges the sub-PR via GitHub UI instead of the gate: `scripts/dev-loop-watch.sh` detects the state change (PR state MERGED), the poller or user message wakes the develop orchestrator, which verifies via a delegated `developer` Task (`gh pr view --json state`), then runs step §5d's cleanup.
+If the user merges the sub-PR via GitHub UI instead of the gate: `scripts/dev-loop-watch.sh` flags `out_of_band_merged: true` on the ticket entry (PR state MERGED while the issue label still reports a pre-merge state), the poller or user message wakes the develop orchestrator. The orchestrator then:
+
+1. Confirms via a delegated `developer` Task (`gh pr view --json state`).
+2. Transitions the ticket to `state:ticket-reviewed` so the label matches reality (delegated `developer` runs `scripts/issue-state-transition.sh <repo> <n> state:ticket-reviewed`) — matches the new semantic: "merged into feature branch" == "human approved".
+3. Runs §5d's cleanup (worktree delete + remote-branch delete).
 
 ## §6 State transitions inside the loop
 
-The coder session owns `state:in-progress` (set during `ticket-lifecycle` §0 Bootstrap) and `state:ready-for-review` (set when the sub-PR opens, after `code_review_gate:` is posted). The develop orchestrator owns any subsequent state changes (`state:blocked` on `BLOCKED`, etc.). All transitions go through `scripts/issue-state-transition.sh <repo> <n> <state>` delegated to `developer`.
+The coder session owns `state:in-progress` (set during `ticket-lifecycle` §0 Bootstrap) and `state:ready-for-ticket-review` (set when the sub-PR opens, after `code_review_gate:` is posted). The develop orchestrator owns `state:ticket-reviewed` (set on "ticket reviewed" reply or detected out-of-band merge, immediately before sub-PR merge into the feature branch) and `state:done` (set on "all reviewed" reply, immediately before the feature PR merges to `develop`). The feature coder owns `state:ready-for-feature-review` (set on every child ticket after it opens the feature PR — see `skills/feature-review/SKILL.md` §5). `state:blocked` is owned by whichever actor surfaced the blocker (coder or orchestrator). All transitions go through `scripts/issue-state-transition.sh <repo> <n> <state>` delegated to `developer`.
 
 ## §7 Failure handling
 
@@ -328,7 +342,7 @@ The coder session owns `state:in-progress` (set during `ticket-lifecycle` §0 Bo
 | `worktree-manager` returns `blocker_code: "KICKOFF_FAILED"` (advisory only) | develop orchestrator loop | Relay the envelope's `manualRecovery` to the user IMMEDIATELY (never silent); record advisory in lifecycle log; the kickoff message is the contract and the coder session can still bootstrap from the branch + GitHub. Retry via `worktree-manager` `kickoff` action (which now routes through `session-manager`), or the user opens the GUI session and types anything. **Do not pause the batch.** |
 | `session-manager` returns `SESSION_TOOLS_NOT_REGISTERED` | develop orchestrator loop | The session-manager plugin is not loaded in this environment. Surface `next_action` verbatim and stop: deploy `plugins/session-manager.js` into the config `plugins/` dir, restart opencode-server, confirm the boot log shows `[session-manager-plugin] messaging tools loaded` before retrying. |
 | `session-manager` returns `SESSION_API_FAILED` (advisory only) | develop orchestrator loop | Relay the envelope's `manualRecovery` to the user IMMEDIATELY (never silent); record advisory in lifecycle log; the kickoff message is the contract and the coder session can still bootstrap from the branch + GitHub. **Do not pause the batch.** The `kickoff` action's default `create_if_absent: true` no longer surfaces a "no session" code — an empty scoped list now means "create", not "fail". Operators that need the "create not allowed" semantics must dispatch `kickoff({ ..., create_if_absent: false })` and read the `NO_SESSION_FOR_WORKTREE` `blocker_code` from that envelope. |
-| `session-manager.notify` returns `blocker_code: "SESSION_NOT_FOUND"` (e.g. stale `develop_session_id` after a restart) | develop orchestrator loop | The `ticket_report:` / `feature_report:` issue comment is the **mandatory durable channel**; `scripts/dev-loop-poller.sh` + `scripts/dev-loop-watch.sh` will wake the develop orchestrator within one poll interval. Do not retry inject; continue waiting for the durable wake. |
+| `session-manager.notify` returns `blocker_code: "SESSION_NOT_FOUND"` (e.g. stale `develop_session_id` after a restart) | develop orchestrator loop | The `ticket_report:` / `feature_report:` issue comment is the **mandatory durable channel**; `scripts/dev-loop-poller.sh` + `scripts/dev-loop-watch.sh` will wake the develop orchestrator within one poll interval. Do not retry inject; continue waiting for the durable wake. (Coder-side counterpart: the coder emits the `session-notify-fallback` block — see `skills/orchestrate/session-notify-fallback.md` — when its outbound notify hits this shape.) |
 | `session-manager.kickoff` returns `session_id == <ctx.sessionID>` (`BLOCKED: KICKOFF_RESOLVED_TO_SELF`) | develop orchestrator loop (tripwire per Global Invariants #8) | Pause the batch and surface `BLOCKED: KICKOFF_RESOLVED_TO_SELF` verbatim. This indicates a regression — `session-manager.kickoff` resolved to the orchestrator's own session instead of creating/reusing one for the worktree directory. Investigate `agents/session-manager.md` (scoped list filter, agent match) before retrying. Should never fire post-fix. |
 | `session-manager.kickoff` returns `directory_match: false` (`BLOCKED: KICKOFF_DIRECTORY_BIND_FAILED`) | develop orchestrator loop (tripwire per Global Invariants #9; hard stop, not advisory) | Pause the batch and surface `BLOCKED: KICKOFF_DIRECTORY_BIND_FAILED` verbatim along with the envelope's `manualRecovery` curl snippet. The kickoff landed the coder in the wrong cwd — `scripts/checkout-contract.sh --verify` would reject it. Indicates `plugins/session-manager.js` `session_create` returned a stored `directory` that did not match the requested worktree dir (server ignored `?directory=`, or the create response itself is the only synchronous evidence available — a follow-up list race is no longer in the picture). Investigate `plugins/session-manager.js` and re-run the `session_create({directory: ...})` verification recipe in the plan before retrying. Should never fire post-fix. |</oldString>
 | `session-manager.kickoff` returns `agent_match: false` (`BLOCKED: KICKOFF_AGENT_BIND_MISMATCH`) | develop orchestrator loop (tripwire per Global Invariants #9; hard stop, not advisory) | Pause the batch and surface `BLOCKED: KICKOFF_AGENT_BIND_MISMATCH` verbatim along with the envelope's `manualRecovery` curl snippet. The new session was bound to a different agent than requested (the coder would load the wrong agent prompt). Investigate `plugins/session-manager.js` `session_create` body before retrying. Should never fire post-fix. |
@@ -361,37 +375,47 @@ session-manager.kickoff {
 }
 ```
 
-End the turn after kicking. Do not poll. The feature coder owns the entire verification loop end-to-end (test suite, code-review gates, difficulty gates, docs, `state:done`, feature PR, bounded stabilization) and posts one `feature_report:` comment on the PRD parent + best-effort `session-manager.notify` back here.
+End the turn after kicking. Do not poll. The feature coder owns the entire verification loop end-to-end (test suite, code-review gates, difficulty gates, docs, `state:ready-for-feature-review` on every ticket, feature PR, bounded stabilization) and posts one `feature_report:` comment on the PRD parent + best-effort `session-manager.notify` back here. The develop orchestrator owns `state:done` (set after human "all reviewed") and the feature PR merge — see §8a/§8c.
 
 ### §8a. On `feature_report:` wake
 
 When the feature coder wakes you (via `session-manager.notify` or poller or user message), read the terminal `feature_report:` status. You do **not** re-verify code-review or CodeRabbit evidence — every verification gate already ran inside the coder sessions; the terminal report plus the human approval below are your only gates.
 
-- `READY_FOR_HUMAN_REVIEW` → capture `pr_url`, go to §8b.
+- `READY_FOR_HUMAN_REVIEW` → **first** verify every child ticket of `feature:<slug>` carries `state:ready-for-feature-review` (delegated `developer` Task: `gh issue list -l "feature:<slug>" --state all --json number,labels` — filter to entries whose labels include `state:ready-for-feature-review`; the count must equal the total child-issue count). If any child is missing `state:ready-for-feature-review`, surface `BLOCKED: STATE_FEATURE_REVIEW_INCOMPLETE` with the offending ticket numbers and pause — do not advance to §8b. Capture `pr_url` and continue to §8b once verified.
 - `BLOCKED: FEATURE_REMEDIATION` with `remediation:` issue numbers → re-batch those issues through the normal ticket pipeline (§5 batch loop); when they merge, kick the feature coder again.
 - Any other `BLOCKED` → surface verbatim and pause the loop.
 
 ### §8b. Human gate
 
-On READY, print exactly:
+On READY (and verified every child carries `state:ready-for-feature-review`), print exactly:
 
 ```text
-Feature <slug> ready for final review: <pr_url>
+Ready for feature review: <pr_url>
 
-I will merge the feature PR after "all reviewed" — say "all reviewed" to merge (squash, --delete-branch=false).
+state:ready-for-feature-review is set on every ticket; say "all reviewed" to mark every ticket state:done and merge the feature PR (squash, --delete-branch=false).
 ```
 
 Then wait for the user's "all reviewed" message. Do not auto-merge.
 
-### §8c. Merge the feature PR
+### §8c-i. Mark every child ticket `state:done`
 
-On "all reviewed", dispatch a `developer` Task (`load: minimal`) with explicit `cd <feature worktree dir>` (and `git -C`):
+For every child ticket of `feature:<slug>`, dispatch a `developer` Task (`load: minimal`) to run:
+
+```bash
+bash "$OC/scripts/issue-state-transition.sh" "<repo>" "<issue_number>" state:done
+```
+
+`state:done` is the final accept label — set by the develop orchestrator (not the feature coder) after human "all reviewed" on the feature PR. Issues **stay open** until spec `feature-complete`. Skip tickets already `state:done`. For large N, dispatch one `developer` Task with an explicit bash loop over `gh issue list -l "feature:<slug>" --state all --json number` rather than N separate Tasks (mirrors the `feature-review` §5 pattern).
+
+### §8c-ii. Merge the feature PR
+
+After `state:done` is set on every ticket, dispatch a `developer` Task (`load: minimal`) with explicit `cd <feature worktree dir>` (and `git -C`):
 
 ```bash
 gh pr merge <pr_url> --squash --delete-branch=false
 ```
 
-On failure: surface `gh pr view --json mergeable` verbatim, pause. On success: continue.
+On failure: surface `gh pr view --json mergeable` verbatim, pause. On success: continue to §8d.
 
 ### §8d. Hand off
 
@@ -423,11 +447,11 @@ Restart / recovery for stuck worktrees (post `opencode-server` restart, stale st
 
 | Marker | Emitted by | Consumed by |
 |---|---|---|
-| `feature_report:` (issue comment on PRD parent) | feature coder on terminal report | develop orchestrator reads the status: READY → §8b human gate → merge; `FEATURE_REMEDIATION` → re-batch `remediation:` issues; other BLOCKED → surface + pause |
-| `READY_FOR_HUMAN_REVIEW` | coder session when sub-PR is green and comment-clean (ticket mode) | develop orchestrator surfaces to user (single human gate per PR) |
+| `feature_report:` (issue comment on PRD parent) | feature coder on terminal report | develop orchestrator reads the status: READY → §8a verify + §8b human gate + §8c-i state:done + §8c-ii merge; `FEATURE_REMEDIATION` → re-batch `remediation:` issues; other BLOCKED → surface + pause |
+| `READY_FOR_HUMAN_REVIEW` | coder session when sub-PR is green and comment-clean (ticket mode) | develop orchestrator surfaces to user (single human gate per PR); reply "ticket reviewed" → §5d marks `state:ticket-reviewed` then merges |
 | `BLOCKED` | coder session on environment-after-repair, CI-exhaustion, fallback-exhaustion, or cross-ticket review | develop orchestrator surfaces verbatim and pauses the batch |
-| `ticket_report:` (issue comment) | coder session on terminal report (ticket mode) | develop orchestrator's `scripts/dev-loop-watch.sh` + `scripts/dev-loop-poller.sh` — durable wake channel and out-of-band merge detector |
-| `DEV_LOOP_WAKE: { repo, feature, reason }` | poller (`scripts/dev-loop-poller.sh`) when `ticket_report:` delta detected | develop orchestrator; ignored if no active loop for that feature |
+| `ticket_report:` (issue comment) | coder session on terminal report (ticket mode) | develop orchestrator's `scripts/dev-loop-watch.sh` + `scripts/dev-loop-poller.sh` — durable wake channel and out-of-band merge detector; the `ticket_report:` body is the canonical durable channel for the review-ready signal even when `session-manager.notify` fails |
+| `DEV_LOOP_WAKE: { repo, feature, reason: TICKET_REVIEW_READY \| FEATURE_REVIEW_READY }` | poller (`scripts/dev-loop-poller.sh`) when `ticket_report:` / `feature_report:` delta detected, or manual operator fallback via `gh issue comment` (see `skills/orchestrate/session-notify-fallback.md`) | develop orchestrator; ignored if no active loop for that feature. `TICKET_REVIEW_READY` → §5c surface; `FEATURE_REVIEW_READY` → §8a verify + §8b gate. |
 
 There is no ticket-dispatch marker — the coder session is the auto-started GUI session for the worktree, not a `task`-tool dispatch. The `session-manager.notify` tool injects report-back messages into an existing session via `POST /session/{id}/prompt_async`; it does not dispatch a new subagent.
 

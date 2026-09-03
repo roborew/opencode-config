@@ -39,7 +39,7 @@ Probe order: `sandbox probe` → `sandbox exec`; else `docker` present → direc
   only APPROVED-eligible when the user explicitly approves it for a confirmed
   host-runnable project.
 - **Code-review gate backstop** (`issue-state-transition.sh`): refuses
-  `state:ready-for-review` without a `code_review_gate:` comment with
+  `state:ready-for-ticket-review` without a `code_review_gate:` comment with
   `all_stages: true` and `verdict: APPROVED`.
 
 ## Migration
