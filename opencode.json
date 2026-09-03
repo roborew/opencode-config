@@ -320,11 +320,11 @@
     },
     "orchestrate": {
       "model": "kilo/minimax/minimax-m3",
-      "steps": 50
+      "steps": 80
     },
     "coder": {
       "model": "kilo/minimax/minimax-m3",
-      "steps": 60
+      "steps": 120
     },
     "plan": {
       "model": "opencode-go/qwen3.7-plus",
@@ -342,7 +342,7 @@
     "developer": {
       "mode": "subagent",
       "model": "opencode/deepseek-v4-flash",
-      "steps": 30
+      "steps": 100
     },
     "designer": {
       "mode": "subagent",
@@ -352,7 +352,7 @@
     "senior-dev": {
       "mode": "subagent",
       "model": "opencode/kimi-k3",
-      "steps": 40
+      "steps": 60
     },
     "vision": {
       "mode": "subagent",
@@ -367,7 +367,7 @@
     "scribe": {
       "mode": "subagent",
       "model": "opencode/deepseek-v4-flash",
-      "steps": 8
+      "steps": 60
     },
     "stack-bootstrap": {
       "mode": "subagent",
@@ -377,7 +377,7 @@
     "worktree-sandbox": {
       "mode": "subagent",
       "model": "opencode-gpt/gpt-5-nano",
-      "steps": 20
+      "steps": 60
     },
     "worktree-manager": {
       "mode": "subagent",
@@ -387,17 +387,17 @@
     "session-manager": {
       "mode": "subagent",
       "model": "opencode-gpt/gpt-5-nano",
-      "steps": 15
+      "steps": 40
     },
     "code-review": {
       "mode": "subagent",
       "model": "kilo/minimax/minimax-m3",
-      "steps": 35
+      "steps": 100
     },
     "test-writer": {
       "mode": "subagent",
       "model": "opencode/deepseek-v4-flash",
-      "steps": 25
+      "steps": 60
     },
     "review": {
       "mode": "subagent",
@@ -437,22 +437,22 @@
     "frontend-dev": {
       "mode": "subagent",
       "model": "kilo/minimax/minimax-m3",
-      "steps": 30
+      "steps": 60
     },
     "ux-dev": {
       "mode": "subagent",
       "model": "opencode/gemini-3-flash",
-      "steps": 30
+      "steps": 60
     },
     "kilo-fallback": {
       "mode": "subagent",
       "model": "kilo/minimax/minimax-m3",
-      "steps": 25
+      "steps": 40
     },
     "openrouter-fallback": {
       "mode": "subagent",
       "model": "openrouter/openai/gpt-5.6-luna",
-      "steps": 25
+      "steps": 40
     }
   }
 }
