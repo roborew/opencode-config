@@ -384,11 +384,6 @@
       "model": "opencode-gpt/gpt-5-nano",
       "steps": 20
     },
-    "session-manager": {
-      "mode": "subagent",
-      "model": "opencode-gpt/gpt-5-nano",
-      "steps": 40
-    },
     "code-review": {
       "mode": "subagent",
       "model": "kilo/minimax/minimax-m3",

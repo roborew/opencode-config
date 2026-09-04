@@ -117,7 +117,7 @@ elif ! node --check plugins/session-manager.js >/dev/null 2>&1; then
   echo "  FAIL: plugins/session-manager.js syntax check"
   ERR=1
 fi
-for tool in session_create session_list session_notify session_delete; do
+for tool in session_create session_list session_notify session_kickoff session_delete; do
   if ! grep -qE "^[[:space:]]*${tool}:[[:space:]]*\{" plugins/session-manager.js 2>/dev/null; then
     echo "  MISSING: $tool registration in plugins/session-manager.js"
     ERR=1
@@ -125,10 +125,6 @@ for tool in session_create session_list session_notify session_delete; do
 done
 if ! grep -q "\[session-manager-plugin\] messaging tools loaded" plugins/session-manager.js 2>/dev/null; then
   echo "  MISSING: session-manager boot log line in plugins/session-manager.js"
-  ERR=1
-fi
-if ! grep -q "session_delete: true" agents/session-manager.md 2>/dev/null; then
-  echo "  MISSING: session_delete: true in agents/session-manager.md frontmatter"
   ERR=1
 fi
 # session_create envelope must surface directory_match + agent_match inside the create body
@@ -179,21 +175,50 @@ if ! grep -q "EVENTUAL_CONSISTENCY_RETRY" /tmp/sm_notify_block.$$ 2>/dev/null; t
   echo "  MISSING: EVENTUAL_CONSISTENCY_RETRY marker inside session_notify execute body in plugins/session-manager.js"
   ERR=1
 fi
-rm -f /tmp/sm_notify_block.$$
-# session_notify's sessionID branch must NOT re-list against the unscoped /session endpoint.
-# That over-validation was the source of the false-404 against worktree-bound sessions
-# (the unscoped list doesn't always include them; the subagent already proved presence via
-# the scoped list at kickoff step 2-4). Guard: no `listWithRetry({ method: "GET" })` call
-# between the `if (sessionID)` keyword and the matching `} else {`.
-# Fragility note: this keys off `if (sessionID)` and `} else {` token occurrences — if a
-# future refactor adds another `if (sessionID)` block above execute() (e.g. inside a
-# helper), the awk window could match wrong lines. Today's code has exactly one of each.
-extract_tool_block plugins/session-manager.js session_notify /tmp/sm_notify_block.$$
-if awk '/if \(sessionID\)/{f=1; next} f && /^[[:space:]]*\} else \{/{f=0} f' /tmp/sm_notify_block.$$ | grep -qE "listWithRetry\(\{ method: ['\"]GET['\"] \}\)"; then
-  echo "  REGRESSION: session_notify sessionID branch re-lists (false-404 against worktree-bound sessions)"
+# session_notify's inject call must carry `init.query = { directory: ... }` so the POST URL is
+# `/session/{id}/prompt_async?directory=...` — matches the poller's working pattern at
+# scripts/dev-loop-poller.sh and is defense-in-depth against server builds that scope sessions
+# to the directory query param (the historical bug that motivated this guard).
+if ! grep -qE 'query[[:space:]]*[:=][[:space:]]*\{\s*directory:\s*targetDir' /tmp/sm_notify_block.$$ 2>/dev/null; then
+  echo "  REGRESSION: session_notify inject call missing init.query = { directory: targetDir } (Bug A — un-scope inject URL)"
   ERR=1
 fi
 rm -f /tmp/sm_notify_block.$$
+# session_notify's sessionID branch does a single bounded GET /session lookup (EVENTUAL_CONSISTENCY_RETRY)
+# to resolve the target row's directory for the `?directory=` inject URL. This is intentional and
+# differs from the pre-fix design (which trusted the sessionID without listing). The old check
+# forbade any listWithRetry in the sessionID branch; the new design's bounded lookup is allowed
+# because (a) it is bounded (3 attempts / 250-500-1000 ms), (b) it feeds the inject URL, not
+# stale-row validation. Guard: there must be NO unbounded retry / sleep loops in the sessionID
+# branch between the `if (sessionID)` keyword and the matching `} else {`.
+extract_tool_block plugins/session-manager.js session_notify /tmp/sm_notify_block.$$
+if awk '/if \(sessionID\)/{f=1; next} f && /^[[:space:]]*\} else \{/{f=0} f' /tmp/sm_notify_block.$$ | grep -qE "while\s*\(\s*true|for\s*\(\s*[^;]*;\s*[^;]*;\s*[^)]*\)"; then
+  echo "  REGRESSION: session_notify sessionID branch contains an unbounded loop (single bounded listWithRetry is allowed)"
+  ERR=1
+fi
+rm -f /tmp/sm_notify_block.$$
+# session_kickoff must use the create envelope's exact id for the inject — never any other id
+# (the previous design's failure mode was the model scanning the global list and picking a
+# stale row to inject into, which is structurally impossible when the inject id comes from
+# the create envelope inline).
+extract_tool_block plugins/session-manager.js session_kickoff /tmp/sm_kickoff_block.$$
+if ! grep -q "session_kickoff" /tmp/sm_kickoff_block.$$ 2>/dev/null; then
+  echo "  MISSING: session_kickoff tool body in plugins/session-manager.js"
+  ERR=1
+fi
+if ! grep -qE "scopedListInit|query:\s*\{\s*directory\s*\}" /tmp/sm_kickoff_block.$$ 2>/dev/null; then
+  echo "  REGRESSION: session_kickoff must use a scoped list (?directory=) — never unfiltered global"
+  ERR=1
+fi
+if ! grep -qE "create_if_absent|NO_SESSION_FOR_WORKTREE" /tmp/sm_kickoff_block.$$ 2>/dev/null; then
+  echo "  REGRESSION: session_kickoff must honor create_if_absent and surface NO_SESSION_FOR_WORKTREE"
+  ERR=1
+fi
+if ! grep -qE "session_id:\s*targetId|targetId\s*=\s*sessionId\(chosen\)" /tmp/sm_kickoff_block.$$ 2>/dev/null; then
+  echo "  REGRESSION: session_kickoff must inject using the chosen session id (create envelope's id or the reuse list row's id) — never a model-picked id"
+  ERR=1
+fi
+rm -f /tmp/sm_kickoff_block.$$
 # session_delete args must include force (orphan-cleanup path). Scope to the args block
 # (the session_delete tool body, not the whole module).
 extract_tool_block plugins/session-manager.js session_delete /tmp/sm_delete_block.$$
@@ -204,8 +229,8 @@ fi
 rm -f /tmp/sm_delete_block.$$
 
 echo "Checking session-manager blocker_code allowlist + obsolete NO_SESSION_IN_DIRECTORY sweep..."
-SESSION_KNOWN_BLOCKER_CODES='SESSION_TOOLS_NOT_REGISTERED|SESSION_API_FAILED|NO_SESSION_FOR_WORKTREE|SESSION_NOT_FOUND|LIST_SCOPE_INCOMPLETE|AMBIGUOUS_TARGET|CREATE_BIND_MISMATCH|KICKOFF_FAILED|KICKOFF_DIRECTORY_BIND_FAILED|KICKOFF_AGENT_BIND_MISMATCH|KICKOFF_BIND_CONFIRMATION_MISSING|KICKOFF_ALREADY_DELIVERED|KICKOFF_RESOLVED_TO_SELF|WORKTREE_API_FAILED|WORKTREE_TOOLS_NOT_REGISTERED|WORKTREE_NAME_COLLISION|WORKTREE_NOT_CLEAN_OR_PUSHED|WORKTREE_PREFLIGHT_FAILED|WORKTREE_SESSION_ATTEMPTS_EXCEEDED|BASE_NOT_PUSHED|PROTECTED_PROJECT_ROOT|NOT_A_GIT_WORKTREE|WORKTREE_RECOVERY_FAILED|HANDSHAKE_PUSH_FAILED|HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED|TICKET_NOT_FORKED_FROM_FEATURE|directory_bind_failed|agent_bind_mismatch|no_session_in_directory|session_not_found|ambiguous_target|list_scope_incomplete'
-SESSION_FILES="agents/session-manager.md agents/worktree-manager.md skills/orchestrate/SKILL.md skills/ticket-lifecycle/SKILL.md skills/feature-review/SKILL.md"
+SESSION_KNOWN_BLOCKER_CODES='SESSION_TOOLS_NOT_REGISTERED|SESSION_API_FAILED|NO_SESSION_FOR_WORKTREE|SESSION_NOT_FOUND|LIST_SCOPE_INCOMPLETE|AMBIGUOUS_TARGET|CREATE_BIND_MISMATCH|KICKOFF_FAILED|KICKOFF_DIRECTORY_BIND_FAILED|KICKOFF_AGENT_BIND_MISMATCH|KICKOFF_BIND_CONFIRMATION_MISSING|KICKOFF_ALREADY_DELIVERED|KICKOFF_RESOLVED_TO_SELF|WORKTREE_API_FAILED|WORKTREE_TOOLS_NOT_REGISTERED|WORKTREE_NAME_COLLISION|WORKTREE_NOT_CLEAN_OR_PUSHED|WORKTREE_PREFLIGHT_FAILED|WORKTREE_SESSION_ATTEMPTS_EXCEEDED|BASE_NOT_PUSHED|PROTECTED_PROJECT_ROOT|NOT_A_GIT_WORKTREE|WORKTREE_RECOVERY_FAILED|HANDSHAKE_PUSH_FAILED|HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED|TICKET_NOT_FORKED_FROM_FEATURE|directory_bind_failed|agent_bind_mismatch|no_session_in_directory|session_not_found|ambiguous_target|list_scope_incomplete|create_response_missing_id'
+SESSION_FILES="agents/worktree-manager.md skills/orchestrate/SKILL.md skills/ticket-lifecycle/SKILL.md skills/feature-review/SKILL.md"
 for f in $SESSION_FILES; do
   [[ -f "$f" ]] || continue
   CODE_LINES=$(grep -nE '"blocker_code":[[:space:]]*"[A-Za-z_0-9]+"' "$f" 2>/dev/null || true)
@@ -362,30 +387,20 @@ if ! grep -q '/experimental/worktree' plugins/worktree.js 2>/dev/null; then
   echo "  MISSING: /experimental/worktree route in plugins/worktree.js"
   ERR=1
 fi
-if ! grep -q 'OPENCODE_APPS_DIR' plugins/worktree.js 2>/dev/null; then
-  echo "  MISSING: OPENCODE_APPS_DIR self-guard in plugins/worktree.js"
-  ERR=1
-fi
-for tool in worktree_create worktree_list worktree_delete worktree_reset; do
-  if ! grep -q "$tool:" plugins/worktree.js 2>/dev/null; then
+# Worktree plugin's tool set: 4 specific tools (worktree_create_feature,
+# worktree_create_ticket, worktree_reset, worktree_list) + worktree_delete.
+# The previous generic worktree_create shape was removed by the strip-back.
+for tool in worktree_create_feature worktree_create_ticket worktree_list worktree_delete worktree_reset; do
+  if ! grep -qE "^[[:space:]]*${tool}:[[:space:]]*\{" plugins/worktree.js 2>/dev/null; then
     echo "  MISSING: $tool registration in plugins/worktree.js"
     ERR=1
   fi
 done
-if ! grep -q 'async execute({ directory }, context)' plugins/worktree.js 2>/dev/null; then
-  echo "  MISSING: context in worktree_delete/reset execute signature in plugins/worktree.js"
-  ERR=1
-fi
-if ! grep -q 'v2.worktree.remove({' plugins/worktree.js 2>/dev/null; then
-  echo "  MISSING: v2.worktree.remove call in plugins/worktree.js"
-  ERR=1
-fi
-if ! grep -q 'directory: (context && context.directory) || undefined' plugins/worktree.js 2>/dev/null; then
-  echo "  MISSING: project directory query param passed to remove/reset in plugins/worktree.js"
-  ERR=1
-fi
-if ! grep -q 'scheduleGitCleanup' plugins/worktree.js 2>/dev/null; then
-  echo "  MISSING: scheduleGitCleanup defense-in-depth cleanup in plugins/worktree.js"
+# The stripped-back worktree plugin must reject feature_branch values that don't
+# start with `opencode/feat-` (the safety link that prevents tickets from being
+# forked off develop/main/sibling tickets).
+if ! grep -q "opencode/feat-" plugins/worktree.js 2>/dev/null; then
+  echo "  MISSING: opencode/feat- feature_branch guard in plugins/worktree.js"
   ERR=1
 fi
 if [[ ! -f agents/worktree-manager.md ]]; then
@@ -414,11 +429,12 @@ if ! grep -q 'Preflight check' agents/worktree-manager.md 2>/dev/null; then
   echo "  MISSING: Preflight check step 8.5 in agents/worktree-manager.md"
   ERR=1
 fi
-# KICKOFF_ALREADY_DELIVERED precondition lives in worktree-manager.kickoff step 2a —
-# the literal must appear in the failure-reporting contract so the validator's
-# blocker_code allowlist sweep picks it up.
-if ! grep -q 'KICKOFF_ALREADY_DELIVERED' agents/worktree-manager.md 2>/dev/null; then
-  echo "  MISSING: KICKOFF_ALREADY_DELIVERED precondition literal in agents/worktree-manager.md"
+# KICKOFF_ALREADY_DELIVERED precondition moved from worktree-manager.kickoff step 2a to
+# orchestrate SKILL §5a-iii (delegated developer Task — gh issue view against durable
+# ticket_report: comments). The literal still appears in the develop loop, but the
+# validator checks the orchestrator's skill, not the worktree-manager agent.
+if ! grep -q 'KICKOFF_ALREADY_DELIVERED' skills/orchestrate/SKILL.md 2>/dev/null; then
+  echo "  MISSING: KICKOFF_ALREADY_DELIVERED precondition literal in skills/orchestrate/SKILL.md"
   ERR=1
 fi
 # Global Invariant #11's per-worktree session-create cap lives in the orchestrator's
@@ -441,20 +457,24 @@ if ! grep -q 'do not recommend upgrading the Docker/base Node' docs/RUNBOOK.md s
   ERR=1
 fi
 
-echo "Checking ticket-session kickoff reliability wiring (coder as host)..."
-for needle in 'session_notify:' 'session.promptAsync' 'opencode-ticket-brief.json' 'kickoff_message'; do
-  if ! grep -q "$needle" plugins/worktree.js 2>/dev/null; then
-    echo "  MISSING: $needle in plugins/worktree.js"
-    ERR=1
-  fi
-done
-for needle in 'kickoff' 'KICKOFF_FAILED' 'session_notify: true'; do
+echo "Checking ticket-session kickoff reliability wiring (session_kickoff in session-manager)..."
+# The actual kickoff machinery now lives in plugins/session-manager.js (the new
+# session_kickoff composite tool), not in plugins/worktree.js. The worktree plugin
+# was stripped back — it no longer holds session_notify, session.promptAsync, the
+# brief-file machinery, or kickoff_message state. Coder holds session_notify
+# directly; orchestrator holds session_kickoff directly. The pre-strip-back
+# needles below are intentionally removed because the worktree plugin was simplified.
+if ! grep -q 'session_kickoff:' plugins/session-manager.js 2>/dev/null; then
+  echo "  MISSING: session_kickoff registration in plugins/session-manager.js"
+  ERR=1
+fi
+for needle in 'kickoff' 'KICKOFF_ALREADY_DELIVERED' 'session_delete: true'; do
   if ! grep -q "$needle" agents/worktree-manager.md 2>/dev/null; then
     echo "  MISSING: $needle in agents/worktree-manager.md"
     ERR=1
   fi
 done
-for needle in 'ticket_report:' 'Bootstrap' 'opencode-ticket-brief.json'; do
+for needle in 'ticket_report:' 'Bootstrap' 'opencode-task-yaml'; do
   if ! grep -q "$needle" skills/ticket-lifecycle/SKILL.md 2>/dev/null; then
     echo "  MISSING: $needle in skills/ticket-lifecycle/SKILL.md"
     ERR=1
@@ -615,9 +635,11 @@ if grep -R -n --exclude-dir=.git --exclude-dir=.kilo --exclude-dir=adr --exclude
   ERR=1
 fi
 
-echo "Checking kickoff_agent default is coder..."
-if ! grep -q 'kickoff_agent || "coder"' plugins/worktree.js 2>/dev/null; then
-  echo "  ERROR: kickoff_agent default must be coder in plugins/worktree.js"
+echo "Checking coder default in session_kickoff..."
+# The kickoff default agent is now `"coder"` (string literal) in
+# `plugins/session-manager.js` `session_kickoff`'s `requestedAgent = (args && args.agent) || "coder"`.
+if ! grep -q 'args.agent) || "coder"' plugins/session-manager.js 2>/dev/null; then
+  echo "  ERROR: session_kickoff default agent must be coder in plugins/session-manager.js"
   ERR=1
 fi
 

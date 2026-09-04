@@ -5,25 +5,35 @@
  * args, pass-through {ok, status, body} envelope) so the two plugins read
  * like siblings.
  *
- * Three tools, each fetch-only — no file writes, no orchestration logic
- * lives here; the `session-manager` subagent (agents/session-manager.md)
- * owns the kickoff / notify choreography on top of these primitives.
+ * Five tools, all fetch-only — no file writes, no orchestration logic
+ * lives here; agents (`orchestrate`, `coder`, `worktree-manager`) call
+ * these primitives directly. The previous `session-manager` subagent
+ * layer (189 lines, gpt-5-nano) is removed; the kickoff choreography
+ * lives in `session_kickoff` below as mechanical plugin code so no model
+ * ever scans the global session list.
  *
- *   session_create   POST /session                                  {directory?, agent?, title?}
+ *   session_create    POST /session                                  {directory?, agent?, title?}
  *                     (directory is forwarded as `?directory=...` on the URL — the
  *                      opencode server's POST /session binds sessions to a directory
  *                      via the query string, not the body)
-*   session_list     GET  /session                                  {scope?, directory?}
+ *   session_list      GET  /session                                  {scope?, directory?}
  *                     (no scope arg = no query string, server returns everything the calling
  *                      project knows about; pass scope:"directory" + directory to forward
- *                      `?directory=...` to the server — advisory; the session-manager subagent
- *                      also filters client-side defensively)
- *   session_notify   POST /session/{id}/prompt_async                resolves target then
+ *                      `?directory=...` to the server — advisory; callers also filter
+ *                      client-side defensively)
+ *   session_notify    POST /session/{id}/prompt_async                resolves target then
  *                     posts {parts:[{type:"text", text:msg}], agent?} as a 204-ack async prompt
  *                     (when sessionID is omitted, the list call has no query string so
  *                      directory-resolve sees worktree-bound sessions even when the
- *                      calling agent's `context.directory` differs from the target dir)
- *   session_delete   DELETE /session/{id}                            {sessionID?}
+ *                      calling agent's `context.directory` differs from the target dir;
+ *                      the inject URL carries `?directory=` matching the poller's working
+ *                      pattern — defense-in-depth against future server-shape drift)
+ *   session_kickoff   composite: scoped-list → reuse-or-create → inject with ?directory=
+ *                     replaces the removed `session-manager` subagent's `kickoff` action
+ *                     (the entire 189-line procedure is now mechanical plugin code —
+ *                     no model scans the global list, so the stale-row injection bug
+ *                     is impossible by construction)
+ *   session_delete    DELETE /session/{id}                            {sessionID?}
  *                     OR                                                    {directory?}
  *                     (mutual exclusion — same shape as session_notify; directory-mode
  *                      iterates the global list and deletes every session bound to
@@ -34,9 +44,10 @@
  *
  * Listing un-scoping: `smFetch` no longer reads `context.directory` as an
  * implicit query string — the previous behaviour caused the
- * `session-manager.kickoff` self-resolve bug against worktree dirs.
- * `args.directory` + `args.scope` carry the intent explicitly now; the
- * session-manager subagent performs the global re-list + client-side filter.
+ * `session_kickoff` self-resolve bug against worktree dirs (the old
+ * subagent layer fell back to an unfiltered global list and picked the
+ * orchestrator's own session). `args.directory` + `args.scope` carry the
+ * intent explicitly now.
  *
  * 204 void is the success contract on /prompt_async — `admitted` is keyed
  * on HTTP status, not body, matching the dev-loop-poller's silent curl.
@@ -104,11 +115,20 @@ export const SessionManagerPlugin = async (ctx) => {
     return candidates[0] || null;
   }
 
+  function readSessionField(s, camelKey, snakeKey) {
+    if (!s || typeof s !== "object") return undefined;
+    if (s[camelKey] !== undefined) return s[camelKey];
+    if (snakeKey && s[snakeKey] !== undefined) return s[snakeKey];
+    return undefined;
+  }
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
   return {
     tool: {
       session_create: {
         description:
-          "Create a new session for the current project (or a project directory). Returns the new session id plus the server's stored `directory` and `agent` for the new session, inline in the same envelope as the create response (no follow-up list — eliminates the bind race that the previous global re-list had). Use when a fresh GUI session is needed (e.g. kicking a coder into a newly-created ticket worktree). For the common kickoff path prefer the session-manager subagent — it composes list-then-create and notification as one atomic action. The `directory` arg is forwarded to the server as `?directory=...` on the POST URL and binds the new session to that worktree directory; without it, the server binds to the calling project's directory. Returns {ok, status, body, session_id, target_directory, agent, requested_directory, requested_agent, directory_match, agent_match}; `directory_match` is `false` when the caller passed a `directory` and the server returned a different one (or none) — the session-manager subagent surfaces this as a tripwire instead of silently admitting. Also returns `bind_failed: true` whenever either `directory_match` or `agent_match` is `false`; the orchestrator hard-stops on `bind_failed: true` rather than admitting on `admitted`.",
+          "Create a new session for the current project (or a project directory). Returns the new session id plus the server's stored `directory` and `agent` for the new session, inline in the same envelope as the create response (no follow-up list — eliminates the bind race that the previous global re-list had). Use when a fresh GUI session is needed (e.g. kicking a coder into a newly-created ticket worktree). For the common kickoff path prefer `session_kickoff` — it composes list-then-create and notification as one atomic action. The `directory` arg is forwarded to the server as `?directory=...` on the POST URL and binds the new session to that worktree directory; without it, the server binds to the calling project's directory. Returns {ok, status, body, session_id, target_directory, agent, requested_directory, requested_agent, directory_match, agent_match}; `directory_match` is `false` when the caller passed a `directory` and the server returned a different one (or none) — the orchestrator hard-stops on `bind_failed: true` rather than admitting on `admitted`. Also returns `bind_failed: true` whenever either `directory_match` or `agent_match` is `false`.",
         args: {
           directory: {
             type: "string",
@@ -133,19 +153,14 @@ export const SessionManagerPlugin = async (ctx) => {
           const init = { method: "POST", body: JSON.stringify(body) };
           if (args && args.directory) init.query = { directory: args.directory };
           const r = await smFetch("/session", init, context);
-          // Normalize the new-session payload across server response shapes — some
-          // builds return the session directly, some wrap as {session}, some as
-          // {sessions:[...]}, some as [...]. When the shape is unknown, every stored
-          // field is null and directory_match / agent_match are conservative-false so
-          // the caller hard-stops rather than silently admitting.
           const newSession = Array.isArray(r.body) ? r.body[0]
                            : r.body && Array.isArray(r.body.sessions) ? r.body.sessions[0]
                            : r.body && r.body.session && typeof r.body.session === "object" ? r.body.session
                            : r.body && typeof r.body === "object" && r.body.id ? r.body
                            : null;
-          const storedDirectory = newSession ? (newSession.directory ?? newSession.directory) : null;
-          const storedAgent     = newSession ? (newSession.agent ?? newSession.agent) : null;
-          const sessionId       = newSession ? (newSession.id ?? newSession.id) : null;
+          const storedDirectory = newSession ? readSessionField(newSession, "directory", "directory") : null;
+          const storedAgent     = newSession ? readSessionField(newSession, "agent", "agent") : null;
+          const sessionId       = newSession ? readSessionField(newSession, "id", "id") : null;
           const requestedDirectory = (args && args.directory) || null;
           const requestedAgent     = (args && args.agent) || null;
           const directoryMatch = !!(requestedDirectory && storedDirectory && storedDirectory === requestedDirectory);
@@ -166,18 +181,18 @@ export const SessionManagerPlugin = async (ctx) => {
 
       session_list: {
         description:
-          "List sessions. Returns the sessions array. With no `scope` arg, sends `GET /session` (no query string) and the server returns everything the calling project knows about — the session-manager subagent filters client-side against `args.directory` defensively. With `scope: \"directory\"` + `directory`, also forwards `?directory=...` to the server (advisory; some server builds ignore it).",
+          "List sessions. Returns the sessions array. With no `scope` arg, sends `GET /session` (no query string) and the server returns everything the calling project knows about. With `scope: \"directory\"` + `directory`, also forwards `?directory=...` to the server (advisory; callers should filter client-side against `args.directory` defensively — some server builds ignore the query parameter).",
         args: {
           directory: {
             type: "string",
             description:
-              "Optional project directory scope. When set with `scope: \"directory\"`, the server attempts to filter sessions to that directory (advisory — the session-manager subagent filters again on the client).",
+              "Optional project directory scope. When set with `scope: \"directory\"`, the server attempts to filter sessions to that directory (advisory — callers should filter again on the client).",
           },
           scope: {
             type: "string",
             enum: ["directory"],
             description:
-              "Optional. `\"directory\"` forwards `?directory=<args.directory>` to the server; absence of `scope` means no query string (server returns everything). The session-manager subagent always filters client-side.",
+              "Optional. `\"directory\"` forwards `?directory=<args.directory>` to the server; absence of `scope` means no query string (server returns everything).",
           },
         },
         async execute(args, context) {
@@ -197,7 +212,7 @@ export const SessionManagerPlugin = async (ctx) => {
 
       session_notify: {
         description:
-          "Inject an async message into a session (POST /session/{id}/prompt_async). Resolves the target session id from EITHER `sessionID` (exact, trusted as-is — the server's 404 on /prompt_async is the canonical stale/unknown signal) OR `directory` (newest no-parent session bound to that worktree, picked from an unfiltered list — the previous scoped-list path was the source of the self-resolve bug against worktree dirs). Passing both, or neither, is a client error. Returns {ok, admitted, session_id, target_directory, agent, directory_match, agent_match, manualRecovery} where `admitted` is true on HTTP 204 (the success contract for /prompt_async).",
+          "Inject an async message into a session (POST /session/{id}/prompt_async). Resolves the target session id from EITHER `sessionID` (exact, trusted as-is — the server's 404 on /prompt_async is the canonical stale/unknown signal; sessionID-mode resolves the target row's directory via a single `GET /session` lookup so the inject URL can carry `?directory=` defensively matching the poller's working pattern) OR `directory` (newest no-parent session bound to that worktree, picked from an unfiltered list). Passing both, or neither, is a client error. Returns {ok, admitted, session_id, target_directory, agent, directory_match, agent_match, manualRecovery} where `admitted` is true on HTTP 204 (the success contract for /prompt_async).",
         args: {
           sessionID: {
             type: "string",
@@ -223,7 +238,7 @@ export const SessionManagerPlugin = async (ctx) => {
             type: "string",
             enum: ["directory"],
             description:
-              "Optional. For directory-mode resolution only — `\"directory\"` filters by `?directory=<args.directory>` to the server (advisory). Ignored in `sessionID` mode (always unfiltered so a fresh id is always findable).",
+              "Optional. For directory-mode resolution only — `\"directory\"` filters by `?directory=<args.directory>` to the server (advisory). Ignored in `sessionID` mode.",
           },
         },
         async execute(args, context) {
@@ -248,12 +263,10 @@ export const SessionManagerPlugin = async (ctx) => {
           let resolvedSession = null;
 
           function sessionAgent(s) {
-            if (!s) return undefined;
-            return s.agent !== undefined ? s.agent : s.agent;
+            return readSessionField(s, "agent", "agent");
           }
           function sessionDirectory(s) {
-            if (!s) return undefined;
-            return s.directory !== undefined ? s.directory : s.directory;
+            return readSessionField(s, "directory", "directory");
           }
           function agentMatches(s, agent) {
             if (!agent) return true;
@@ -274,7 +287,6 @@ export const SessionManagerPlugin = async (ctx) => {
           // We bound this with a 3-attempt / 250-500-1000 ms ladder; the caller (kickoff) also
           // waits 750 ms after create. Terminal failure shape is unchanged.
           const RETRY_DELAYS_MS = [250, 500, 1000];
-          const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
           async function listWithRetry(listInit) {
             let last = null;
             for (let i = 0; i < RETRY_DELAYS_MS.length + 1; i++) {
@@ -287,14 +299,23 @@ export const SessionManagerPlugin = async (ctx) => {
             return last;
           }
 
-          // sessionID mode: trust the id. The server's /prompt_async 404 is the
-          // canonical signal for stale/unknown ids. Re-validating against an
-          // unscoped list was the source of the false-404 against worktree-bound
-          // sessions (the unscoped list doesn't always include them; the subagent
-          // already proved presence via the scoped list at kickoff step 2-4).
           if (sessionID) {
-            resolvedSession = { id: sessionID, directory: directory || null };
-            targetDir = directory || null;
+            // sessionID mode: resolve the target row's directory from a single GET /session
+            // lookup so the inject URL can carry ?directory= defensively (matches the poller's
+            // working pattern). The id itself is trusted — a server 404 on /prompt_async is the
+            // canonical stale/unknown signal; re-validating against an unscoped list was the
+            // source of the false-404 against worktree-bound sessions.
+            const list = await listWithRetry({ method: "GET" });
+            const sessions =
+              list.ok && Array.isArray(list.body) ? list.body : [];
+            const row = sessions.find((s) => readSessionField(s, "id", "id") === sessionID);
+            if (row) {
+              resolvedSession = row;
+              targetDir = sessionDirectory(row) || null;
+            } else {
+              resolvedSession = { id: sessionID, directory: null };
+              targetDir = null;
+            }
           } else {
             // directory-mode resolve. Caller may opt into scoped listing by passing
             // scope:"directory" + directory; default is unfiltered.
@@ -322,8 +343,6 @@ export const SessionManagerPlugin = async (ctx) => {
             const chosen = resolveNewestNoParent(pool, directory);
             if (!chosen) {
               if (useScoped) {
-                // Server indicated scoped presence but client-side resolver returned
-                // null — surface rather than silently admitting.
                 return JSON.stringify({
                   ok: false,
                   admitted: false,
@@ -359,7 +378,7 @@ export const SessionManagerPlugin = async (ctx) => {
             }
             resolvedSession = chosen;
             targetID = chosen.id;
-            targetDir = chosen.directory || directory;
+            targetDir = sessionDirectory(chosen) || directory;
           }
 
           const directoryMatch = directoryMatches(resolvedSession, targetDir);
@@ -370,9 +389,19 @@ export const SessionManagerPlugin = async (ctx) => {
           };
           if (requestedAgent) payload.agent = requestedAgent;
 
+          // Always carry ?directory= on the inject URL when we have a known targetDir —
+          // matches the poller's working pattern and is defense-in-depth against server
+          // builds that scope sessions to the directory query param. Empty/null targetDir
+          // skips the param (legacy behavior, unchanged for sessionID-mode unknowns).
+          const injectInit = {
+            method: "POST",
+            body: JSON.stringify(payload),
+          };
+          if (targetDir) injectInit.query = { directory: targetDir };
+
           const r = await smFetch(
             `/session/${encodeURIComponent(targetID)}/prompt_async`,
-            { method: "POST", body: JSON.stringify(payload) },
+            injectInit,
             context,
           );
           const admitted = r.status === 204 || (r.ok && r.body == null);
@@ -389,6 +418,269 @@ export const SessionManagerPlugin = async (ctx) => {
             manualRecovery: r.ok
               ? null
               : manualRecoveryCurl(targetID, targetDir || ""),
+          });
+        },
+      },
+
+      session_kickoff: {
+        description:
+          "Composite tool: scoped-list → reuse-or-create → inject with `?directory=`. Replaces the removed `session-manager` subagent's `kickoff` action. The full procedure is mechanical plugin code so no model ever scans the global session list — eliminates the stale-row injection failure mode (where a model picks a different row than the one the create just returned). Args: `directory` (required, absolute worktree dir), `agent` (default `\"coder\"`), `message` (required, the kickoff pointer), `create_if_absent` (default `true`). Procedure: scoped list → client-side filter by `directory` AND `agent` → `resolveNewestNoParent` (reuse) → else create (`?directory=`) → 750 ms settle → bind verification from the create envelope → inject with `?directory=` using the create envelope's exact `id`. Returns {ok, action: \"kickoff\", admitted, session_id, session_source: \"reused\"|\"created\", directory_match, agent_match, bind_failed, status, target_directory, agent, error, manualRecovery}. Both `directory_match` and `agent_match` must be `true`; either `false` is a hard stop surfaced via `bind_failed: true` (the orchestrator treats this as `BLOCKED: KICKOFF_DIRECTORY_BIND_FAILED` or `KICKOFF_AGENT_BIND_MISMATCH`). The `KICKOFF_ALREADY_DELIVERED` precondition (gh issue view against `ticket_report:` comments) is NOT performed here — it lives in the orchestrator's `skills/orchestrate/SKILL.md` §5a-iii where the issue + repo context is available.",
+        args: {
+          directory: {
+            type: "string",
+            description:
+              "Required. Absolute worktree directory the coder session should be bound to. Forwarded as `?directory=...` on the create POST URL and on the inject URL.",
+          },
+          agent: {
+            type: "string",
+            description:
+              "Optional primary agent for the new/reused session (default `\"coder\"`). Used for the reuse filter and forwarded to `POST /session` body.",
+          },
+          message: {
+            type: "string",
+            description:
+              "Required. The kickoff pointer text — injected as a single text part into the chosen session's `/prompt_async`.",
+          },
+          create_if_absent: {
+            type: "boolean",
+            description:
+              "Optional bool (default `true`). When false and zero reuse candidates exist, the tool returns `blocker_code: \"NO_SESSION_FOR_WORKTREE\"` instead of creating. Defaults preserve the historical kickoff behavior.",
+          },
+        },
+        async execute(args, context) {
+          const directory = args && args.directory;
+          const requestedAgent = (args && args.agent) || "coder";
+          const message = args && args.message;
+          const createIfAbsent = args && args.create_if_absent === false ? false : true;
+
+          if (!directory || typeof directory !== "string") {
+            return clientError(
+              "session_kickoff requires a non-empty 'directory' argument.",
+            );
+          }
+          if (!message || typeof message !== "string") {
+            return clientError(
+              "session_kickoff requires a non-empty 'message' argument.",
+            );
+          }
+
+          // EVENTUAL_CONSISTENCY_RETRY: server commits the POST /session row before it
+          // surfaces in GET /session; a freshly-created id may not be findable for ~250-1000 ms.
+          // The kickoff itself waits 750 ms after create before the inject; this ladder is
+          // for the initial reuse-list miss (no candidate yet is a real miss, not a retry).
+          const RETRY_DELAYS_MS = [250, 500, 1000];
+          async function listWithRetry(listInit) {
+            let last = null;
+            for (let i = 0; i < RETRY_DELAYS_MS.length + 1; i++) {
+              const list = await smFetch("/session", listInit, context);
+              last = list;
+              const sessions = list.ok && Array.isArray(list.body) ? list.body : [];
+              if (sessions.length > 0) return list;
+              if (i < RETRY_DELAYS_MS.length) await sleep(RETRY_DELAYS_MS[i]);
+            }
+            return last;
+          }
+
+          function sessionAgent(s) {
+            return readSessionField(s, "agent", "agent");
+          }
+          function sessionDirectory(s) {
+            return readSessionField(s, "directory", "directory");
+          }
+          function sessionId(s) {
+            return readSessionField(s, "id", "id");
+          }
+
+          // Step 2: scoped list (scoped to the requested directory + agent). The previous
+          // unfiltered-list fallback was the source of the self-resolve bug (the nano model
+          // picked the orchestrator's own session); never fall back to global here.
+          const scopedListInit = { method: "GET", query: { directory } };
+          const list = await listWithRetry(scopedListInit);
+          const sessions = list.ok && Array.isArray(list.body) ? list.body : [];
+
+          // Step 3: client-side filter by directory AND agent (the scoped server filter is
+          // advisory — some builds ignore it).
+          const candidates = sessions.filter((s) => {
+            if (!s) return false;
+            const dir = sessionDirectory(s);
+            const agent = sessionAgent(s);
+            return dir === directory && (agent === undefined || agent === requestedAgent);
+          });
+
+          // Step 4: pick the best reuse candidate (mirror resolveNewestNoParent). When
+          // candidates match the requested agent, restrict the pool; otherwise fall back to
+          // any no-parent candidate under the directory so a wrong-agent session can still
+          // be picked (the orchestrator can correct via the agent_match gate below).
+          let chosen = null;
+          let sessionSource = "reused";
+          const matchingAgent = candidates.filter(
+            (s) => sessionAgent(s) === requestedAgent,
+          );
+          const pool =
+            matchingAgent.length > 0 ? matchingAgent : candidates;
+          if (pool.length > 0) {
+            const noParent = pool.filter((s) => !s.parentID && !s.parent_id);
+            const finalPool = noParent.length > 0 ? noParent : pool;
+            finalPool.sort((a, b) => {
+              const ta = Date.parse(a.updatedAt || a.updated_at || 0) || 0;
+              const tb = Date.parse(b.updatedAt || b.updated_at || 0) || 0;
+              return tb - ta;
+            });
+            chosen = finalPool[0] || null;
+          }
+
+          // Step 5: no matching session — handle per create_if_absent.
+          if (!chosen) {
+            if (!createIfAbsent) {
+              return JSON.stringify({
+                ok: false,
+                admitted: false,
+                action: "kickoff",
+                session_id: null,
+                session_source: "none",
+                directory_match: false,
+                agent_match: true,
+                bind_failed: true,
+                status: 404,
+                target_directory: directory,
+                agent: requestedAgent,
+                error: "no_session_in_directory",
+                blocker_code: "NO_SESSION_FOR_WORKTREE",
+                manualRecovery:
+                  `No session found in directory ${directory} and ` +
+                  `create_if_absent: false. Open the Desktop GUI session for that ` +
+                  `worktree and type any message — the bootstrap ` +
+                  `(ticket-lifecycle §0) reconstructs from GitHub.`,
+              });
+            }
+
+            // create → settle → inject with the exact returned id (no model, no stale id).
+            const createInit = { method: "POST", body: JSON.stringify({ agent: requestedAgent }) };
+            createInit.query = { directory };
+            const created = await smFetch("/session", createInit, context);
+            if (!created.ok) {
+              return JSON.stringify({
+                ok: false,
+                admitted: false,
+                action: "kickoff",
+                session_id: null,
+                session_source: "create_failed",
+                directory_match: false,
+                agent_match: false,
+                bind_failed: true,
+                status: created.status,
+                target_directory: directory,
+                agent: requestedAgent,
+                error: created.body,
+                blocker_code: "SESSION_API_FAILED",
+                manualRecovery:
+                  `curl -u "${process.env.OPENCODE_SERVER_USERNAME || "opencode"}:${process.env.OPENCODE_SERVER_PASSWORD || "opencode"}" ` +
+                  `-H 'Content-Type: application/json' -d '${JSON.stringify({ agent: requestedAgent }).replace(/'/g, "'\\''")}' ` +
+                  `"${baseUrl}/session?directory=${encodeURIComponent(directory)}"`,
+              });
+            }
+            const newRow = Array.isArray(created.body) ? created.body[0]
+                         : created.body && Array.isArray(created.body.sessions) ? created.body.sessions[0]
+                         : created.body && created.body.session && typeof created.body.session === "object" ? created.body.session
+                         : created.body && typeof created.body === "object" && created.body.id ? created.body
+                         : null;
+            const createdId = newRow ? sessionId(newRow) : null;
+            const createdDir = newRow ? sessionDirectory(newRow) : null;
+            const createdAgent = newRow ? sessionAgent(newRow) : null;
+            if (!createdId) {
+              return JSON.stringify({
+                ok: false,
+                admitted: false,
+                action: "kickoff",
+                session_id: null,
+                session_source: "create_failed",
+                directory_match: false,
+                agent_match: false,
+                bind_failed: true,
+                status: created.status,
+                target_directory: directory,
+                agent: requestedAgent,
+                error: "create_response_missing_id",
+                blocker_code: "KICKOFF_DIRECTORY_BIND_FAILED",
+                manualRecovery:
+                  `Create succeeded but no id in the response. Re-run ` +
+                  `"POST /session?directory=${directory}" to inspect.`,
+              });
+            }
+            const directoryMatch = !!(createdDir && createdDir === directory);
+            const agentMatch = !!(createdAgent && createdAgent === requestedAgent);
+            if (!directoryMatch || !agentMatch) {
+              return JSON.stringify({
+                ok: false,
+                admitted: false,
+                action: "kickoff",
+                session_id: createdId,
+                session_source: "created",
+                directory_match: directoryMatch,
+                agent_match: agentMatch,
+                bind_failed: true,
+                status: created.status,
+                target_directory: createdDir || directory,
+                agent: createdAgent || requestedAgent,
+                error: !directoryMatch ? "directory_bind_failed" : "agent_bind_mismatch",
+                blocker_code: !directoryMatch
+                  ? "KICKOFF_DIRECTORY_BIND_FAILED"
+                  : "KICKOFF_AGENT_BIND_MISMATCH",
+                manualRecovery:
+                  `Create returned directory=${createdDir} agent=${createdAgent} but ` +
+                  `caller requested directory=${directory} agent=${requestedAgent}. ` +
+                  `Server ignored ?directory= or the agent body field. Inspect with ` +
+                  `"GET /session/${createdId}".`,
+              });
+            }
+
+            // EVENTUAL_CONSISTENCY_RETRY: 750 ms settle before the inject — empirically wide
+            // enough for the create row to be findable in subsequent list attempts.
+            await sleep(750);
+            chosen = newRow;
+            sessionSource = "created";
+          }
+
+          // Step 6: inject with ?directory= using the chosen id (the create envelope's exact
+          // id when created; the list row's id when reused). Always carry ?directory= —
+          // matches the poller's working pattern and is defense-in-depth.
+          const targetId = sessionId(chosen);
+          const targetDir = sessionDirectory(chosen) || directory;
+          const payload = {
+            parts: [{ type: "text", text: message }],
+            agent: requestedAgent,
+          };
+          const injectInit = {
+            method: "POST",
+            body: JSON.stringify(payload),
+            query: { directory: targetDir },
+          };
+          const r = await smFetch(
+            `/session/${encodeURIComponent(targetId)}/prompt_async`,
+            injectInit,
+            context,
+          );
+          const admitted = r.status === 204 || (r.ok && r.body == null);
+          return JSON.stringify({
+            ok: r.ok,
+            admitted,
+            action: "kickoff",
+            session_id: targetId,
+            session_source: sessionSource,
+            resolution: sessionSource,
+            reused: sessionSource === "reused",
+            directory_match: sessionDirectory(chosen) === targetDir,
+            agent_match: sessionAgent(chosen) === requestedAgent,
+            bind_failed: false,
+            status: r.status,
+            target_directory: targetDir,
+            agent: requestedAgent,
+            error: r.ok ? null : r.body,
+            manualRecovery: r.ok
+              ? null
+              : `curl -u "${process.env.OPENCODE_SERVER_USERNAME || "opencode"}:${process.env.OPENCODE_SERVER_PASSWORD || "opencode"}" ` +
+                `-H 'Content-Type: application/json' -d '${JSON.stringify(payload).replace(/'/g, "'\\''")}' ` +
+                `"${baseUrl}/session/${encodeURIComponent(targetId)}/prompt_async?directory=${encodeURIComponent(targetDir)}"`,
           });
         },
       },
@@ -480,7 +772,7 @@ export const SessionManagerPlugin = async (ctx) => {
           const inDir = sessions.filter(
             (s) =>
               s &&
-              (s.directory === directory || s.directory === directory),
+              (readSessionField(s, "directory", "directory") === directory),
           );
           if (inDir.length === 0) {
             return JSON.stringify({

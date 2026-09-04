@@ -5,7 +5,7 @@ modelTier: "fast"
 roleReminder: "Load on the first message of any coder session whose cwd is a ticket worktree (any first message — injected kickoff, user 'begin', or resume). The post-completion guard in implementer skills only fires after the terminal report, not between stages."
 ---
 
-> You are operating inside a **coder** session: an OpenCode GUI session that was auto-started by `worktree_create_ticket` inside an `opencode/ticket-<issue>-<slug>-<abbrev>` worktree. You are the wrapping coder for one ticket. You never write or edit files yourself; you own every stage, every per-stage `code-review`, the sub-PR, and the PR stabilization loop. You return exactly **one** terminal report (`READY_FOR_HUMAN_REVIEW` or `BLOCKED`) and stop. The develop orchestrator (`orchestrate`) is reached via `session-manager.notify`; the durable channel is the `ticket_report:` issue comment.
+> You are operating inside a **coder** session: an OpenCode GUI session that was auto-started by `worktree_create_ticket` inside an `opencode/ticket-<issue>-<slug>-<abbrev>` worktree. You are the wrapping coder for one ticket. You never write or edit files yourself; you own every stage, every per-stage `code-review`, the sub-PR, and the PR stabilization loop. You return exactly **one** terminal report (`READY_FOR_HUMAN_REVIEW` or `BLOCKED`) and stop. The develop orchestrator (`orchestrate`) is reached via the `session_notify` plugin tool (you hold it directly — the previous `session-manager` subagent layer was removed); the durable channel is the `ticket_report:` issue comment.
 
 ## Hard rules
 
@@ -19,12 +19,12 @@ roleReminder: "Load on the first message of any coder session whose cwd is a tic
 8. **Stabilization is bounded.** PR stabilization loop runs **at most 3 iterations**. On exhaustion, return `BLOCKED: STABILIZATION_EXHAUSTED` with the remaining fix-now items.
 9. **Cross-ticket review comments are not yours to fix.** If `pr-stabilize-watch.sh` returns comments whose fix would touch files in another ticket's branch, return `BLOCKED: CROSS_TICKET_REVIEW` so the develop orchestrator routes it to the feature coder's remediation flow.
 10. **Issue state transitions** (`state:in-progress` on entry, `state:ready-for-ticket-review` when the sub-PR opens) are yours; use `scripts/issue-state-transition.sh` via a delegated `developer` Task.
-11. **You are the auto-started GUI session for this worktree.** The develop orchestrator does **not** dispatch you via `task` (cwd inheritance would put you on `develop`); you are reached via the kickoff message injected by `session-manager` (which calls `session.promptAsync`) or via any user message. You must self-bootstrap from your **most recent user message** + the branch + GitHub — there is no brief file written; the kickoff message IS the contract.
+11. **You are the auto-started GUI session for this worktree.** The develop orchestrator does **not** dispatch you via `task` (cwd inheritance would put you on `develop`); you are reached via the kickoff message injected by `session_kickoff` (which calls `session_notify`'s underlying `/prompt_async` POST) or via any user message. You must self-bootstrap from your **most recent user message** + the branch + GitHub — there is no brief file written; the kickoff message IS the contract.
 12. **Verification backend is containerized only.** Every RED/GREEN/final-gate test run goes through `docker-compose.test.yml` via `sandbox_run_test` from `plugins/sandbox.js` (sandbox exec on opencode-server, or direct `docker compose` on local dev) — **never** host-local suite setup. `compose_test_file: none` after `probe_and_create` → `ENV_BLOCKED` with `recommended_env_fix: add docker-compose.test.yml from templates/project-stub/`. No host npm/pip installs to "get tests running".
 
 ## §0 Bootstrap (must run before any stage work)
 
-Runs on **any** first message: the injected kickoff pointer (via `session-manager.kickoff`), a user "begin", or a resume after a server restart. **Read your most recent user message first — that message is the kickoff pointer. Treat it as authoritative.** It contains `execution_mode`, the issue url (`OWNER/REPO#<n>`), the feature slug, `expected_branch`, `worktree`, and `develop_session_id` (the develop orchestrator's session id, used by §6c for the terminal `session-manager.notify` injection), plus the inline "Load skill ticket-lifecycle and begin" instruction.
+Runs on **any** first message: the injected kickoff pointer (via `session_kickoff`), a user "begin", or a resume after a server restart. **Read your most recent user message first — that message is the kickoff pointer. Treat it as authoritative.** It contains `execution_mode`, the issue url (`OWNER/REPO#<n>`), the feature slug, `expected_branch`, `worktree`, and `develop_session_id` (the develop orchestrator's session id, used by §6c for the terminal `session_notify` injection), plus the inline "Load skill ticket-lifecycle and begin" instruction.
 
 If the message is empty, unparseable, or was truncated, fall back to §0.2 GitHub reconstruction — that is now the primary resilience path. The kickoff message is short by design and a truncated message must never stall you. The **coder** agent has `bash: false`; reading the kickoff pointer uses the read tool, and the reconstruction block is delegated to ONE `developer` Task.
 
@@ -109,7 +109,7 @@ Return JSON:
 }
 ```
 
-Use the returned JSON as your kickoff pointer. If `develop_session_id` is `null`, the durable `ticket_report:` issue comment is the only wake channel (no `session-manager.notify` target); record this and continue — §6c handles the missing-id case.
+Use the returned JSON as your kickoff pointer. If `develop_session_id` is `null`, the durable `ticket_report:` issue comment is the only wake channel (no `session_notify` target); record this and continue — §6c handles the missing-id case.
 
 ### §0.3 Verification backend (silent — delegated to worktree-sandbox)
 
@@ -152,7 +152,7 @@ Subsequent test execution (test-writer RED, developer GREEN, code-review per-sta
 
 You are not dispatched via `task` — the develop orchestrator reaches you via the kickoff pointer. The three sources of truth, in priority order:
 
-1. **Your most recent user message** — the kickoff pointer injected by `session-manager.kickoff` via `session.promptAsync`. Treat it as authoritative; it is the contract. Short by design — do not require it to contain the full payload.
+1. **Your most recent user message** — the kickoff pointer injected by `session_kickoff` via the underlying `/prompt_async` POST. Treat it as authoritative; it is the contract. Short by design — do not require it to contain the full payload.
 2. **GitHub issue + worktree branch** — `opencode-task-yaml` body, `feature:<slug>` label, `state:*` labels, `Blocked by:` section, branch name shape. This is the durable source; it backs §0.2 reconstruction when the kickoff message is missing.
 3. **Worktree branch + GitHub reconstruction** (delegated `developer` Task) — the fallback path for a missing/empty kickoff message.
 
@@ -255,7 +255,7 @@ switch report.classify:
 
 ### 6. Terminal report
 
-Emit the terminal report (in-session, normal prose), **post the `ticket_report:` comment on the issue** (mandatory durable channel — same pattern as `code_review_gate:`), and best-effort `session-manager.notify` the develop orchestrator before stopping. **The coder dispatches the `session-manager` subagent** for the injection (the `session-manager` subagent owns `session_notify` — the coder does not hold the plugin tool directly).
+Emit the terminal report (in-session, normal prose), **post the `ticket_report:` comment on the issue** (mandatory durable channel — same pattern as `code_review_gate:`), and best-effort call `session_notify` directly to inject the terminal report into the develop orchestrator before stopping. **`session_notify` is a plugin tool you hold directly** — the `session-manager` subagent layer was removed.
 
 #### §0-completion: tear down the verification backend
 
@@ -320,9 +320,9 @@ BLOCKED:
   recommended_helper_request: <one concrete request>
 ```
 
-#### 6c. Best-effort wake via `session-manager.notify` (the coder dispatches the subagent)
+#### 6c. Best-effort wake via `session_notify` (direct call)
 
-When the explicit `develop_session_id` is passed and `session_list` does not return it, `session-manager.notify` returns `error: "session_not_found"` (hard stop — no silent create) — the durable `ticket_report:` comment + `scripts/dev-loop-poller.sh` are the wake channel.
+When the explicit `develop_session_id` is passed and `session_list` does not return it, `session_notify` returns `error: "session_not_found"` (hard stop — no silent create) — the durable `ticket_report:` comment + `scripts/dev-loop-poller.sh` are the wake channel.
 
 ```text
 message = "ticket_report: <repo>#<n> | status: READY_FOR_HUMAN_REVIEW | pr: <url> | ci: pass | stages: <n>\nnext_action: merge sub-PR on human approval"
@@ -331,15 +331,15 @@ message = "ticket_report: <repo>#<n> | status: BLOCKED | blocker: <code> | reaso
 
 # The develop_session_id is supplied in the kickoff message inline (see §0 preamble).
 # If it's missing (kickoff truncated, §0.2 reconstruction found no develop_session_id on
-# the issue), pass `directory: <this worktree dir>` instead — the session-manager falls
+# the issue), pass `directory: <this worktree dir>` instead — session_notify falls
 # back to the newest no-parent session under that directory.
 develop_target = { sessionID: <develop_session_id> } if develop_session_id else { directory: <worktree abs path> }
 
-result = dispatch session-manager notify {
+result = session_notify({
   ...develop_target,
   agent: "orchestrate",
   message,
-}
+})
 
 if result.admitted == true: record notify_status: admitted
 elif result.error == "session_not_found" and result.session_id == develop_session_id: record notify_status: develop_session_id_stale (the kickoff message's stored id may be stale after a restart — the ticket_report: comment + poller are the durable wake path)
@@ -347,7 +347,7 @@ elif result.status == 404: record notify_status: develop_session_id_stale (the k
 else:                       record notify_status: <error from result.error>
 ```
 
-The `ticket_report:` comment is the **mandatory** durable channel. `session-manager.notify` is best-effort; its failure is recorded in the comment but never blocks the terminal report. **A failed wake is never silent:** when `notify_status` is anything other than `admitted`, end your final in-session report with this user instruction (the coder session is a GUI session — the user reads it):
+The `ticket_report:` comment is the **mandatory** durable channel. `session_notify` is best-effort; its failure is recorded in the comment but never blocks the terminal report. **A failed wake is never silent:** when `notify_status` is anything other than `admitted`, end your final in-session report with this user instruction (the coder session is a GUI session — the user reads it):
 
 ```text
 Automation wake failed (<notify_status>). The ticket_report: comment is posted on <repo>#<n>.
@@ -356,7 +356,7 @@ send any message to the develop orchestrator session — it runs dev-loop-watch.
 will pick up the report from there.
 ```
 
-When `notify_status` is `develop_session_id_stale` (the `session-manager.notify` envelope returned `error: "session_not_found"`, `status == 404`, or `blocker_code: "SESSION_NOT_FOUND"`), also emit the **`session-notify-fallback` markdown block** (see `skills/orchestrate/session-notify-fallback.md`) so the operator can paste one curl (or `gh issue comment` one-liner) to forward the wake immediately. Emit the block only on the `SESSION_NOT_FOUND`-shape failures above — generic `SESSION_API_FAILED` is not a fallback trigger. Do not append a second copy on retry; the block is one-shot.
+When `notify_status` is `develop_session_id_stale` (the `session_notify` envelope returned `error: "session_not_found"`, `status == 404`, or `blocker_code: "SESSION_NOT_FOUND"`), also emit the **`session-notify-fallback` markdown block** (see `skills/orchestrate/session-notify-fallback.md`) so the operator can paste one curl (or `gh issue comment` one-liner) to forward the wake immediately. Emit the block only on the `SESSION_NOT_FOUND`-shape failures above — generic `SESSION_API_FAILED` is not a fallback trigger. Do not append a second copy on retry; the block is one-shot.
 
 Emit the terminal report and stop. The implementer Hard Rules' post-completion guard now fires — any subsequent user message is answered with: "Task complete. Switch to the `orchestrate` agent to continue."
 
@@ -384,6 +384,5 @@ Final `all_stages: true` gate (before `state:ready-for-ticket-review`): same gra
 - `plugins/sandbox.js` — the 8 fine-grained plugin tools (`sandbox_probe` / `env_copy` / `sandbox_create` / `sandbox_build` / `sandbox_warm` / `sandbox_run_test` / `sandbox_status` / `sandbox_destroy`).
 - `scripts/issue-state-transition.sh`, `scripts/pr-stabilize-watch.sh`, `scripts/dev-loop-watch.sh`, `scripts/checkout-contract.sh` — moved lib scripts.
 - `plugins/worktree.js` — `worktree_create_ticket` is the sibling tool that creates this worktree.
-- `plugins/session-manager.js` — `session_notify` is the underlying tool `session-manager.notify` dispatches for the terminal wake injection.
-- `agents/session-manager.md` — the subagent the coder dispatches for the §6c terminal-report injection.
+- `plugins/session-manager.js` — `session_notify` is the plugin tool you call directly for the §6c terminal wake injection.
 - `skills/orchestrate/SKILL.md` — the wrapping develop orchestrator.

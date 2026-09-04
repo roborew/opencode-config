@@ -222,7 +222,7 @@ When step 1, step 2, step 3, or step 7 surface unmet acceptance criteria that ca
 
 ### 9. Terminal report
 
-Emit the terminal report (in-session, normal prose), **post the `feature_report:` comment on the PRD parent issue** (mandatory durable channel), and best-effort `session-manager.notify` the develop orchestrator before stopping. **The coder dispatches the `session-manager` subagent** for the injection (the `session-manager` subagent owns `session_notify` — the coder does not hold the plugin tool directly).
+Emit the terminal report (in-session, normal prose), **post the `feature_report:` comment on the PRD parent issue** (mandatory durable channel), and best-effort call `session_notify` directly to inject the terminal report into the develop orchestrator before stopping. **`session_notify` is a plugin tool you hold directly** — the `session-manager` subagent layer was removed.
 
 #### §9-completion: tear down the verification backend
 
@@ -287,9 +287,9 @@ BLOCKED:
   recommended_helper_request: <one concrete request>
 ```
 
-#### 9c. Best-effort wake via `session-manager.notify` (the coder dispatches the subagent)
+#### 9c. Best-effort wake via `session_notify` (direct call)
 
-When the explicit `develop_session_id` is passed and `session_list` does not return it, `session-manager.notify` returns `error: "session_not_found"` (hard stop — no silent create) — the durable `feature_report:` comment is the wake channel.
+When the explicit `develop_session_id` is passed and `session_list` does not return it, `session_notify` returns `error: "session_not_found"` (hard stop — no silent create) — the durable `feature_report:` comment is the wake channel.
 
 ```text
 message = "feature_report: feature:<slug> | status: READY_FOR_HUMAN_REVIEW | pr: <url> | ci: pass | tickets: <n>"
@@ -298,14 +298,14 @@ message = "feature_report: feature:<slug> | status: BLOCKED | blocker: <code> | 
 
 # The develop_session_id is supplied in the feature coder kickoff message inline.
 # If it's missing (kickoff truncated), pass `directory: <feature worktree dir>` instead —
-# the session-manager falls back to the newest no-parent session under that directory.
+# session_notify falls back to the newest no-parent session under that directory.
 develop_target = { sessionID: <develop_session_id> } if develop_session_id else { directory: <feature worktree abs path> }
 
-result = dispatch session-manager notify {
+result = session_notify({
   ...develop_target,
   agent: "orchestrate",
   message,
-}
+})
 
 if result.admitted == true: record notify_status: admitted
 elif result.error == "session_not_found" and result.session_id == develop_session_id: record notify_status: develop_session_id_stale
@@ -313,7 +313,7 @@ elif result.status == 404: record notify_status: develop_session_id_stale
 else:                       record notify_status: <error from result.error>
 ```
 
-The `feature_report:` comment is the **mandatory** durable channel. `session-manager.notify` is best-effort; its failure is recorded in the comment but never blocks the terminal report.
+The `feature_report:` comment is the **mandatory** durable channel. `session_notify` is best-effort; its failure is recorded in the comment but never blocks the terminal report.
 
 Emit the terminal report and stop. The coder agent Hard Rules' post-completion guard now fires — any subsequent user message is answered with: "Task complete. Switch to the `orchestrate` agent to continue."
 
@@ -336,6 +336,5 @@ Emit the terminal report and stop. The coder agent Hard Rules' post-completion g
 - `skills/to-tickets/SKILL.md` — `remediation:` issue publishing (`--parent-issue`).
 - `scripts/issue-state-transition.sh`, `scripts/feature-finish-pr.sh`, `scripts/dev-loop-watch.sh` — shared lib scripts.
 - `plugins/worktree.js` — `worktree_create_feature` is the sibling tool that creates this worktree.
-- `plugins/session-manager.js` — `session_notify` is the underlying tool `session-manager.notify` dispatches for the terminal wake injection.
-- `agents/session-manager.md` — the subagent the coder dispatches for the §9c terminal-report injection.
+- `plugins/session-manager.js` — `session_notify` is the plugin tool you call directly for the §9c terminal wake injection.
 - `skills/orchestrate/SKILL.md` — the develop orchestrator that kicks this loop and merges the feature PR after "all reviewed".

@@ -66,7 +66,7 @@ PRD + handoffs        build → review → (fix → review)*          merge + cl
 | Stage | Repo | Select | Your choice | Your job | This stage owns |
 |-------|------|--------|-------------|----------|-----------------|
 | Plan / PRD | **spec** | **architect** → `hi` | **1. Product feature / PRD — …** | Answer grill; **approve PRD**; **approve** issue plans | Planning + handoffs only — not code, not PR polish |
-| Build | **work repo** | **orchestrate** | Paste `feature:<slug>` / handoff | Wait for the feature PR | The orchestrator assigns; one **coder** session per ticket worktree produces the code. Each ticket's auto-started GUI session is the coder session, self-bootstraps from `<gitdir>/opencode-ticket-brief.json` and GitHub, returns exactly one `ticket_report:` comment per ticket. |
+| Build | **work repo** | **orchestrate** | Paste `feature:<slug>` / handoff | Wait for the feature PR | The orchestrator assigns; one **coder** session per ticket worktree produces the code. Each ticket's auto-started GUI session is the coder session, self-bootstraps from the kickoff pointer (injected via `session_kickoff`) and GitHub, returns exactly one `ticket_report:` comment per ticket. |
 | Review / docs / PR | **same work repo, feature worktree** | **coder** (kicked by orchestrator) → loads `feature-review` | (no menu — kicks the loop automatically) | Verify + sign off + docs + feature PR | All PR readiness and ticket acceptance; orchestrator merges after "all reviewed" |
 | Remediation loop | **same work repo** | **orchestrate** ↔ feature-review re-kick | After BLOCKED: FEATURE_REMEDIATION, fixes re-run | Stay until you are happy — **do not go to spec yet** | Work-repo loop only |
 | Final close | **spec** | **architect** → `hi` | **3. Feature complete — …** | After every work repo merged; verify-only close | Verify `state:done` + `verified` + MERGED; close done tickets + PRD |
@@ -326,7 +326,7 @@ See **[Feature flow (PRD → sign-off)](#feature-flow-prd--sign-off)** for the f
 | Step | Repo | Select | You do |
 |------|------|--------|--------|
 | Plan | **spec** | **architect** → `hi` → **1. Product feature / PRD …** | Approve PRD and issue plans; copy handoffs |
-| Build | **each work repo** | **orchestrate** (new session) | Paste `feature:<slug>` / handoff; wait for PR. Tickets are auto-kicked: each ticket worktree's GUI session is the **coder** primary agent (loading `ticket-lifecycle`), self-bootstraps from `<gitdir>/opencode-ticket-brief.json` and GitHub, returns exactly one `ticket_report:` comment per ticket. |
+| Build | **each work repo** | **orchestrate** (new session) | Paste `feature:<slug>` / handoff; wait for PR. Tickets are auto-kicked: each ticket worktree's GUI session is the **coder** primary agent (loading `ticket-lifecycle`), self-bootstraps from the kickoff pointer (injected via `session_kickoff`) and GitHub, returns exactly one `ticket_report:` comment per ticket. |
 | Review loop | **same work repo** | **architect** → `hi` → **4. Review / sign-off …** → **R** ↔ **orchestrate** until happy → **1** → **2** | Accept (`state:done`); docs; leave PR merge-ready |
 | Close | **spec** | **architect** → `hi` → **3. Feature complete …** | Verify-only close after every work repo's feature PR merged |
 
