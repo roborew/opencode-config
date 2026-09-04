@@ -1,11 +1,11 @@
 ---
 name: orchestrate
-description: Develop-branch outer-loop coordinator — bootstrap + work selection, feature worktree + push, batch kickoff of coder sessions per ticket, PR approval gate, merge + worktree/remote-branch cleanup, re-batch, feature coder kickoff + feature merge on approval.
+description: Develop-branch outer-loop coordinator — bootstrap + work selection, feature worktree + push, batch kickoff of coder sessions per ticket, PR approval gate, merge + worktree/remote-branch cleanup, per-merge re-batch, feature coder kickoff + feature merge on approval.
 modelTier: "fast"
 roleReminder: "Loaded by the `orchestrate` primary agent on the develop branch. The orchestrator never executes tickets — coder sessions do. Wake contract: in-session `session_notify` (primary), `DEV_LOOP_WAKE` from the poller, any user message → run `dev-loop-watch.sh` first."
 ---
 
-> Hard Rules live in `agents/orchestrate.md`; this skill owns the **per-impl-repo develop-loop** body. The orchestrator owns outer-loop coordination only: bootstrap, work selection, feature worktree, batch kickoff, PR approval gate, merge + cleanup, re-batch, feature coder kickoff, feature merge on approval. Ticket execution lives in `coder` sessions loading `ticket-lifecycle`; feature-mode sign-off lives in `coder` sessions loading `feature-review`. The orchestrator never verifies code-review or CodeRabbit evidence — terminal reports plus human approval are its only gates.
+> Hard Rules live in `agents/orchestrate.md`; this skill owns the **per-impl-repo develop-loop** body. The orchestrator owns outer-loop coordination only: bootstrap, work selection, feature worktree, batch kickoff, PR approval gate, merge + cleanup, per-merge re-batch, feature coder kickoff, feature merge on approval. Ticket execution lives in `coder` sessions loading `ticket-lifecycle`; feature-mode sign-off lives in `coder` sessions loading `feature-review`. The orchestrator never verifies code-review or CodeRabbit evidence — terminal reports plus human approval are its only gates.
 >
 > **You have no bash tool.** Every shell invocation in this skill — `scripts/checkout-contract.sh`, `opencode-run impl orchestrate-readiness-check`, `scripts/dev-loop-batch.sh`, `scripts/dev-loop-watch.sh`, `gh pr view` — is dispatched as a `developer` Task with `load: minimal` and the exact command to run. You also have no `worktree_*` tools: worktree lifecycle goes through `worktree-manager`. **You DO hold `session_*` plugin tools directly** (`session_kickoff` for ticket/feature coder kickoff, `session_list` for state queries, `session_notify` for terminal-report reception via the kickoff message's `develop_session_id`) — the previous `session-manager` subagent layer was removed and the choreography lives in plugin code. Never conclude "I can't run X because I have no bash" — delegate it to a `developer` Task.
 
@@ -14,6 +14,8 @@ roleReminder: "Loaded by the `orchestrate` primary agent on the develop branch. 
 Run the **develop** branch as the single persistent orchestration session for one `(feature:<slug>, impl-repo)` pair. From `develop`, create the feature worktree, then **for each runnable ticket, create a ticket worktree + kick the auto-started GUI session** with a short pointer message (the coder session loads `ticket-lifecycle` and reconstructs the rest from the branch + GitHub — no brief file is written). The develop loop only reacts to terminal ticket reports (`READY_FOR_HUMAN_REVIEW` | `BLOCKED`) — posted as `ticket_report:` comments on the issue and best-effort injected back via `session_notify`. When all tickets merge into the feature branch, kick the **feature coder** (same `coder` agent, loading `feature-review`) for the final verification + feature PR + `feature_report:`.
 
 The develop loop does **not** dispatch ticket subagents via the `task` tool. Subagents inherit the parent's cwd (`develop`), so they would land on the wrong branch and `checkout-contract.sh --verify` would correctly reject them (`SubtaskPartInput` in the installed SDK has no `directory` field). The auto-started GUI session for the ticket worktree IS the coder session — it has the correct cwd by construction.
+
+After each sub-PR merges into the feature branch, the orchestrator fast-forwards the local feature ref, deletes the ticket worktree + remote ticket branch, and **per-merge re-batches** the remaining DAG before creating any new ticket worktrees. The §5-0 freshness gate guarantees the next ticket forks off code that includes every previously merged sub-PR — without it, `worktree_create_ticket` (which forks off the **local** `refs/heads/opencode/feat-<slug>` per `plugins/worktree.js:166`) would silently produce a stale worktree, and `ticket-lifecycle` §0.0 handshake step 6 would fail with `BLOCKED: TICKET_NOT_FORKED_FROM_FEATURE`.
 
 ## Entry conditions
 
@@ -142,6 +144,50 @@ while true:
     url    = entry.url
     abbrev = <derive from title or pass via entry if worktree-manager echoes it>
     branch_name = "opencode/ticket-<n>-<slug>-<abbrev>"
+
+    # 5-0. Feature-branch freshness gate (mandatory precondition before create_ticket).
+    #      Reason: worktree_create_ticket forks the new worktree off the LOCAL ref
+    #      refs/heads/opencode/feat-<slug> (plugins/worktree.js:166 sends
+    #      `base: <feature_branch>` which the server resolves locally — it does not
+    #      fork off refs/remotes/origin/opencode/feat-<slug>). If the local feature
+    #      ref is stale (e.g. a §5d fast-forward was skipped, or the user merged
+    #      via the GitHub UI and §5e bypassed the ff), the next ticket forks off
+    #      pre-merge code and ticket-lifecycle §0.0 step 6 fails with
+    #      BLOCKED: TICKET_NOT_FORKED_FROM_FEATURE (or worktree-manager 8.5
+    #      branch_local_up_to_date === false). This gate is the only thing that
+    #      catches the §5e out-of-band-merge case (§5e used to skip the ff and the
+    #      §5d ff alone was insufficient).
+    #      Delegated developer Task, load: minimal, run in the feature worktree:
+    #
+    #        cd <feature worktree directory>
+    #        git fetch origin "opencode/feat-<slug>"
+    #        local=$(git rev-parse "refs/heads/opencode/feat-<slug>")
+    #        remote=$(git rev-parse "refs/remotes/origin/opencode/feat-<slug>")
+    #        echo "local=$local remote=$remote"
+    #
+    #      - Equal → proceed to 5a-i.
+    #      - Not equal → ONE automatic repair attempt, guarded by the develop-
+    #        pollution guard (the self-ff exemption at scripts/assert-merge-cwd.sh:122
+    #        permits ASSERT_MERGE_REF == origin/<ASSERT_MERGE_BRANCH> in
+    #        feature-worktree context):
+    #
+    #        cd <feature worktree directory>
+    #        ASSERT_MERGE_CWD="<feature worktree dir>" \
+    #        ASSERT_MERGE_BRANCH="opencode/feat-<slug>" \
+    #        ASSERT_MERGE_REF="origin/opencode/feat-<slug>" \
+    #        ASSERT_REPO="<OWNER/REPO>" \
+    #        ASSERT_BRANCH_CONTEXT="feature-worktree" \
+    #          source "${OPENCODE_CONFIG:-$HOME/.config/opencode}/scripts/assert-merge-cwd.sh"
+    #        git merge --ff-only "origin/opencode/feat-<slug>"
+    #
+    #      - Re-check; still unequal OR any BLOCKED: * from the guard → surface
+    #        BLOCKED: FEATURE_BRANCH_STALE with both SHAs verbatim, pause the batch,
+    #        do NOT call create_ticket.
+    #      - Also gate the feature worktree existence: if the feature worktree is
+    #        gone, surface BLOCKED: FEATURE_BRANCH_STALE with feature_worktree_gone:
+    #        true and recreate the feature worktree via worktree-manager.create_feature
+    #        before continuing. Do NOT silently recreate and proceed — surface the
+    #        code so the operator sees the recovery.
 
     # 5a-i. Create ticket worktree (forked off the feature branch captured at §4)
     #       Pure JSON envelope — worktree-manager owns the procedure. Do NOT include
@@ -314,7 +360,7 @@ After user approval reply (or after out-of-band merge detection per §5e):
 
    On failure: surface `gh pr view --json mergeable` verbatim, pause the batch. On success: continue.
 
-2. **Fast-forward the feature branch** in the feature worktree (delegated `developer`, `cd <feature worktree dir>`). The `git merge --ff-only origin/opencode/feat-<slug>` self-ff MUST be guarded by `scripts/assert-merge-cwd.sh` (develop-pollution guard — see §12). On any `BLOCKED: *` exit, surface verbatim and pause:
+3. **Fast-forward the feature branch** in the feature worktree (delegated `developer`, `cd <feature worktree dir>`). The `git merge --ff-only origin/opencode/feat-<slug>` self-ff MUST be guarded by `scripts/assert-merge-cwd.sh` (develop-pollution guard — see §12). On any `BLOCKED: *` exit, surface verbatim and pause:
 
    ```bash
    cd <feature worktree directory>
@@ -328,9 +374,18 @@ After user approval reply (or after out-of-band merge detection per §5e):
    git merge --ff-only "origin/opencode/feat-<slug>"
    ```
 
-3. **Delete the ticket worktree** — dispatch `worktree-manager` `delete { directory: <ticket worktree dir> }`.
+4. **Delete the ticket worktree** — dispatch `worktree-manager` `delete { directory: <ticket worktree dir> }`.
 
-4. **Delete the remote ticket branch** — delegated `developer`: `git push origin --delete opencode/ticket-<n>-<slug>-<abbrev>` (developer is the only delegated actor for `git push origin --delete`; coder session itself never runs this).
+5. **Delete the remote ticket branch** — delegated `developer`: `git push origin --delete opencode/ticket-<n>-<slug>-<abbrev>` (developer is the only delegated actor for `git push origin --delete`; coder session itself never runs this).
+
+6. **Re-batch (per-merge next-wave).** Re-running `dev-loop-batch.sh` after every merge is what unlocks dependent tickets promptly (`scripts/dev-loop-batch.sh:151-156` already treats a merged sub-PR as dep-satisfied, so the exit code tells you whether new runnable tickets are now available):
+   1. Delegated `developer` (`load: minimal`): re-run `bash "$OC/scripts/dev-loop-batch.sh" <slug>`.
+   2. Exit 2 → surface stderr verbatim, stop (never "all done").
+   3. Exit 0 → for each entry **not already present in the lifecycle log with a recorded `directory`** (the in-flight skip-guard), run the §5-0 freshness gate → `create_ticket` (§5a-i) → `KICKOFF_ALREADY_DELIVERED` precheck (§5a-iii) → `session_kickoff` (§5a-iv). Skipping already-live tickets is mandatory: re-running `create_ticket` for a live ticket trips `worktree-manager` Hard Rule 4 and produces a `-2` sibling worktree.
+   4. Exit 1 → if any ticket in the lifecycle log is still in flight (kicked, no terminal report, or reported but not yet merged), **end the turn and keep waiting** — do not go to §8. Only when exit 1 AND the in-flight set is empty AND no `BLOCKED` ticket exists, go to §8.
+   5. End the turn after kicking (§5b wake contract unchanged).
+
+   The `KICKOFF_ALREADY_DELIVERED` (§5a-iii) precheck **must still run** for every ticket entry even when the in-flight skip-guard fires — it is the durable-comment safety net for tickets whose coder crashed mid-kickoff (lifecycle log says "kicked" but the `ticket_report:` comment is missing).
 
 ### §5e. Out-of-band merges (GitHub UI)
 
@@ -338,7 +393,7 @@ If the user merges the sub-PR via GitHub UI instead of the gate: `scripts/dev-lo
 
 1. Confirms via a delegated `developer` Task (`gh pr view --json state`).
 2. Transitions the ticket to `state:ticket-reviewed` so the label matches reality (delegated `developer` runs `scripts/issue-state-transition.sh <repo> <n> state:ticket-reviewed`) — matches the new semantic: "merged into feature branch" == "human approved".
-3. Runs §5d's cleanup (worktree delete + remote-branch delete).
+3. Runs the **full** §5d sequence from step 3 onward: fast-forward the feature branch → delete ticket worktree → delete remote branch → re-batch (§5d step 6). Out-of-band merges MUST NOT skip the ff — the §5-0 gate's only safety property is that the local feature ref is up to date, and the ff is what makes that true. Skipping it leaves the next ticket worktree forking off pre-merge code.
 
 ## §6 State transitions inside the loop
 
@@ -360,8 +415,9 @@ The coder session owns `state:in-progress` (set during `ticket-lifecycle` §0 Bo
 | `session_report:` arrives without `bind_failed: false` for that `session_id` in the lifecycle log (`BLOCKED: KICKOFF_BIND_CONFIRMATION_MISSING`) | develop orchestrator loop (Global Invariant #10) | Pause the batch and surface verbatim. The kickoff silently admitted without bind evidence; the coder may be in the wrong cwd. Inspect the kickoff envelope and the develop-loop-watch output, then dispatch a `developer` Task to re-run `scripts/checkout-contract.sh --verify` against the worktree before retrying. |
 | §5a-iii `KICKOFF_ALREADY_DELIVERED` precheck returns a `ticket_report:` comment id for the issue | develop orchestrator loop (orchestrator-owned precheck, was worktree-manager step 2a) | Pause the batch and surface verbatim. The coder already finished and posted the durable terminal report; re-kicking would create an orphan. Inspect the `ticket_report:` comment on the issue and resume from `ticket-lifecycle` §0 if the coder is alive (or treat the ticket as done and move to PR-approval if the coder has merged). Do not retry the kickoff — that is exactly what this check exists to prevent. |
 | `session_kickoff` create branch ran `session_create_attempts` times against the same worktree (`BLOCKED: WORKTREE_SESSION_ATTEMPTS_EXCEEDED`) | develop orchestrator loop (Global Invariant #11; hard stop, not advisory) | Pause the batch and surface verbatim. The develop loop has hit the per-worktree session-create ceiling (default `3`, configurable via `session_create_cap`). The worktree likely has orphaned sessions registered against it from prior kickoff storms (this is the failure mode the operator hit — 5 orphans against ticket #246 before the loop paused). Operator intervention is required: dispatch `worktree-manager.recover { directory }` to deregister the orphan sessions via the sanctioned `rewrite-worktree-gitdirs.py` + `session_delete` flow, then either raise `session_create_cap` in the lifecycle log or skip the offending ticket. Do not retry the kickoff automatically. |
-| `worktree-manager.create_ticket` step 8.5 readiness check fails (`BLOCKED: WORKTREE_PREFLIGHT_FAILED`) — worktree not reachable / not writable / `branch_local_up_to_date === false` / `parent_branch_merged === false` | develop orchestrator loop (Global Invariant #12; hard stop, not advisory) | Pause the batch and surface `BLOCKED: WORKTREE_PREFLIGHT_FAILED` verbatim along with the captured `branch_local_head_sha` vs `origin/<branch>` SHAs and the envelope's `manualRecovery`. **Do not retry by re-running `create_ticket`** — Hard Rule 4 would suffix `-2` on the worktree name and create a sibling. Inspect the worktree (likely a wrong-ref reset that left the worktree on `develop`/`main` instead of the feature branch; or the feature branch has not been pushed yet). If the branch is stale, dispatch a `developer` Task (`load: minimal`) to `git fetch origin "<branch>" && git -C <dir> reset --hard "origin/<branch>"`; if the parent is unmerged, the upstream ticket likely needs to merge first. The `branch_local_up_to_date === false` branch is the canonical signal of the latent #245 reset-to-wrong-ref bug. |
-| `scripts/dev-loop-batch.sh` exits 1 | develop orchestrator loop | All tickets done → exit loop, go to §8. |
+| `worktree-manager.create_ticket` step 8.5 readiness check fails (`BLOCKED: WORKTREE_PREFLIGHT_FAILED`) — worktree not reachable / not writable / `branch_local_up_to_date === false` / `parent_branch_merged === false` | develop orchestrator loop (Global Invariant #12; hard stop, not advisory) | Pause the batch and surface `BLOCKED: WORKTREE_PREFLIGHT_FAILED` verbatim along with the captured `branch_local_head_sha` vs `origin/<feature_branch>` SHAs and the envelope's `manualRecovery`. **Do not retry by re-running `create_ticket`** — Hard Rule 4 would suffix `-2` on the worktree name and create a sibling. Inspect the worktree (likely a wrong-ref reset that left the worktree on `develop`/`main` instead of the feature branch; or the feature branch has not been pushed yet). If the feature ref is stale, dispatch a `developer` Task (`load: minimal`) to run the §5-0 freshness gate (fetch + rev-parse + one auto-ff repair attempt) — never reset the worktree branch directly; if the parent is unmerged, the upstream ticket likely needs to merge first. The `branch_local_up_to_date === false` branch is the canonical signal of the latent #245 reset-to-wrong-ref bug. |
+| `scripts/dev-loop-batch.sh` exits 1 | develop orchestrator loop | All tickets done AND no in-flight tickets remain → exit loop, go to §8. If any ticket in the lifecycle log is still in flight (kicked, no terminal report, or reported but not yet merged), keep waiting — do not advance to §8. |
+| `BLOCKED: FEATURE_BRANCH_STALE` (§5-0 gate; both after the initial §5 batch run and after every §5d step 6 re-batch) | develop orchestrator loop | Surface the local `refs/heads/opencode/feat-<slug>` SHA and the `refs/remotes/origin/opencode/feat-<slug>` SHA verbatim, pause the batch, do NOT call `create_ticket`. If `feature_worktree_gone: true` is in the envelope, the feature worktree is missing — recreate it via `worktree-manager.create_feature` before continuing (do not skip; the orchestrator's only handle on the feature ref is through that worktree). **Never** `git reset --hard` the feature branch as a workaround and **never** fork a ticket off `develop`/`main` to bypass the gate — both defeat the freshness guarantee. Recovery: confirm the sub-PR actually merged into `opencode/feat-<slug>` on GitHub, then re-run the §5-0 gate (which attempts one automatic `git merge --ff-only` repair before surfacing this code again). The 8.5 in-worktree-manager readiness check `branch_local_up_to_date === false` is a *post-create* tripwire for the same latent #245 wrong-ref bug; keep both, document that 8.5 alone is no longer the only detector. |
 | `scripts/dev-loop-batch.sh` exits 2 | develop orchestrator loop | gh/API failure — surface stderr verbatim, stop. Never treat as "all tickets done" (an empty lifecycle log + exit 2 is a transport failure, not completion). |
 | Ticket `BLOCKED: ENV_BLOCKED` after one repair | coder session → develop orchestrator | Surface `recommended_env_fix`, pause batch. |
 | Ticket `BLOCKED: STABILIZATION_EXHAUSTED` (CI fail after 3 iterations) | coder session | Surface verbatim, pause batch. |
