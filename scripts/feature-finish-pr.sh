@@ -3,6 +3,17 @@
 # Usage: feature-finish-pr.sh <feature_slug_without_prefix> [base_branch]
 # Opt-out: ORCHESTRATE_AUTO_PR=0
 # Base override: PR_BASE env, else $2, else develop (fallback to repo default if missing on origin).
+#
+# Defense in depth — if this script ever grows a `git merge` call, the merge
+# MUST source `scripts/assert-merge-cwd.sh` immediately before the merge line
+# (the develop-pollution guard, 2026-09-02 incident — `git merge
+# origin/opencode/feat-workflow-runtime` in the develop main checkout
+# polluted develop). The current push path needs no guard; this block is a
+# tripwire for future drift so the requirement is visible to anyone adding
+# a merge here.
+if grep -qE '^\s*git\s+merge\b' "$0" 2>/dev/null; then
+  : # documented hook — see scripts/assert-merge-cwd.sh contract
+fi
 set -euo pipefail
 
 SLUG="${1:?feature slug required}"

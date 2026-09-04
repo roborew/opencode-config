@@ -314,11 +314,18 @@ After user approval reply (or after out-of-band merge detection per §5e):
 
    On failure: surface `gh pr view --json mergeable` verbatim, pause the batch. On success: continue.
 
-2. **Fast-forward the feature branch** in the feature worktree (delegated `developer`, `cd <feature worktree dir>`):
+2. **Fast-forward the feature branch** in the feature worktree (delegated `developer`, `cd <feature worktree dir>`). The `git merge --ff-only origin/opencode/feat-<slug>` self-ff MUST be guarded by `scripts/assert-merge-cwd.sh` (develop-pollution guard — see §12). On any `BLOCKED: *` exit, surface verbatim and pause:
 
    ```bash
-   git fetch origin opencode/feat-<slug>
-   git merge --ff-only origin/opencode/feat-<slug>
+   cd <feature worktree directory>
+   ASSERT_MERGE_CWD="<feature worktree dir>" \
+   ASSERT_MERGE_BRANCH="opencode/feat-<slug>" \
+   ASSERT_MERGE_REF="origin/opencode/feat-<slug>" \
+   ASSERT_REPO="<OWNER/REPO>" \
+   ASSERT_BRANCH_CONTEXT="feature-worktree" \
+     source "${OPENCODE_CONFIG:-$HOME/.config/opencode}/scripts/assert-merge-cwd.sh"
+   git fetch origin "opencode/feat-<slug>"
+   git merge --ff-only "origin/opencode/feat-<slug>"
    ```
 
 3. **Delete the ticket worktree** — dispatch `worktree-manager` `delete { directory: <ticket worktree dir> }`.
@@ -366,6 +373,7 @@ The coder session owns `state:in-progress` (set during `ticket-lifecycle` §0 Bo
 | User says "happy" but PR not yet merged | develop orchestrator | Orchestrator merges the sub-PR (delegated developer, with explicit `cd`/`git -C`), then cleanup. |
 | In-session `session_notify` delivery fails (`develop_session_id` stale) | coder session → develop orchestrator | The `ticket_report:` comment is the mandatory durable channel; the poller will wake the develop orchestrator within one poll interval. |
 | Poller disabled / down | develop orchestrator | `scripts/dev-loop-watch.sh` is still agent-invocable; the user can manually trigger a wake. |
+| Sync-claim verification (§12) reflog or `gh pr list --base develop` check fails (`BLOCKED: DEVELOP_POLLUTION_DETECTED`) | develop orchestrator (sync-claim gate) | Surface the offending reflog entry or merged PR (number + `headRefName` + `mergedAt`) verbatim, pause, ask operator for next steps. **Never** rebase, **never** reset, **never** auto-fix — operator decides after human review of polluted commits. The script (`scripts/assert-merge-cwd.sh`) and branch protection are the upstream guards; this gate is the post-hoc detector. |
 
 ## §8 Feature coder kickoff + feature merge
 
@@ -413,13 +421,20 @@ bash "$OC/scripts/issue-state-transition.sh" "<repo>" "<issue_number>" state:don
 
 ### §8c-ii. Merge the feature PR
 
-After `state:done` is set on every ticket, dispatch a `developer` Task (`load: minimal`) with explicit `cd <feature worktree dir>` (and `git -C`):
+After `state:done` is set on every ticket, dispatch a `developer` Task (`load: minimal`) with explicit `cd <feature worktree dir>` (and `git -C`). The merge uses `gh pr merge` (the only legal feature→develop path — see §12); the develop-pollution guard is sourced first as a tripwire so a future edit that swaps to `git merge` is caught immediately:
 
 ```bash
+cd <feature worktree directory>
+ASSERT_MERGE_CWD="<feature worktree dir>" \
+ASSERT_MERGE_BRANCH="opencode/feat-<slug>" \
+ASSERT_MERGE_REF="origin/opencode/feat-<slug>" \
+ASSERT_REPO="<OWNER/REPO>" \
+ASSERT_BRANCH_CONTEXT="feature-worktree" \
+  source "${OPENCODE_CONFIG:-$HOME/.config/opencode}/scripts/assert-merge-cwd.sh"
 gh pr merge <pr_url> --squash --delete-branch=false
 ```
 
-On failure: surface `gh pr view --json mergeable` verbatim, pause. On success: continue to §8d.
+On `BLOCKED: *` exit: surface verbatim, pause. On failure: surface `gh pr view --json mergeable` verbatim, pause. On success: continue to §8d.
 
 ### §8d. Hand off
 
@@ -458,6 +473,86 @@ Restart / recovery for stuck worktrees (post `opencode-server` restart, stale st
 | `DEV_LOOP_WAKE: { repo, feature, reason: TICKET_REVIEW_READY \| FEATURE_REVIEW_READY }` | poller (`scripts/dev-loop-poller.sh`) when `ticket_report:` / `feature_report:` delta detected, or manual operator fallback via `gh issue comment` (see `skills/orchestrate/session-notify-fallback.md`) | develop orchestrator; ignored if no active loop for that feature. `TICKET_REVIEW_READY` → §5c surface; `FEATURE_REVIEW_READY` → §8a verify + §8b gate. |
 
 There is no ticket-dispatch marker — the coder session is the auto-started GUI session for the worktree, not a `task`-tool dispatch. The `session_notify` plugin tool injects report-back messages into an existing session via `POST /session/{id}/prompt_async`; it does not dispatch a new subagent.
+
+## §12 Sync-claim verification gate (develop-pollution detector)
+
+> **Origin:** 2026-09-02 incident — a developer Task ran `git merge
+> origin/opencode/feat-workflow-runtime` (local fast-forward) inside the
+> `develop` main checkout, polluting develop with feature work that should
+> have only landed via a reviewed PR. Develop reflog: `fdfef0a
+> develop@{2026-09-02 16:07:12 +0000}: merge
+> origin/opencode/feat-workflow-runtime: Fast-forward`. No PR with
+> head=feat-workflow-runtime, base=develop ever existed. Branch protection
+> on develop was off.
+
+The develop branch is the canonical shared ref. Any time a user message
+contains a sync-claim phrase — "branches are in sync", "in sync", "aligned",
+"up to date", "all good on develop", or any equivalent — the orchestrator
+MUST verify before advancing. The script (`scripts/assert-merge-cwd.sh`,
+sourced before any `git merge`) and GitHub branch protection on develop are
+the upstream guards; this gate is the post-hoc detector that catches any
+pollution that already landed.
+
+**Sync-claim phrases** (case-insensitive substring match on the user's most
+recent message):
+
+| Phrase (any of) |
+| --- |
+| `in sync` / `are in sync` / `branches are in sync` |
+| `aligned` / `all aligned` |
+| `up to date` / `up-to-date` |
+| `all good on develop` / `develop is clean` |
+| `develop is up to date` / `develop is in sync` |
+
+**Verification** — dispatch ONE `developer` Task (`load: minimal`):
+
+```text
+Task developer load: minimal
+bash -c '
+  cd <repo root of the impl repo>
+  echo "=== reflog develop (head -10) ==="
+  git reflog show develop | head -10
+  echo "=== merged PRs base=develop (head -20) ==="
+  gh pr list --base develop --state merged -L 20 \
+    --json number,headRefName,mergedAt
+  echo "=== open PRs base=develop (head -20) ==="
+  gh pr list --base develop --state open -L 20 \
+    --json number,headRefName,createdAt
+'
+```
+
+**Hard-stop with `BLOCKED: DEVELOP_POLLUTION_DETECTED` if EITHER:**
+
+(a) the reflog shows any `merge origin/opencode/*` or `merge: Fast-forward`
+of an `origin/opencode/*` ref within the last N=10 entries (whether
+fast-forward or not), OR
+
+(b) any merged or open PR's `headRefName` matches `^opencode/feat-`.
+
+Surface the offending entry (full reflog line OR PR number + `headRefName` +
+timestamp) verbatim. Do **NOT** advance and do **NOT** offer "I'll rebase
+around it" or "I'll reset develop" — the operator must decide after human
+review of the polluted commits. After surfacing the BLOCKED line, ask the
+operator for next steps (typical recovery: `git fetch && git reset --hard
+origin/develop` to a known-clean SHA, then re-merge the feature PRs
+properly through `gh pr merge` after the human "all reviewed" gate).
+
+**Allowed edge cases** that MUST NOT trip the gate:
+
+- `git fetch` / `git pull` entries in the reflog (these are not merges).
+- `merge origin/develop` in the reflog (develop syncing with develop).
+- Rebase / cherry-pick / commit entries in the reflog (not merges).
+- Open or merged PRs whose `headRefName` is `opencode/ticket-<n>-...`
+  (sub-PRs merge into the feature branch, not develop — those are legal).
+- `feature-report` / `ticket-report` issue-comment activity (irrelevant to
+  the reflog/PR-list check).
+
+**The sync-claim gate is mandatory, not advisory.** Treat the user's
+sync-claim as untrusted input until the verification completes. This is the
+detection layer for a class of bugs the upstream guards (script + branch
+protection) cannot fully prevent (e.g. an agent that bypasses the script
+entirely, or a manual `git push --force` that the protection rule allows
+for admins).
 
 ## Hard rules for the develop orchestrator
 
