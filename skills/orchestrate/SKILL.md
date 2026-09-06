@@ -3,6 +3,7 @@ name: orchestrate
 description: Develop-branch outer-loop coordinator — bootstrap + work selection, feature worktree + push, batch kickoff of coder sessions per ticket, PR approval gate, merge + worktree/remote-branch cleanup, per-merge re-batch, feature coder kickoff + feature merge on approval.
 modelTier: "fast"
 roleReminder: "Loaded by the `orchestrate` primary agent on the develop branch. The orchestrator never executes tickets — coder sessions do. Wake contract: in-session `session_notify` (primary), `DEV_LOOP_WAKE` from the poller, any user message → run `dev-loop-watch.sh` first."
+version: "1.1.0"
 ---
 
 > Hard Rules live in `agents/orchestrate.md`; this skill owns the **per-impl-repo develop-loop** body. The orchestrator owns outer-loop coordination only: bootstrap, work selection, feature worktree, batch kickoff, PR approval gate, merge + cleanup, per-merge re-batch, feature coder kickoff, feature merge on approval. Ticket execution lives in `coder` sessions loading `ticket-lifecycle`; feature-mode sign-off lives in `coder` sessions loading `feature-review`. The orchestrator never verifies code-review or CodeRabbit evidence — terminal reports plus human approval are its only gates.
@@ -517,6 +518,8 @@ Naming convention is `feat-<slug>` for a feature, `ticket-<issue>-<slug>-<abbrev
 All worktree lifecycle (create, list, delete, reset) is delegated to the `worktree-manager` subagent, which calls the `worktree_*` tools registered by `plugins/worktree.js`. **Raw git worktree subcommands (`worktree add`, `worktree remove`, `branch opencode/...`) are forbidden** — they bypass GUI registration and are not coordinated with session start. Session messaging (kickoff, terminal-report notify) is direct: the orchestrator calls `session_kickoff` / `session_list` / `session_notify` via the `session_*` plugin tools registered by `plugins/session-manager.js`. There is no `session-manager` subagent.
 
 Restart / recovery for stuck worktrees (post `opencode-server` restart, stale state): dispatch `worktree-manager` `reset { directory }`. If worktrees are stuck in the GUI / `worktree_list` after a failed delete (WorktreeNotGitError), dispatch `worktree-manager` `recover { directory }` — the system's sanctioned `rewrite-worktree-gitdirs.py` + `session_delete` (called directly by worktree-manager, not via a subagent). Never raw `git worktree`.
+
+> **Bind-mount hazard on `recover`.** `rewrite-worktree-gitdirs.py remove` is a filesystem op — if `<directory>` lives under a bind-mount (case in point: a develop-side `/Users/.../APP-web` bind-mounted into `/Users/.../.opencode-worktrees/.../APP-web` for the local compose stack), the `remove` subcommand can yank the bind, not just the worktree. Until the `recover` procedure ships a `realpath`-based guard, do NOT call `worktree-manager.recover` when `realpath <directory>` resolves into `${OPENCODE_WORKTREES_DIR:-~/.opencode-worktrees}`. For those directories, instead: `session_delete({ directory: <dir> })` to deregister the orphan sessions (server-only, no filesystem op) and run `git worktree prune` to reap admin records. The `recover` script's `prune` and `scrub` subcommands are admin-reaping (safe) — only the `remove` subcommand hits the filesystem.
 
 ## §11 Hand-off markers
 

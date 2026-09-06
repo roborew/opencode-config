@@ -53,6 +53,8 @@
  * on HTTP status, not body, matching the dev-loop-poller's silent curl.
  */
 
+// @version 1.1.0 — branch-match kickoff guard
+
 export const SessionManagerPlugin = async (ctx) => {
   console.log(
     "[session-manager-plugin] messaging tools loaded; ctx keys:",
@@ -661,6 +663,55 @@ export const SessionManagerPlugin = async (ctx) => {
             context,
           );
           const admitted = r.status === 204 || (r.ok && r.body == null);
+          // FIX 7 — branch-match guard: if the kickoff message names `expected_branch:` and
+          // we just admitted, verify the directory actually points at that branch. Catches
+          // the failure mode where session_kickoff bind succeeds but the directory was on
+          // a different branch than the coder expects (e.g. reused session bound to the
+          // wrong worktree, or a directory path that exists with a stale branch).
+          const directoryMatch = sessionDirectory(chosen) === targetDir;
+          const agentMatch = sessionAgent(chosen) === requestedAgent;
+          if (admitted && directoryMatch && agentMatch) {
+            const m =
+              typeof message === "string" ? message.match(/expected_branch:\s*(\S+)/) : null;
+            const expectedBranch = m ? m[1] : null;
+            if (expectedBranch) {
+              let cwdBranch = null;
+              let cwdBranchErr = null;
+              try {
+                cwdBranch = require("child_process")
+                  .execSync(`git -C ${JSON.stringify(targetDir)} rev-parse --abbrev-ref HEAD`, { encoding: "utf8" })
+                  .trim();
+              } catch (e) {
+                cwdBranchErr = e && e.message ? e.message : String(e);
+              }
+              if (cwdBranchErr || cwdBranch !== expectedBranch) {
+                return JSON.stringify({
+                  ok: false,
+                  admitted: false,
+                  action: "kickoff",
+                  session_id: targetId,
+                  session_source: sessionSource,
+                  resolution: sessionSource,
+                  reused: sessionSource === "reused",
+                  directory_match: directoryMatch,
+                  agent_match: agentMatch,
+                  bind_failed: true,
+                  status: 200,
+                  target_directory: targetDir,
+                  agent: requestedAgent,
+                  error: "kickoff_directory_mismatches_branch",
+                  blocker_code: "KICKOFF_DIRECTORY_MISMATCHES_BRANCH",
+                  expected: expectedBranch,
+                  actual: cwdBranch,
+                  target_directory: targetDir,
+                  manualRecovery:
+                    `The kickoff message named expected_branch=${expectedBranch} but the directory ` +
+                    `${targetDir} is on ${cwdBranch || "<unknown>"}. Re-call session_kickoff with the ` +
+                    `directory whose branch matches, or fix the kickoff message's expected_branch.`,
+                });
+              }
+            }
+          }
           return JSON.stringify({
             ok: r.ok,
             admitted,

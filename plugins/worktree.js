@@ -33,6 +33,18 @@
 const DEFAULT_BASE = "develop";
 const FEATURE_BRANCH_PATTERN = /^opencode\/feat-/;
 
+import { execSync } from "child_process";
+
+// @version 1.1.0 — upstream assertion
+
+function safeExec(cmd) {
+  try {
+    return { ok: true, out: execSync(cmd, { encoding: "utf8" }).trim() };
+  } catch (e) {
+    return { ok: false, err: (e && e.message) || String(e) };
+  }
+}
+
 export const WorktreePlugin = async (ctx) => {
   console.log(
     "[worktree-plugin] CRUD tools loaded; ctx keys:",
@@ -122,6 +134,43 @@ export const WorktreePlugin = async (ctx) => {
             { method: "POST", body: JSON.stringify({ name, base }) },
             context,
           );
+          if (r && r.ok && r.body && r.body.branch && r.body.directory) {
+            const branch = r.body.branch;
+            const directory = r.body.directory;
+            const head = safeExec(
+              `git -C ${JSON.stringify(directory)} rev-parse --abbrev-ref HEAD`,
+            );
+            const remote = safeExec(
+              `git -C ${JSON.stringify(directory)} config --get branch.${branch}.remote`,
+            );
+            const merge = safeExec(
+              `git -C ${JSON.stringify(directory)} config --get branch.${branch}.merge`,
+            );
+            if (
+              head.out !== branch ||
+              remote.out !== "origin" ||
+              !(merge.ok && merge.out.includes("refs/heads/"))
+            ) {
+              return JSON.stringify({
+                ok: false,
+                blocker_code: "WORKTREE_NO_UPSTREAM_TRACKING",
+                branch,
+                expected: { remote: "origin", merge: `refs/heads/${branch}` },
+                actual: {
+                  head: head.out,
+                  remote: remote.out,
+                  merge: merge.ok ? merge.out : null,
+                  exec_error: !remote.ok ? remote.err : null,
+                },
+                manualRecovery:
+                  `Inside ${directory}:\n` +
+                  `  git worktree repair\n` +
+                  `  git fetch origin ${branch}\n` +
+                  `  git branch --set-upstream-to=origin/${branch} ${branch}\n` +
+                  `If repair fails, worktree_delete and call worktree_create_feature again — never raw \`git worktree add\` (Hard Rule 1).`,
+              });
+            }
+          }
           return JSON.stringify(r);
         },
       },
@@ -167,6 +216,43 @@ export const WorktreePlugin = async (ctx) => {
             },
             context,
           );
+          if (r && r.ok && r.body && r.body.branch && r.body.directory) {
+            const branch = r.body.branch;
+            const directory = r.body.directory;
+            const head = safeExec(
+              `git -C ${JSON.stringify(directory)} rev-parse --abbrev-ref HEAD`,
+            );
+            const remote = safeExec(
+              `git -C ${JSON.stringify(directory)} config --get branch.${branch}.remote`,
+            );
+            const merge = safeExec(
+              `git -C ${JSON.stringify(directory)} config --get branch.${branch}.merge`,
+            );
+            if (
+              head.out !== branch ||
+              remote.out !== "origin" ||
+              !(merge.ok && merge.out.includes("refs/heads/"))
+            ) {
+              return JSON.stringify({
+                ok: false,
+                blocker_code: "WORKTREE_NO_UPSTREAM_TRACKING",
+                branch,
+                expected: { remote: "origin", merge: `refs/heads/${branch}` },
+                actual: {
+                  head: head.out,
+                  remote: remote.out,
+                  merge: merge.ok ? merge.out : null,
+                  exec_error: !remote.ok ? remote.err : null,
+                },
+                manualRecovery:
+                  `Inside ${directory}:\n` +
+                  `  git worktree repair\n` +
+                  `  git fetch origin ${branch}\n` +
+                  `  git branch --set-upstream-to=origin/${branch} ${branch}\n` +
+                  `If repair fails, worktree_delete and call worktree_create_ticket again — never raw \`git worktree add\` (Hard Rule 1).`,
+              });
+            }
+          }
           return JSON.stringify(r);
         },
       },
