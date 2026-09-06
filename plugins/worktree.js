@@ -46,7 +46,8 @@ import { realpath } from "fs/promises";
 import { join } from "path";
 import os from "os";
 
-// @version 1.2.0 — added worktree_reconcile
+// @version 1.3.0 — worktree_reconcile no longer renames local branches;
+// worktree_create_feature returns WORKTREE_PRECONDITION_FAILED on duplicates.
 
 async function realpathSafe(p) {
   try {
@@ -126,17 +127,17 @@ export const WorktreePlugin = async (ctx) => {
 
       worktree_create_feature: {
         description:
-          "Create a FEATURE worktree (opencode/feat-<slug>) for the current project. Forks off `base` (defaults to 'develop'). Use this ONLY for the top-level feature branch. The response includes a `branch` field (e.g. 'opencode/feat-<name>') — capture it and pass it as `feature_branch` to worktree_create_ticket when creating ticket worktrees off this feature.",
+          "Create a FEATURE worktree (opencode/feat-<slug>) for the current project. Forks off `base` (defaults to 'develop'). Use this ONLY for the top-level feature branch. The response includes a `branch` field (e.g. 'opencode/feat-<name>') — capture it and pass it as `feature_branch` to worktree_create_ticket when creating ticket worktrees off this feature. If a worktree with the same feature branch already exists on disk, returns WORKTREE_PRECONDITION_FAILED rather than reusing / renaming it.",
         args: {
           name: {
             type: "string",
             description:
-              "Required. Feature slug, e.g. 'test' or 'billing-flow'. The plugin auto-prefixes 'feat-' if not already present, so the created branch is always 'opencode/feat-<name>' (idempotent — 'feat-x' is left as-is).",
+              "Required. Feature slug, e.g. 'test' or 'billing-flow'. The plugin auto-prefixes 'feat-' if not already present.",
           },
           base: {
             type: "string",
             description:
-              "Base branch to fork from. Pass an empty string to use the default 'develop'. Use 'main' or another long-lived branch if your repo does not use 'develop'.",
+              "Base branch to fork from. Pass an empty string to use the default 'develop'.",
           },
         },
         async execute(args, context) {
@@ -148,6 +149,31 @@ export const WorktreePlugin = async (ctx) => {
           }
           const name = rawName.startsWith("feat-") ? rawName : `feat-${rawName}`;
           const base = (args && args.base) || DEFAULT_BASE;
+          const branchShort = name.startsWith("opencode/") ? name : `opencode/${name}`;
+          const fullRef = `refs/heads/${branchShort}`;
+
+          // Precondition: if a worktree with this branch already exists in git,
+          // refuse to create a duplicate / trigger collision. Direct the operator
+          // to worktree_reset on the existing one instead.
+          const existing = safeExec(
+            `git worktree list --porcelain | grep -B1 "branch ${fullRef}" || true`,
+          );
+          if (existing.ok && existing.out.trim()) {
+            const pathLine = safeExec(
+              `git worktree list --porcelain | awk '/^worktree /{p=$2} /^branch /{b=$2} b==\\"${fullRef}\\"{print p; exit}'`,
+            );
+            return JSON.stringify({
+              ok: false,
+              blocker_code: "WORKTREE_PRECONDITION_FAILED",
+              branch: branchShort,
+              existing_path: pathLine.ok ? pathLine.out : null,
+              manualRecovery:
+                "A worktree for this feature branch already exists on disk. " +
+                "Either (a) reuse it — call worktree_reset({directory: <path>}) to re-register it with the server; " +
+                "or (b) remove it first — worktree_delete({directory: <path>}) — then call worktree_create_feature again.",
+            });
+          }
+
           const r = await wtFetch(
             "/experimental/worktree",
             { method: "POST", body: JSON.stringify({ name, base }) },
@@ -186,7 +212,7 @@ export const WorktreePlugin = async (ctx) => {
                   `  git worktree repair\n` +
                   `  git fetch origin ${branch}\n` +
                   `  git branch --set-upstream-to=origin/${branch} ${branch}\n` +
-                  `If repair fails, worktree_delete and call worktree_create_feature again — never raw \`git worktree add\` (Hard Rule 1).`,
+                  `If repair fails, worktree_delete and call worktree_create_feature again.`,
               });
             }
           }
@@ -331,13 +357,13 @@ export const WorktreePlugin = async (ctx) => {
       worktree_reconcile: {
         description:
           "Repair the opencode server's worktree registration after it drifted from `git worktree list` — e.g. a manual `git worktree add -B` left a worktree on disk but invisible to the GUI. " +
-          "Diffs git's worktree list against GET /experimental/worktree (realpath-collapsed, so bind-mount aliases count as one entry), then: " +
-          "(1) DELETEs plugin-only stale entries via DELETE /experimental/worktree; " +
-          "(2) for missing git entries whose branch starts with `opencode/feat-`, renames the orphan's local branch via `git branch -m` to dodge the server's 409 collision, then POSTs /experimental/worktree {name, base} to register a new canonical entry off the existing feature branch; " +
-          "(3) surfaces the orphan's old path in `orphans_to_cleanup[]` for operator-driven `worktree_delete` follow-up (never auto-deletes — Hard Rule 1). " +
-          "Non-`opencode/feat-*` branches (develop, main, ticket branches) go to `not_recoverable[]` with manualRecovery hints. " +
-          "The plugin itself shells out to git inside this tool only; agents must dispatch into this tool rather than running raw git for reconciliation. " +
-          "Default dryRun=true: pass dryRun=false to actually write. Accepts optional mainCheckoutRoot (absolute path) for the git source — defaults to OPENCODE_MAIN_CHECKOUT env, then scans `git worktree list --porcelain` for the first non-`opencode/*` worktree.",
+          "Diffs git's worktree list against GET /experimental/worktree (realpath-collapsed, so bind-mount aliases count as one entry). " +
+          "Surface-only by default: returns the diff with no mutations. " +
+          "When dryRun=false: " +
+          "(1) DELETEs plugin-only stale entries via DELETE /experimental/worktree (never touches git); " +
+          "(2) for missing git entries, surfaces them in `missing_featurable[]` (opencode/feat-* branches the operator should re-register via worktree_create_feature) or `missing_ticketable[]` (opencode/ticket-* branches the operator should re-register via worktree_create_ticket) — the tool itself does NOT call POST /experimental/worktree or run `git branch -m` to avoid the 409-collision rename trap; " +
+          "(3) surfaces bind-mount duplicate plugin entries in `duplicates_collapsed[]` (the plugin is the source of truth for collisions, but no auto-deletion — operator decides). " +
+          "Optional mainCheckoutRoot (absolute path) — defaults to OPENCODE_MAIN_CHECKOUT env, then scans `git worktree list --porcelain` for the first non-`opencode/*` worktree. Default dryRun=true; pass dryRun=false to actually delete stale plugin entries.",
         args: {
           mainCheckoutRoot: {
             type: "string",
@@ -347,7 +373,7 @@ export const WorktreePlugin = async (ctx) => {
           dryRun: {
             type: "boolean",
             description:
-              "Optional, default true. When true, only computes the diff and returns it without any writes or git mutations. Pass false to actually recreate missing entries and delete stale ones.",
+              "Optional, default true. When true, only computes the diff and returns it without any mutations. Pass false to actually delete stale plugin entries (worktree DELETE only — never touches git).",
           },
         },
         async execute(args, context) {
@@ -358,16 +384,8 @@ export const WorktreePlugin = async (ctx) => {
           }
           const dryRun =
             args && typeof args.dryRun === "boolean" ? args.dryRun : true;
-          if (typeof dryRun !== "boolean") {
-            return clientError("worktree_reconcile: dryRun must be boolean.");
-          }
           const argMain = args && args.mainCheckoutRoot;
-          if (argMain && typeof argMain !== "string") {
-            return clientError(
-              "worktree_reconcile: mainCheckoutRoot must be a string path.",
-            );
-          }
-          if (argMain && !argMain.startsWith("/")) {
+          if (argMain && (typeof argMain !== "string" || !argMain.startsWith("/"))) {
             return clientError(
               "worktree_reconcile: mainCheckoutRoot must be an absolute path.",
             );
@@ -377,9 +395,7 @@ export const WorktreePlugin = async (ctx) => {
             argMain ||
             process.env.OPENCODE_MAIN_CHECKOUT ||
             (() => {
-              const probe = safeExec(
-                "git worktree list --porcelain",
-              );
+              const probe = safeExec("git worktree list --porcelain");
               if (!probe.ok) return null;
               const blocks = probe.out.split("\n\n");
               for (const b of blocks) {
@@ -413,7 +429,7 @@ export const WorktreePlugin = async (ctx) => {
               blocker_code: "RECONCILE_NO_GIT_SOURCE",
               gitCwd,
               exec_error: wtListRaw.err,
-              manualRecovery: `Confirm ${gitCwd} is a git worktree root (run \`git -C ${gitCwd} worktree list\` manually).`,
+              manualRecovery: `Confirm ${gitCwd} is a git worktree root.`,
             });
           }
 
@@ -436,7 +452,7 @@ export const WorktreePlugin = async (ctx) => {
             gitRecords.push({ path, real, branch });
           }
 
-          // Prefer the spelling that equals WT_REAL when present; else first-seen.
+          // Prefer the spelling that equals WT_REAL when present.
           const canonicalByReal = new Map();
           for (const rec of gitRecords) {
             if (!canonicalByReal.has(rec.real)) {
@@ -456,27 +472,22 @@ export const WorktreePlugin = async (ctx) => {
               ok: false,
               blocker_code: "RECONCILE_NO_PLUGIN_SOURCE",
               regResp,
-              manualRecovery:
-                "GET /experimental/worktree failed — server may be down. Retry after verifying server health.",
             });
           }
           const regRaw = Array.isArray(regResp.body)
             ? regResp.body
-            : regResp.body &&
-                Array.isArray(regResp.body.worktrees)
+            : regResp.body && Array.isArray(regResp.body.worktrees)
               ? regResp.body.worktrees
               : [];
           const pluginEntries = [];
           for (const e of regRaw) {
-            if (typeof e === "string") {
-              pluginEntries.push({ path: e });
-            } else if (e && typeof e === "object") {
+            if (typeof e === "string") pluginEntries.push({ path: e });
+            else if (e && typeof e === "object")
               pluginEntries.push({
                 path: e.path || e.directory,
                 branch: e.branch,
                 head: e.head,
               });
-            }
           }
           const pluginReals = new Set();
           const pluginByReal = new Map();
@@ -487,18 +498,39 @@ export const WorktreePlugin = async (ctx) => {
             if (!pluginByReal.has(real)) pluginByReal.set(real, e);
           }
 
-          const missing = [];
+          const missing_featurable = [];
+          const missing_ticketable = [];
+          const missing_other = [];
           const stale = [];
           const duplicates_collapsed = [];
           const kept = [];
 
           for (const [real, rec] of canonicalByReal) {
             if (!pluginReals.has(real)) {
-              missing.push({
-                path: rec.path,
-                branch: rec.branch,
-                realpath: real,
-              });
+              if (rec.branch && rec.branch.startsWith(RESERVED_BRANCH_PREFIX)) {
+                missing_featurable.push({
+                  path: rec.path,
+                  branch: rec.branch,
+                  realpath: real,
+                  manual_recovery:
+                    "Call worktree_create_feature({ name: '<feat-slug>', base: '<branch-name>' }). The slug is the part after 'opencode/feat-'. The plugin auto-prefixes 'feat-' to the name. If a worktree with that name already exists, worktree_create_feature will return WORKTREE_PRECONDITION_FAILED — call worktree_reset on the existing one first.",
+                });
+              } else if (rec.branch && rec.branch.startsWith("refs/heads/opencode/ticket-")) {
+                const branchShort = rec.branch.slice("refs/heads/".length);
+                missing_ticketable.push({
+                  path: rec.path,
+                  branch: branchShort,
+                  realpath: real,
+                  manual_recovery:
+                    "Ticket branches cannot be auto-recreated by reconcile (the server's create-collision rule renames them). Either: (a) keep the existing on-disk worktree and call worktree_reset({ directory: <path> }) to re-register it; or (b) worktree_delete it then worktree_create_ticket({ feature_branch: '<feat-branch>', name: '<ticket-name>' }) to recreate from origin.",
+                });
+              } else {
+                missing_other.push({
+                  path: rec.path,
+                  branch: rec.branch,
+                  realpath: real,
+                });
+              }
             } else {
               const pluginEntry = pluginByReal.get(real);
               if (pluginEntry.path === rec.path) {
@@ -524,10 +556,12 @@ export const WorktreePlugin = async (ctx) => {
             }
           }
 
-          const summaryBase = {
+          const summary = {
             git_worktrees: canonicalByReal.size,
             plugin_registrations: pluginEntries.length,
-            missing: missing.length,
+            missing_featurable: missing_featurable.length,
+            missing_ticketable: missing_ticketable.length,
+            missing_other: missing_other.length,
             stale: stale.length,
             duplicates_collapsed: duplicates_collapsed.length,
             kept: kept.length,
@@ -539,14 +573,17 @@ export const WorktreePlugin = async (ctx) => {
               dryRun: true,
               gitCwd,
               wtReal,
-              summary: summaryBase,
-              missing,
+              summary,
+              missing_featurable,
+              missing_ticketable,
+              missing_other,
               stale,
               duplicates_collapsed,
               kept,
             });
           }
 
+          // dryRun=false: only delete stale plugin entries (no git mutations).
           const stale_results = [];
           for (const s of stale) {
             try {
@@ -558,7 +595,12 @@ export const WorktreePlugin = async (ctx) => {
                 },
                 context,
               );
-              stale_results.push({ path: s.path, ok: r.ok, status: r.status, body: r.body });
+              stale_results.push({
+                path: s.path,
+                ok: r.ok,
+                status: r.status,
+                body: r.body,
+              });
             } catch (e) {
               stale_results.push({
                 path: s.path,
@@ -568,121 +610,28 @@ export const WorktreePlugin = async (ctx) => {
             }
           }
 
-          const missing_results = [];
-          const missing_succeeded = [];
-          const missing_failed = [];
-          const not_recoverable = [];
-
-          for (const m of missing) {
-            if (!m.branch || !m.branch.startsWith(RESERVED_BRANCH_PREFIX)) {
-              not_recoverable.push({
-                path: m.path,
-                branch: m.branch,
-                reason: "non_feature_branch",
-                manualRecovery:
-                  "Branch does not start with 'refs/heads/opencode/feat-'. " +
-                  "Prune the orphan manually if you want it gone; ticket branches and develop/main cannot be recreated via this tool.",
-              });
-              continue;
-            }
-            const branchShort = m.branch.slice("refs/heads/".length);
-            const name = `feat-${branchShort.slice("opencode/feat-".length)}`;
-
-            let branch_renamed_to = null;
-            let rename_ok = false;
-            const rev = safeExec(
-              `git -C ${JSON.stringify(gitCwd)} rev-parse --verify ${branchShort}`,
-            );
-            if (rev.ok) {
-              const unix = Date.now();
-              const target = `${branchShort}-orphan-${unix}`;
-              const rename = safeExec(
-                `git -C ${JSON.stringify(gitCwd)} branch -m ${branchShort} ${target}`,
-              );
-              if (rename.ok) {
-                branch_renamed_to = target;
-                rename_ok = true;
-              }
-            }
-
-            let feature_branch_stale = false;
-            const localRev = safeExec(
-              `git -C ${JSON.stringify(gitCwd)} rev-parse ${branchShort}`,
-            );
-            const originRev = safeExec(
-              `git -C ${JSON.stringify(gitCwd)} rev-parse origin/${branchShort}`,
-            );
-            if (localRev.ok && originRev.ok && localRev.out !== originRev.out) {
-              feature_branch_stale = true;
-            }
-
-            try {
-              const r = await wtFetch(
-                "/experimental/worktree",
-                {
-                  method: "POST",
-                  body: JSON.stringify({ name, base: branchShort }),
-                },
-                context,
-              );
-              const entry = {
-                old_path: m.path,
-                branch_renamed_to,
-                rename_ok,
-                feature_branch_stale,
-                create_envelope: r,
-              };
-              if (r.ok && r.body && r.body.directory && r.body.branch) {
-                entry.new_directory = r.body.directory;
-                entry.new_branch = r.body.branch;
-                missing_succeeded.push(entry);
-              } else {
-                missing_failed.push(entry);
-              }
-              missing_results.push(entry);
-            } catch (e) {
-              const entry = {
-                old_path: m.path,
-                branch_renamed_to,
-                rename_ok,
-                feature_branch_stale,
-                ok: false,
-                exec_error: (e && e.message) || String(e),
-              };
-              missing_failed.push(entry);
-              missing_results.push(entry);
-            }
-          }
-
-          const orphans_to_cleanup = missing_succeeded.map(
-            ({ old_path, new_directory, branch_renamed_to }) => ({
-              old_path,
-              new_directory,
-              manualRecovery: branch_renamed_to
-                ? `Branch was renamed to ${branch_renamed_to} so the orphan is no longer the canonical feature ref. After verifying the new canonical worktree at ${new_directory}, run worktree_delete({ directory: ${JSON.stringify(old_path)} }) to clean up the orphan and then optionally \`git branch -D ${branch_renamed_to}\` if you no longer need it.`
-                : `Run worktree_delete({ directory: ${JSON.stringify(old_path)} }) to clean up the orphan.`,
-            }),
-          );
-
           return JSON.stringify({
             ok: true,
             dryRun: false,
             gitCwd,
             wtReal,
             summary: {
-              ...summaryBase,
+              ...summary,
               plugin_registrations_before: pluginEntries.length,
-              missing_attempted: missing.length,
-              missing_succeeded: missing_succeeded.length,
-              missing_failed: missing_failed.length,
               stale_attempted: stale.length,
               stale_succeeded: stale_results.filter((r) => r.ok).length,
-              not_recoverable: not_recoverable.length,
             },
             stale_results,
-            missing_results,
-            not_recoverable,
-            orphans_to_cleanup,
+            // Surface the operator-action-required lists every time so the
+            // operator can act on them.
+            operator_action_required: {
+              missing_featurable,
+              missing_ticketable,
+              missing_other,
+              duplicates_collapsed,
+            },
+            note:
+              "worktree_reconcile does NOT auto-register missing entries. Use worktree_create_feature for feature branches and worktree_create_ticket (or worktree_reset on existing) for ticket branches. See operator_action_required for per-entry guidance.",
           });
         },
       },
