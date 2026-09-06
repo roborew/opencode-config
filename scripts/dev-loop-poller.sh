@@ -140,7 +140,11 @@ for repo in $REPOS; do
     --arg repo "$repo" \
     --arg feat "feature:$slug" \
     --argjson delta "$delta" \
-    '"DEV_LOOP_WAKE: { repo: \($repo), feature: \($feat), reason: \"ticket_report delta\" }\n\n" + ($delta | tostring)')
+    --argjson current "$current" \
+    '($current
+      | map(select(.verified_drift == true) | .number)) as $drift
+    | ("VERIFIED_LABEL_MISSING_AT_REVIEW: " + ($drift | tostring)) as $advisory
+    | "DEV_LOOP_WAKE: { repo: \($repo), feature: \($feat), reason: \"ticket_report delta\"" + (if ($drift | length) > 0 then ", advisory: VERIFIED_LABEL_MISSING_AT_REVIEW, drift_issues: " + ($drift | tostring) else "" end) + "\" }\n\n" + ($delta | tostring) + "\n" + $advisory')
   if wake_session "$sid" "$project_dir" "$msg"; then
     echo "woke $repo session=$sid delta_count=$(printf '%s' "$delta" | jq 'length')"
   else

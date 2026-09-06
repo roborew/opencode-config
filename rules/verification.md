@@ -39,8 +39,28 @@ Probe order: `sandbox probe` → `sandbox exec`; else `docker` present → direc
   only APPROVED-eligible when the user explicitly approves it for a confirmed
   host-runnable project.
 - **Code-review gate backstop** (`issue-state-transition.sh`): refuses
-  `state:ready-for-ticket-review` without a `code_review_gate:` comment with
-  `all_stages: true` and `verdict: APPROVED`.
+  `state:ready-for-ticket-review` without a `code_review_gate:` comment whose
+  `all_stages:` field is exactly `true`, whose `verdict:` field is exactly
+  `APPROVED`, and whose `author.login` matches `${OPENCODE_CODER_AUTHOR}`
+  when set, AND the `verified` label. Refuses `state:ticket-reviewed` if
+  `verified` was dropped in between (outbound guard against out-of-band
+  merges without gate evidence — the #247-class drift). The `OPENCODE_CODER_AUTHOR`
+  env var is empty by default; an empty value bypasses the author check so
+  legacy repos stay functional, but every impl repo should set it in its
+  opencode config — the BLOCKED message echoes the configured value so
+  operators can see what was expected.
+- **Verification label is binary.** Every `feature:<slug>` (and targeted /
+  remediation) issue carries exactly one of `verified` or `unverified` at all
+  observable moments. The pair is centralized in `scripts/issue-state-transition.sh`,
+  which enforces the swap on every state transition, and the coder calls
+  `scripts/issue-verified-transition.sh` (delegated `developer` Task) to add
+  `verified` on `code-review` APPROVED — these are the only two writers. Do
+  **not** run `gh issue edit --add-label verified` directly anywhere; the
+  inline `--add-label` leaves `unverified` in place and creates the duplicate
+  pair. To clean up existing duplicates, the operator must run a one-off
+  `gh issue edit --remove-label verified --add-label unverified` (or
+  vice-versa) per offending issue — the binary pair itself is enforced
+  centrally on every subsequent state transition.
 
 ## Migration
 

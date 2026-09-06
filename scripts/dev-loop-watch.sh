@@ -82,6 +82,23 @@ while IFS= read -r stub; do
     f && /^  [a-z_]+:/{print substr($0, 3)}
     f && /^[^ ]/{f=0}
   ' | paste -sd '|' - || true)
+  # Drift detection: ticket has reached a post-gate state but lacks the gate
+  # evidence (no `verified` label OR no `code_review_gate:` comment from any
+  # author). This catches the #247-class historical incident where a sub-PR
+  # was merged with neither the gate comment nor the `verified` label. The
+  # strict author check lives in `issue-state-transition.sh` — here we only
+  # ask "does any gate evidence exist?" as a drift advisory.
+  verified_drift="false"
+  if [[ "$state" == "state:ticket-reviewed" || "$out_of_band_merged" == "true" ]]; then
+    labels_json=$(gh issue view "$number" --repo "$REPO" --json labels -q '.labels[].name' 2>/dev/null || true)
+    if ! grep -qx 'verified' <<<"$labels_json"; then
+      verified_drift="true"
+    elif ! gh issue view "$number" --repo "$REPO" --comments --json comments -q '
+        [.comments[] | select(.body | test("(?m)^code_review_gate:"))] | length' 2>/dev/null \
+      | grep -qxE '[1-9][0-9]*'; then
+      verified_drift="true"
+    fi
+  fi
   entry=$(jq -c -n \
     --argjson n "$number" \
     --arg t "$title" \
@@ -90,7 +107,8 @@ while IFS= read -r stub; do
     --arg ps "$pr_state" \
     --arg tr "$ticket_report_summary" \
     --argjson oob "$out_of_band_merged" \
-    '{number: $n, state: $st, title: $t, pr_url: $pu, pr_state: $ps, ticket_report: $tr, out_of_band_merged: $oob}')
+    --argjson vd "$verified_drift" \
+    '{number: $n, state: $st, title: $t, pr_url: $pu, pr_state: $ps, ticket_report: $tr, out_of_band_merged: $oob, verified_drift: $vd}')
   OUT=$(jq -c --argjson e "$entry" '. + [$e]' <<<"$OUT")
 done <"$STUBS_FILE"
 

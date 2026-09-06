@@ -147,7 +147,7 @@ Subsequent test execution (test-writer RED, developer GREEN, code-review per-sta
    bash <OC>/scripts/issue-state-transition.sh "<repo>" "<issue_number>" state:in-progress
    ```
 
-   `state:in-progress` automatically removes `verified` and adds `unverified` — the verification gate will re-arm when this ticket reaches `state:ready-for-ticket-review` again.
+   `state:in-progress` automatically removes `verified` and adds `unverified` — the verification gate will re-arm when this ticket reaches `state:ready-for-ticket-review` again. The swap is enforced centrally in `scripts/issue-state-transition.sh` on **every** state transition; the only inline writer of `verified` is `scripts/issue-verified-transition.sh`, which the coder calls on APPROVED (final-gate step §3 below).
 
 ## Required inputs (truth sources)
 
@@ -216,9 +216,32 @@ One attempt per provider per bounded Task; track `attempted_providers`. After bo
 
 ### 3. Final gate — full suite + CodeRabbit pre-flight (before push/PR)
 
-1. **Final-gate full-suite verification** — dispatch `code-review` (`load: full`) for the **final** `all_stages: true` gate: the **full test suite** via the compose backend (full regression, integration, e2e). The per-stage code-review stays focused. On `APPROVED` → post the `code_review_gate:` comment with `all_stages: true`, `verdict: APPROVED`, and add the `verified` label. On `NEEDS_CHANGES` → fix in-worktree (TDD), re-run (grading + retry rules: the "Code-review grading gate" section below).
+#### 3.1 `final_gate_post` sub-procedure (mandatory, atomic)
 
-2. **Local CodeRabbit pre-flight** — dispatch `code-review` once with `load: full`, `execution_mode: ticket_coderabbit_preflight`, the ticket worktree path, `base_branch: opencode/feat-<slug>`, and the per-stage code-review evidence. Scope: correctness, obvious bugs, and risky changes only (narrow rule set — narrow further if this and the PR-side feature gate keep producing duplicate noise).
+The final gate has exactly one success shape:
+
+```yaml
+final_gate_post:
+  posted_comment_id: <int>           # numeric GitHub comment id from gh issue view back-resolve
+  label_added: true                  # issue-verified-transition wrapper exited 0
+  evidence_url: <code_review_gate: comment html_url>
+```
+
+Steps in order; no early exit until ALL THREE succeed:
+
+1. Dispatch `code-review` (`load: full`) for the **final** `all_stages: true` gate (full suite via compose backend).
+2. On `APPROVED`, dispatch ONE delegated `developer` Task (`load: minimal`) that performs steps 2a–2c atomically:
+   a. Post the `code_review_gate:` comment via `gh issue comment`. **Note:** `gh issue comment … --json id` does not exist in the CLI; capture the comment id by back-resolving from the issue's comments list — `gh issue view <n> --repo <repo> --comments --json comments -q '[.comments[]|select(.body|startswith("code_review_gate:"))]|last|.id'` (the coder-as-author identity is implicit because you are operating inside a coder session; the env var `OPENCODE_CODER_AUTHOR` is the strict-precondition contract enforced by `scripts/issue-state-transition.sh`, not by this capture shape).
+   b. Run `scripts/issue-verified-transition.sh "<repo>" "<issue_number>" verified` from the same delegated Task. The wrapper is the **only** writer of `verified` — do **not** run `gh issue edit --add-label verified` inline, that leaves a stale `unverified` and creates the duplicate pair.
+   c. Verify via `gh issue view <n> --repo <repo> --json labels -q '.labels[].name' | grep -qx verified` inside the same delegated Task.
+3. Return `final_gate_post: { posted_comment_id, label_added, evidence_url }` from the delegated Task and record it in the terminal `ticket_report:` (§6a).
+4. Anything else (`NEEDS_CHANGES`, missing comment, missing label, wrapper exit ≠ 0) → `BLOCKED: FINAL_GATE_NOT_POSTED`. Do **not** proceed to §4.
+
+Resume-safe idempotence (§0.4 step 2) reads the most recent `code_review_gate:` comment to find `last_approved_stage_index`. The new exact-value matching requires `all_stages: true` — a per-stage comment with `all_stages: false` must **not** match the final-gate selector. Do not weaken the resume check to "contains all_stages: true anywhere".
+
+#### 3.2 Local CodeRabbit pre-flight
+
+1. Dispatch `code-review` once with `load: full`, `execution_mode: ticket_coderabbit_preflight`, the ticket worktree path, `base_branch: opencode/feat-<slug>`, and the per-stage code-review evidence. Scope: correctness, obvious bugs, and risky changes only (narrow rule set — narrow further if this and the PR-side feature gate keep producing duplicate noise).
 
    - On `PASS` → proceed to §4.
    - On `BLOCKED` → apply the fix-now suggestions in-worktree (TDD, behaviour changes only), commit `Refs: #<issue_number>`, push the ticket branch, re-run the pre-flight before the sub-PR opens. Max 2 retries, then `BLOCKED: PREFLIGHT_EXHAUSTED`.
@@ -228,7 +251,7 @@ One attempt per provider per bounded Task; track `attempted_providers`. After bo
 
 1. Push your branch: `git push -u origin <expected_branch>` (delegated developer).
 2. Open the sub-PR via `gh pr create --base opencode/feat-<slug> --head <expected_branch> --title "feat(<slug>): ticket <issue> — <title>" --body <auto-body>` (delegated developer).
-3. `state:ready-for-ticket-review` on the issue via `scripts/issue-state-transition.sh` (the sub-PR is now open; the final gate + `verified` label already landed in §3).
+3. Only after `final_gate_post` returned success (§3.1): `state:ready-for-ticket-review` on the issue via `scripts/issue-state-transition.sh` (the sub-PR is now open; the final gate + `verified` label already landed in §3).
 
 ### 5. PR stabilization loop (max 3 iterations)
 
@@ -287,6 +310,9 @@ ticket_report:
   reason: <one-line>                # BLOCKED only
   next_action: <what the develop orchestrator should do>
   notify_status: admitted|failed|<reason>   # see §6c
+  final_gate_post:
+    posted_comment_id: <int>           # from §3.1 step 2a
+    label_added: true                  # from §3.1 step 2c
 EOF
 )"
 ```
