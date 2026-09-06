@@ -3,7 +3,7 @@ name: orchestrate
 description: Develop-branch outer-loop coordinator — bootstrap + work selection, feature worktree + push, batch kickoff of coder sessions per ticket, PR approval gate, merge + worktree/remote-branch cleanup, per-merge re-batch, feature coder kickoff + feature merge on approval.
 modelTier: "fast"
 roleReminder: "Loaded by the `orchestrate` primary agent on the develop branch. The orchestrator never executes tickets — coder sessions do. Wake contract: in-session `session_notify` (primary), `DEV_LOOP_WAKE` from the poller, any user message → run `dev-loop-watch.sh` first."
-version: "1.2.0 — DB-direct repair documented; bind-mount hazard documented"
+version: "1.2.1 — DB-direct repair documented; bind-mount hazard documented; path-equality rule"
 ---
 
 > Hard Rules live in `agents/orchestrate.md`; this skill owns the **per-impl-repo develop-loop** body. The orchestrator owns outer-loop coordination only: bootstrap, work selection, feature worktree, batch kickoff, PR approval gate, merge + cleanup, per-merge re-batch, feature coder kickoff, feature merge on approval. Ticket execution lives in `coder` sessions loading `ticket-lifecycle`; feature-mode sign-off lives in `coder` sessions loading `feature-review`. The orchestrator never verifies code-review or CodeRabbit evidence — terminal reports plus human approval are its only gates.
@@ -517,50 +517,31 @@ Naming convention is `feat-<slug>` for a feature, `ticket-<issue>-<slug>-<abbrev
 
 All worktree lifecycle (create, list, delete, reset) is delegated to the `worktree-manager` subagent, which calls the `worktree_*` tools registered by `plugins/worktree.js`. **Raw git worktree subcommands (`worktree add`, `worktree remove`, `branch opencode/...`) are forbidden** — they bypass GUI registration and are not coordinated with session start. Session messaging (kickoff, terminal-report notify) is direct: the orchestrator calls `session_kickoff` / `session_list` / `session_notify` via the `session_*` plugin tools registered by `plugins/session-manager.js`. There is no `session-manager` subagent.
 
-Restart / recovery for stuck worktrees (post `opencode-server`
-restart, stale state): dispatch `worktree-manager` `reset { directory }`.
-If worktrees are stuck in the GUI / `worktree_list` after a failed
-delete (WorktreeNotGitError), dispatch `worktree-manager` `recover { directory }`
-— the system's sanctioned `rewrite-worktree-gitdirs.py` +
-`session_delete` (called directly by worktree-manager, not via a
-subagent). Never raw `git worktree`.
+Restart / recovery for stuck worktrees (post `opencode-server` restart, stale state): dispatch `worktree-manager` `reset { directory }`. If worktrees are stuck in the GUI / `worktree_list` after a failed delete (WorktreeNotGitError), dispatch `worktree-manager` `recover { directory }` — the system's sanctioned `rewrite-worktree-gitdirs.py` + `session_delete` (called directly by worktree-manager, not via a subagent). Never raw `git worktree`.
 
-> **Bind-mount hazard:** `worktree_recover` is destructive on
-> bind-mounted paths. When `~/.opencode-worktrees` is bind-mounted at
-> `/var/opencode-xdg/opencode/worktree`, both path spellings share one
-> inode and `git worktree remove` on one path destroys the other.
-> Until the worktree plugin ships a `realpath`-based guard (so
-> `recover` skips the filesystem op when the target's realpath
-> equals the XDG worktree root), do NOT call `recover` on a path
-> whose `realpath` matches the XDG root — instead manually
-> `session_delete` the orphan sessions and run `git worktree prune`
-> to reap admin records.
+> **Bind-mount hazard:** `worktree_recover` is destructive on bind-mounted paths. When the opencode XDG worktree root is a bind-mount of the user's `~/.opencode-worktrees`, both path spellings share one inode and `git worktree remove` on one path destroys the other. Until the worktree plugin ships a `realpath`-based guard (so `recover` skips the filesystem op when the target's realpath equals the XDG worktree root), do NOT call `recover` on a bind-mount target — instead manually `session_delete` the orphan sessions and run `git worktree prune` to reap admin records.
 
 ## Source of truth is git, NOT the plugin's registration set
 
-The opencode-server's `project.sandboxes` JSON column
-(SQLite at `/var/lib/opencode-data/opencode.db`, table `project`,
-column `sandboxes`) is the **plugin-side registration set** the GUI
-reads. `worktree_list()` returns `project.sandboxes` for the project
-whose id matches the project's main checkout. `git worktree list
---porcelain` is the **filesystem truth**.
+The opencode-server's `project.sandboxes` JSON column (SQLite, table `project`, column `sandboxes`) is the **plugin-side registration set** the GUI reads. `worktree_list()` returns `project.sandboxes` for the project whose id matches the project's main checkout. `git worktree list --porcelain` is the **filesystem truth**.
 
 These can drift. Symptoms:
 - `worktree_list()` returns paths not in `git worktree list --porcelain` (stale plugin entries).
 - `git worktree list --porcelain` shows worktrees the GUI doesn't (missing plugin entries).
 - A worktree is renamed in `git worktree list` but the GUI still shows the old path.
 
-When drift exceeds what `worktree_reset` and `worktree_reconcile(dryRun: false)`
-can repair (e.g. after a corrupted v1.2.0 reconcile, or after a manual
-`git worktree add -B` outside the plugin) the **DB-direct repair** is
-the sanctioned last resort.
+When drift exceeds what `worktree_reset` and `worktree_reconcile(dryRun: false)` can repair (e.g. after a corrupted reconcile, or after a manual `git worktree add -B` outside the plugin), the **DB-direct repair** is the sanctioned last resort.
+
+## Path-equality rule (bind-mount safe)
+
+When comparing paths for "are these the same worktree?", do NOT use `realpath` — bind mounts are not symlinks and `realpath` does NOT collapse them. The plugin's `devInodeSafe(path)` helper (stat → `dev:ino`, null on failure) IS bind-mount-safe — two paths are physically the same iff they share dev+ino. Any dedup or equivalence check in skill/agent code must use the inode (or compare actual `stat -c '%i'` + `stat -c '%d'` outputs) rather than `realpath`.
 
 ## DB-direct repair procedure (operator-only)
 
 1. **Read current state.**
    ```bash
-   sqlite3 /var/lib/opencode-data/opencode.db \
-     "SELECT id, sandboxes FROM project;" # (sqlite3 CLI; use python3 if absent)
+   sqlite3 <opencode.db-path> \
+     "SELECT id, sandboxes FROM project;"
    ```
    Compare to `git worktree list --porcelain` and `git for-each-ref refs/heads/opencode/`.
 
@@ -574,38 +555,26 @@ the sanctioned last resort.
      '<UTC timestamp ISO 8601>'
    );
    ```
-   The `project_sandboxes_backup` table is preserved across repairs;
-   never delete it.
+   The `project_sandboxes_backup` table is preserved across repairs; never delete it.
 
-3. **Compute the canonical `sandboxes` array** from
-   `git worktree list --porcelain`, realpath-collapsing bind-mount
-   duplicates. Prefer the spelling that matches
-   `realpath ~/.opencode-worktrees` (the canonical on-disk path);
-   fall back to `/var/opencode-xdg/opencode/worktree/...` if that
-   is the only spelling present.
+3. **Compute the canonical `sandboxes` array** from `git worktree list --porcelain`, **inode-collapsing** bind-mount duplicates (`stat -c '%d:%i'` per path; same dev+ino = same worktree). Prefer the spelling that matches `realpath ~/.opencode-worktrees`; fall back to the XDG spelling if that's the only one present. **Do not use `realpath` for the equality test** — bind mounts break it.
 
 4. **Write.**
    ```sql
    UPDATE project SET sandboxes = '<new JSON array>' WHERE id = '<project_id>';
    ```
 
-5. **Verify by restarting opencode-server**, then calling
-   `worktree_list()` and confirming the path set equals
-   `git worktree list --porcelain` (realpath-collapsed).
+5. **Verify by restarting opencode-server**, then calling `worktree_list()` and confirming the path set equals `git worktree list --porcelain` (inode-collapsed).
 
 ## Pre-flight before any worktree op
 
-Before **any** worktree mutation (create, ticket, delete, reset,
-reconcile), the orchestrator MUST verify all three:
+Before **any** worktree mutation (create, ticket, delete, reset, reconcile), the orchestrator MUST verify all three:
 
 - `git worktree list --porcelain` matches the operator's expectation.
-- `worktree_list()` matches `git worktree list --porcelain` (realpath-collapsed).
+- `worktree_list()` matches `git worktree list --porcelain` (inode-collapsed).
 - The project row's `sandboxes` JSON equals the canonical list.
 
-If any of these three is out of sync, repair FIRST (via the DB-direct
-procedure above) before proceeding. A drift left in place during a
-worktree op WILL be mis-registered by the plugin — recovery from
-that is strictly harder than repair-then-proceed.
+If any of these three is out of sync, repair FIRST (via the DB-direct procedure above) before proceeding. A drift left in place during a worktree op WILL be mis-registered by the plugin — recovery from that is strictly harder than repair-then-proceed.
 
 ## §11 Hand-off markers
 

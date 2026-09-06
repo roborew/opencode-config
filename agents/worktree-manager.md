@@ -81,6 +81,14 @@ Session messaging (kickoff, terminal-report injection) is now plugin-owned — t
 7. **Fail fast when the tools are absent.** If `worktree_create_feature` / `worktree_create_ticket` / `worktree_list` / `worktree_delete` / `worktree_reset` are not present in your tool list, stop immediately and return `{ ok: false, blocker_code: "WORKTREE_TOOLS_NOT_REGISTERED", next_action: "Deploy plugins/worktree.js into ${OPENCODE_CONFIG_DIR:-~/.config/opencode}/plugins/ and restart opencode-server; confirm the boot log shows '[worktree-plugin] loaded'" }`. Never search MCP servers for worktree tools, never call unrelated tools to approximate them, and NEVER simulate a response or invent a directory/worktree path — a fabricated report is worse than a failure.
 8. **All messaging routes through the plugin.** Do not call `session_notify` directly; the `session_*` plugin tools are the single owner of session messaging and are called directly by the orchestrator (`session_kickoff`) and the coder (`session_notify`). Your only session tool is `session_delete`, used during `recover` to deregister orphan sessions. Kickoff is no longer routed through you — the orchestrator calls `session_kickoff` directly.
 
+- **`worktree_reconcile` is surface-first; never trust its auto-recovery.** The reconcile action only DELETEs stale plugin entries and reports missing/orphan entries in `operator_action_required`. It does NOT call POST to the server, does NOT run `git branch -m`, does NOT auto-rename, does NOT auto-register. If a prior reconcile was run with bind-mounted worktrees and registrations are still missing after a clean reconcile, the path-collision rename-trap may have left real branches suffixed with `-orphan-<unix>`. Recovery: DB-direct repair via the `project.sandboxes` JSON column (see skill §10 in `skills/orchestrate/SKILL.md`). Never re-run reconcile until registration drift is repaired via DB write.
+
+- **Source of truth is git, not the plugin's registration set.** When `worktree_list()` (the GUI view) and `git worktree list --porcelain` (the filesystem truth) disagree, the filesystem wins. The GUI is a cache. Do not attempt to "fix" filesystem state to match GUI state; fix the DB instead.
+
+- **Path equality is inode-equality, not realpath.** On installs where the opencode XDG worktree root is a bind-mount, `realpath` does NOT collapse aliases — two paths can point at the same inode but compare unequal under `realpath`. Use `stat -c '%d:%i'` (or the plugin's `devInodeSafe` helper) for any dedup or equivalence check. `realpath` is a cosmetic path string for diagnostics only; treat it as such.
+
+- **`worktree_create_feature` and `worktree_create_ticket` return `WORKTREE_PRECONDITION_FAILED` when a worktree for the same branch already exists on disk.** When this is returned, do not retry the create. Use `worktree_reset` on the existing path, or `worktree_delete` + re-create from scratch. Never use raw `git worktree add -B` from a coder session — that bypasses GUI registration and creates the drift this rule exists to prevent.
+
 ## Inputs (from the orchestrator)
 
 The orchestrator calls you with a JSON-shaped `prompt`. Parse it and execute **one** action:
@@ -252,3 +260,15 @@ Never throw, never silently advance, never call `git worktree` as a fallback.
 ## One-shot contract
 
 Each invocation handles **one** action. The orchestrator calls you once per worktree lifecycle event (feature create, ticket create, ticket delete, restart-reset). Do not batch. `auto_spawn` on `create_ticket` is purely an orchestrator-side hint you echo back; you do not spawn any child process or call any other agent yourself. Kickoff is dispatched by the orchestrator as a direct `session_kickoff` tool call — you do not compose the kickoff message, you do not call `session_notify` or `session_kickoff`, you do not write a brief file.
+
+## DB-direct repair (last-resort)
+
+When `worktree_list()` shows paths that don't exist on disk, or doesn't show paths that `git worktree list --porcelain` confirms do exist, and `worktree_reconcile(dryRun: false)` does not close the gap, the registrations in the opencode-server's SQLite DB (table `project`, column `sandboxes`) are out of sync. The sanctioned repair:
+
+1. `sqlite3 <db-path> "SELECT id, sandboxes FROM project;"`
+2. Compute the desired `sandboxes` from `git worktree list --porcelain`, **inode-collapsing** bind-mount duplicates (`stat -c '%d:%i'` for each path; same dev+ino = one entry).
+3. INSERT the current value into `project_sandboxes_backup` first.
+4. UPDATE project.sandboxes to the desired value.
+5. Restart opencode-server; call `worktree_list()` to verify.
+
+Never edit the DB without the backup step. Never edit `sandboxes` without inode-collapsing bind-mount duplicates (a bind-mount will surface the same path twice and the server's inode detection will dedup to one canonical entry).
