@@ -42,18 +42,33 @@ const FEATURE_BRANCH_PATTERN = /^opencode\/feat-/;
 const RESERVED_BRANCH_PREFIX = "refs/heads/opencode/feat-";
 
 import { execSync } from "child_process";
-import { realpath } from "fs/promises";
+import { realpath, stat } from "fs/promises";
 import { join } from "path";
 import os from "os";
 
-// @version 1.3.0 — worktree_reconcile no longer renames local branches;
-// worktree_create_feature returns WORKTREE_PRECONDITION_FAILED on duplicates.
+// @version 1.3.2 — worktree_reconcile keeps entries by dev+ino
+// (path-spelling differences don't count as drift; bind-mount safe);
+// main checkout bucketed separately.
 
 async function realpathSafe(p) {
   try {
     return await realpath(p);
   } catch {
     return p;
+  }
+}
+
+// Returns "dev:ino" for the path (string), or null on stat failure.
+// Bind-mount-safe path equality: realpath doesn't collapse bind mounts,
+// so two path spellings of the same dir compare unequal under realpath
+// but equal under dev+ino (which is what git/posix think of as the same
+// file). Use this for any dedup or equivalence check, not realpath.
+async function devInodeSafe(p) {
+  try {
+    const s = await stat(p);
+    return `${s.dev}:${s.ino}`;
+  } catch {
+    return null;
   }
 }
 
@@ -357,7 +372,7 @@ export const WorktreePlugin = async (ctx) => {
       worktree_reconcile: {
         description:
           "Repair the opencode server's worktree registration after it drifted from `git worktree list` — e.g. a manual `git worktree add -B` left a worktree on disk but invisible to the GUI. " +
-          "Diffs git's worktree list against GET /experimental/worktree (realpath-collapsed, so bind-mount aliases count as one entry). " +
+          "Diffs git's worktree list against GET /experimental/worktree (dev+ino equality so bind-mount aliases count as one entry). " +
           "Surface-only by default: returns the diff with no mutations. " +
           "When dryRun=false: " +
           "(1) DELETEs plugin-only stale entries via DELETE /experimental/worktree (never touches git); " +
@@ -448,13 +463,18 @@ export const WorktreePlugin = async (ctx) => {
                 branch = l.slice("branch ".length);
             }
             if (!path) continue;
-            const real = await realpathSafe(path);
-            gitRecords.push({ path, real, branch });
+            // Keyed by dev+ino for bind-mount-safe equality. realpath is
+            // kept as a cosmetic field for diagnostics only.
+            const devIno = await devInodeSafe(path);
+            gitRecords.push({ path, real: devIno, realpath: await realpathSafe(path), branch });
           }
 
           // Prefer the spelling that equals WT_REAL when present.
+          // Keyed by dev+ino (not realpath) — bind-mount aliases collapse
+          // correctly under this equality.
           const canonicalByReal = new Map();
           for (const rec of gitRecords) {
+            if (!rec.real) continue; // path doesn't exist on disk
             if (!canonicalByReal.has(rec.real)) {
               canonicalByReal.set(rec.real, rec);
             } else if (rec.path === wtReal) {
@@ -489,13 +509,15 @@ export const WorktreePlugin = async (ctx) => {
                 head: e.head,
               });
           }
+          // dev+ino keys — bind-mount aliases collapse correctly.
           const pluginReals = new Set();
           const pluginByReal = new Map();
           for (const e of pluginEntries) {
             if (!e.path) continue;
-            const real = await realpathSafe(e.path);
-            pluginReals.add(real);
-            if (!pluginByReal.has(real)) pluginByReal.set(real, e);
+            const devIno = await devInodeSafe(e.path);
+            if (!devIno) continue;
+            pluginReals.add(devIno);
+            if (!pluginByReal.has(devIno)) pluginByReal.set(devIno, e);
           }
 
           const missing_featurable = [];
@@ -507,6 +529,7 @@ export const WorktreePlugin = async (ctx) => {
 
           for (const [real, rec] of canonicalByReal) {
             if (!pluginReals.has(real)) {
+              const isMainCheckout = gitCwd && rec.path === gitCwd;
               if (rec.branch && rec.branch.startsWith(RESERVED_BRANCH_PREFIX)) {
                 missing_featurable.push({
                   path: rec.path,
@@ -524,6 +547,17 @@ export const WorktreePlugin = async (ctx) => {
                   manual_recovery:
                     "Ticket branches cannot be auto-recreated by reconcile (the server's create-collision rule renames them). Either: (a) keep the existing on-disk worktree and call worktree_reset({ directory: <path> }) to re-register it; or (b) worktree_delete it then worktree_create_ticket({ feature_branch: '<feat-branch>', name: '<ticket-name>' }) to recreate from origin.",
                 });
+              } else if (isMainCheckout) {
+                // Main checkout is by design NOT in project.sandboxes
+                // (the project's main `worktree` column is its source of
+                // truth). Surface it as expected, not as drift.
+                kept.push({
+                  git_path: rec.path,
+                  plugin_path: "(main checkout — not registered by design)",
+                  branch: rec.branch,
+                  devino: real,
+                  is_main_checkout: true,
+                });
               } else {
                 missing_other.push({
                   path: rec.path,
@@ -532,26 +566,25 @@ export const WorktreePlugin = async (ctx) => {
                 });
               }
             } else {
+              // Match by dev+ino (set membership guarantees this). The
+              // plugin entry may use a different path spelling than git's
+              // (e.g. git spells the user's worktree dir; the plugin
+              // stores the bind-mount XDG spelling). Record both as info
+              // but don't classify the spelling difference as drift.
               const pluginEntry = pluginByReal.get(real);
-              if (pluginEntry.path === rec.path) {
-                kept.push({
-                  path: rec.path,
-                  branch: rec.branch,
-                  plugin_path: pluginEntry.path,
-                });
-              } else {
-                duplicates_collapsed.push({
-                  git_path: rec.path,
-                  plugin_path: pluginEntry.path,
-                  realpath: real,
-                });
-              }
+              kept.push({
+                git_path: rec.path,
+                plugin_path: pluginEntry.path,
+                branch: rec.branch,
+                devino: real,
+                path_spelling_differs: rec.path !== pluginEntry.path,
+              });
             }
           }
           for (const e of pluginEntries) {
             if (!e.path) continue;
-            const real = await realpathSafe(e.path);
-            if (!canonicalByReal.has(real)) {
+            const real = await devInodeSafe(e.path);
+            if (!real || !canonicalByReal.has(real)) {
               stale.push({ path: e.path, branch: e.branch });
             }
           }
