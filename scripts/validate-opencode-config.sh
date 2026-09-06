@@ -387,10 +387,11 @@ if ! grep -q '/experimental/worktree' plugins/worktree.js 2>/dev/null; then
   echo "  MISSING: /experimental/worktree route in plugins/worktree.js"
   ERR=1
 fi
-# Worktree plugin's tool set: 4 specific tools (worktree_create_feature,
-# worktree_create_ticket, worktree_reset, worktree_list) + worktree_delete.
-# The previous generic worktree_create shape was removed by the strip-back.
-for tool in worktree_create_feature worktree_create_ticket worktree_list worktree_delete worktree_reset; do
+# Worktree plugin's tool set: 5 specific tools (worktree_create_feature,
+# worktree_create_ticket, worktree_reset, worktree_list, worktree_reconcile)
+# + worktree_delete. The previous generic worktree_create shape was removed
+# by the strip-back; worktree_reconcile was added in v1.2.0.
+for tool in worktree_create_feature worktree_create_ticket worktree_list worktree_delete worktree_reset worktree_reconcile; do
   if ! grep -qE "^[[:space:]]*${tool}:[[:space:]]*\{" plugins/worktree.js 2>/dev/null; then
     echo "  MISSING: $tool registration in plugins/worktree.js"
     ERR=1
