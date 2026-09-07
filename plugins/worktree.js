@@ -237,7 +237,7 @@ export const WorktreePlugin = async (ctx) => {
 
       worktree_create_ticket: {
         description:
-          "Create a TICKET worktree that forks off an existing feature branch. REQUIRED: pass the `branch` field from a prior worktree_create_feature response as `feature_branch`. The plugin rejects any value that does not start with 'opencode/feat-' so tickets cannot accidentally be forked off develop, main, or a sibling ticket. Always call worktree_create_feature first and pass its exact `branch` field here.",
+          "Create a TICKET worktree that forks off an existing feature branch. REQUIRED: pass the `branch` field from a prior worktree_create_feature response as `feature_branch`. The plugin rejects any value that does not start with 'opencode/feat-' so tickets cannot accidentally be forked off develop, main, or a sibling ticket. Always call worktree_create_feature first and pass its exact `branch` field here. If the server returns a worktree on the wrong base, the plugin auto-recovers by resetting to origin/<featureBranch> and pushing with upstream tracking.",
         args: {
           feature_branch: {
             type: "string",
@@ -293,6 +293,95 @@ export const WorktreePlugin = async (ctx) => {
               remote.out !== "origin" ||
               !(merge.ok && merge.out.includes("refs/heads/"))
             ) {
+              // Detect the wrong-base bug: the opencode-server's POST
+              // /experimental/worktree silently ignores the `base` parameter and
+              // forks from the calling directory's HEAD. We compensate here by
+              // resetting the branch to the feature tip and pushing with
+              // upstream tracking.
+              const featureTip = safeExec(
+                `git -C ${JSON.stringify(directory)} rev-parse --verify ${featureBranch}`,
+              );
+              const localHead = safeExec(
+                `git -C ${JSON.stringify(directory)} rev-parse HEAD`,
+              );
+              const baseIsWrong =
+                featureTip.ok &&
+                localHead.ok &&
+                featureTip.out !== localHead.out;
+              const upstreamMissing =
+                remote.out !== "origin" ||
+                !(merge.ok && merge.out.includes("refs/heads/"));
+              if (baseIsWrong || upstreamMissing) {
+                const fetch = safeExec(
+                  `git -C ${JSON.stringify(directory)} fetch origin ${featureBranch}`,
+                );
+                const reset = safeExec(
+                  `git -C ${JSON.stringify(directory)} reset --hard origin/${featureBranch}`,
+                );
+                const push = safeExec(
+                  `git -C ${JSON.stringify(directory)} push -u origin ${branch}`,
+                );
+                const headAfter = safeExec(
+                  `git -C ${JSON.stringify(directory)} rev-parse --abbrev-ref HEAD`,
+                );
+                const remoteAfter = safeExec(
+                  `git -C ${JSON.stringify(directory)} config --get branch.${branch}.remote`,
+                );
+                const mergeAfter = safeExec(
+                  `git -C ${JSON.stringify(directory)} config --get branch.${branch}.merge`,
+                );
+                const localHeadAfter = safeExec(
+                  `git -C ${JSON.stringify(directory)} rev-parse HEAD`,
+                );
+                if (
+                  headAfter.out === branch &&
+                  localHeadAfter.out === featureTip.out
+                ) {
+                  return JSON.stringify({
+                    ok: true,
+                    status: r.status,
+                    body: r.body,
+                    recovered: true,
+                    notes: [
+                      "Server's POST /experimental/worktree ignored the `base` parameter; plugin reset branch to feature tip and attempted to push with upstream tracking.",
+                      fetch.ok ? null : `fetch warning: ${fetch.err}`,
+                      push.ok ? null : `push warning: ${push.err}`,
+                      remoteAfter.out === "origin"
+                        ? null
+                        : `upstream tracking not set (push likely failed without creds); the coder session's §0.0 handshake will create the remote ref.`,
+                    ].filter(Boolean),
+                  });
+                }
+                return JSON.stringify({
+                  ok: false,
+                  blocker_code: "WORKTREE_NO_UPSTREAM_TRACKING",
+                  branch,
+                  feature_branch: featureBranch,
+                  expected: {
+                    remote: "origin",
+                    merge: `refs/heads/${branch}`,
+                    head: featureTip.ok ? featureTip.out : "(unresolved)",
+                  },
+                  actual: {
+                    head: headAfter.out,
+                    remote: remoteAfter.out,
+                    merge: mergeAfter.ok ? mergeAfter.out : null,
+                    local_head: localHeadAfter.ok ? localHeadAfter.out : null,
+                    recovery_attempted: true,
+                    recovery_steps: {
+                      fetch: fetch.ok ? "ok" : fetch.err,
+                      reset: reset.ok ? "ok" : reset.err,
+                      push: push.ok ? "ok" : push.err,
+                    },
+                  },
+                  manualRecovery:
+                    `Server's POST /experimental/worktree ignores the \`base\` param. Inside ${directory}:\n` +
+                    `  git fetch origin ${featureBranch}\n` +
+                    `  git reset --hard origin/${featureBranch}\n` +
+                    `  git push -u origin ${branch}\n` +
+                    `Then re-run worktree_create_ticket. If push fails (no creds), the local branch is still on the correct base; the coder session's §0.0 handshake push will create the remote ref.`,
+                });
+              }
               return JSON.stringify({
                 ok: false,
                 blocker_code: "WORKTREE_NO_UPSTREAM_TRACKING",
