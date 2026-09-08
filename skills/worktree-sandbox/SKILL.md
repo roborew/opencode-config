@@ -11,22 +11,22 @@ Load when the parent (`orchestrate` or `coder`) dispatches the `worktree-sandbox
 
 ## Purpose
 
-The `worktree-sandbox` subagent owns the **compose-test backend lifecycle** for one linked git worktree (ticket or feature). It collapses the legacy `worktree-env` → `preflight` → `developer`-build → `developer`-warm dance into a single coordinator that drives `plugins/sandbox.js`. Every tool the agent calls is one of the 8 plugin tools; every command the agent wants to run is delegated to the plugin.
+The `worktree-sandbox` subagent owns the **compose-test backend lifecycle** for one linked git worktree (ticket or feature). It centralizes environment copy plus verification-backend entry/exit into a single coordinator that drives `plugins/sandbox.js`. Every tool the agent calls is one of the 8 plugin tools; every command the agent wants to run is delegated to the plugin.
 
 ## Plugin tools (by reference, not duplicated)
 
 The plugin registers 8 tools in `plugins/sandbox.js`. The agent calls them by name; this skill does not duplicate the JSON schema — see the plugin source for arg shapes. Names and one-line purpose:
 
-| Tool | Purpose |
-|------|---------|
-| `sandbox_probe` | Resolves `OPENCODE_SANDBOX_ENABLED`, `command -v sandbox`, `command -v docker`. Returns `{ sandbox, docker, recommended_backend }`. |
-| `env_copy` | Copies `.env` / `.env.local` / `WORKTREE_ENV_FILES` from main checkout to worktree; replaces legacy symlinks. No contents, no `.env.example`. |
-| `sandbox_create` | `sandbox create --id <id> --worktree <path>` (or no-op + warning when sandbox: unavailable). One sandbox per worktree. |
-| `sandbox_build` | `sandbox exec --id <id> -- docker compose -f <file> build` (or direct docker compose). Idempotent. |
-| `sandbox_warm` | Smoke command inside the compose service — replaces cold-boot-on-first-RED. |
-| `sandbox_run_test` | Per-stage test runner — `sandbox exec --id <id> -- docker compose -f <file> run --rm <service> <command>` with optional `test_filter`. |
-| `sandbox_status` | Read-only sandbox status. |
-| `sandbox_destroy` | `sandbox destroy --id <id>` (unexpose first by default). Owned by `worktree-sandbox` (mode: teardown) and `code-review` per `docker-sandbox` §5. |
+| Tool               | Purpose                                                                                                                                          |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `sandbox_probe`    | Resolves `OPENCODE_SANDBOX_ENABLED`, `command -v sandbox`, `command -v docker`. Returns `{ sandbox, docker, recommended_backend }`.              |
+| `env_copy`         | Copies `.env` / `.env.local` / `WORKTREE_ENV_FILES` from main checkout to worktree; replaces legacy symlinks. No contents, no `.env.example`.    |
+| `sandbox_create`   | `sandbox create --id <id> --worktree <path>` (or no-op + warning when sandbox: unavailable). One sandbox per worktree.                           |
+| `sandbox_build`    | `sandbox exec --id <id> -- docker compose -f <file> build` (or direct docker compose). Idempotent.                                               |
+| `sandbox_warm`     | Smoke command inside the compose service — replaces cold-boot-on-first-RED.                                                                      |
+| `sandbox_run_test` | Per-stage test runner — `sandbox exec --id <id> -- docker compose -f <file> run --rm <service> <command>` with optional `test_filter`.           |
+| `sandbox_status`   | Read-only sandbox status.                                                                                                                        |
+| `sandbox_destroy`  | `sandbox destroy --id <id>` (unexpose first by default). Owned by `worktree-sandbox` (mode: teardown) and `code-review` per `docker-sandbox` §5. |
 
 The Infisical env-gate runs inside `sandbox_create` (no values, key names only — per `docker-sandbox` skill §5). The Direct-Docker fallback is automatic when `sandbox probe` reports `sandbox: unavailable` and `docker: ready` — every tool accepts both backends and routes accordingly. The plugin never invents an invocation form.
 
@@ -34,12 +34,12 @@ The Infisical env-gate runs inside `sandbox_create` (no values, key names only �
 
 The `worktree-sandbox` agent runs **exactly one** mode per Task. The parent sequences them.
 
-| Mode | Tools called | Trigger |
-|------|--------------|---------|
-| `env_copy` | `env_copy` | Orchestrate bootstrap, before any verification backend setup. |
-| `probe_and_create` | `sandbox_probe` → `sandbox_create` → `sandbox_build` → `sandbox_warm` | Coder §0.3 entry (ticket or feature), once per worktree. |
-| `status` | `sandbox_status` | Ad-hoc — coder asks when in doubt. |
-| `teardown` | `sandbox_status` (confirm idle) → `sandbox_destroy` | Coder §0-completion, before posting `ticket_report:` / `feature_report:`. |
+| Mode               | Tools called                                                          | Trigger                                                                   |
+| ------------------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `env_copy`         | `env_copy`                                                            | Orchestrate bootstrap, before any verification backend setup.             |
+| `probe_and_create` | `sandbox_probe` → `sandbox_create` → `sandbox_build` → `sandbox_warm` | Coder §0.3 entry (ticket or feature), once per worktree.                  |
+| `status`           | `sandbox_status`                                                      | Ad-hoc — coder asks when in doubt.                                        |
+| `teardown`         | `sandbox_status` (confirm idle) → `sandbox_destroy`                   | Coder §0-completion, before posting `ticket_report:` / `feature_report:`. |
 
 ## Lifecycle
 
@@ -122,5 +122,5 @@ The parent surfaces the canonical handles (`sandbox_id`, `compose_test_file`, `b
 - `skills/docker-sandbox/SKILL.md` — Sysbox-vs-direct-Docker matrix + lifecycle-aware destroy contract (referenced by the plugin's fallback logic, not by agent bash).
 - `skills/ticket-lifecycle/SKILL.md` §0.3 + §0-completion — dispatches `worktree-sandbox` (probe_and_create + teardown).
 - `skills/feature-review/SKILL.md` §0.3 + §0-completion — same.
-- `skills/orchestrate/SKILL.md` §0 Bootstrap — dispatches `worktree-sandbox` (env_copy) instead of the legacy `worktree-env`.
+- `skills/orchestrate/SKILL.md` §0 Bootstrap — dispatches `worktree-sandbox` `mode: env_copy` during linked-worktree bootstrap.
 - `agents/coder.md`, `agents/code-review.md`, `agents/senior-dev.md` — direct callers of `sandbox_run_test` from the plugin.

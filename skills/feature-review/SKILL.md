@@ -222,7 +222,7 @@ When step 1, step 2, step 3, or step 7 surface unmet acceptance criteria that ca
 
 ### 9. Terminal report
 
-Emit the terminal report (in-session, normal prose), **post the `feature_report:` comment on the PRD parent issue** (mandatory durable channel), and best-effort call `session_notify` directly to inject the terminal report into the develop orchestrator before stopping. **`session_notify` is a plugin tool you hold directly** — the `session-manager` subagent layer was removed.
+Emit the terminal report (in-session, normal prose), **post the `feature_report:` comment on the PRD parent issue** (mandatory durable channel), and best-effort call `session_notify` directly to inject the terminal report into the develop orchestrator before stopping. **`session_notify` is a direct plugin tool you hold.**
 
 #### 9.0 `human_review_handoff/v1` readiness contract (mandatory on READY)
 
@@ -313,7 +313,7 @@ EOF
 )"
 ```
 
-The develop orchestrator parses `feature_report:` comments to wake when the feature coder finishes. Without this comment, the orchestrator stays paused and the watch/poller cannot detect the terminal state.
+The durable `feature_report:` comment is the authoritative handoff the develop orchestrator reads before surfacing the feature PR. `session_notify` is the primary wake. If `session_notify` misses, there is no poller guarantee for `feature_report:`; the operator should wake or resume the develop orchestrator manually so it fetches this durable report.
 
 #### 9b. Block shape
 
@@ -360,31 +360,29 @@ BLOCKED:
 
 #### 9c. Best-effort wake via `session_notify` (direct call)
 
-When the explicit `develop_session_id` is passed and `session_list` does not return it, `session_notify` returns `error: "session_not_found"` (hard stop — no silent create) — the durable `feature_report:` comment is the wake channel.
+When the explicit `develop_session_id` is passed and `session_notify` does not find it, `session_notify` returns `error: "session_not_found"` (hard stop — no silent create). The durable `feature_report:` comment remains authoritative. If notify fails, do **not** fall back to directory-mode `session_notify`; the recovery path is to wake or resume the develop orchestrator manually so it fetches the durable `feature_report:` from the PRD parent issue.
 
 ```text
 message = "feature_report: feature:<slug> | status: READY_FOR_HUMAN_REVIEW | contract: human_review_handoff/v1 | pr: <url> | issue: <prd_parent_issue_url> | tests: <int> | coderabbit_found: <int> | coderabbit_solved: <int> | local_pr_found: <int> | local_pr_solved: <int> | fix_now_found: <int> | fix_now_resolved: <int> | tickets: <n>"
 # or, for BLOCKED:
 message = "feature_report: feature:<slug> | status: BLOCKED | contract: human_review_handoff/v1 | blocker: <code> | reason: <one-line>"
 
-# The develop_session_id is supplied in the feature coder kickoff message inline.
-# If it's missing (kickoff truncated), pass `directory: <feature worktree dir>` instead —
-# session_notify falls back to the newest no-parent session under that directory.
-develop_target = { sessionID: <develop_session_id> } if develop_session_id else { directory: <feature worktree abs path> }
+if develop_session_id:
+  result = session_notify({
+    sessionID: <develop_session_id>,
+    agent: "orchestrate",
+    message,
+  })
 
-result = session_notify({
-  ...develop_target,
-  agent: "orchestrate",
-  message,
-})
-
-if result.admitted == true: record notify_status: admitted
-elif result.error == "session_not_found" and result.session_id == develop_session_id: record notify_status: develop_session_id_stale
-elif result.status == 404: record notify_status: develop_session_id_stale
-else:                       record notify_status: <error from result.error>
+  if result.admitted == true: record notify_status: admitted
+  elif result.error == "session_not_found" and result.session_id == develop_session_id: record notify_status: develop_session_id_stale
+  elif result.status == 404: record notify_status: develop_session_id_stale
+  else:                      record notify_status: failed
+else:
+  record notify_status: failed
 ```
 
-The `feature_report:` comment is the **mandatory** durable channel. `session_notify` is best-effort; its failure is recorded in the comment but never blocks the terminal report.
+The `feature_report:` comment is the **mandatory** durable channel. `session_notify` is best-effort; its failure is recorded in the comment but never blocks the terminal report. If it fails, the fallback is manual user/orchestrator wake plus durable `feature_report:` fetch — not a poller guarantee.
 
 Emit the terminal report and stop. The coder agent Hard Rules' post-completion guard now fires — any subsequent user message is answered with: "Task complete. Switch to the `orchestrate` agent to continue."
 

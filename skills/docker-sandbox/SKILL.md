@@ -27,9 +27,9 @@ Names: sibling `opencode-sandbox-<slug>`, publish helper `opencode-sandbox-route
 
 1. **Always `sandbox probe` first.** Unavailable → probe `docker` for the **Direct Docker fallback** below; if neither is available → `sandbox: unavailable`; continue non-Docker unless stage requires compose/Docker (then Blocked).
 2. **Env gate before create** (never print secret values):
-   - Require `.env` on worktree (or main before **worktree-env**).
-   - If Infisical used: non-empty key *names* `INFISICAL_PROJECT_ID`, `INFISICAL_DOMAIN`|`INFISICAL_API_URL`, and `INFISICAL_TOKEN` **or** `CLIENT_ID`+`CLIENT_SECRET` (+ `INFISICAL_ENV` if used).
-   - Never `.env.example` / invent values. Fix: `./scripts/setup.sh projects …` create+paste, then worktree-env if linked.
+   - Require `.env` on the worktree (or on the main checkout before linked-worktree `env_copy`).
+   - If Infisical used: non-empty key _names_ `INFISICAL_PROJECT_ID`, `INFISICAL_DOMAIN`|`INFISICAL_API_URL`, and `INFISICAL_TOKEN` **or** `CLIENT_ID`+`CLIENT_SECRET` (+ `INFISICAL_ENV` if used).
+   - Never `.env.example` / invent values. Fix: `./scripts/setup.sh projects …` create+paste, then run linked-worktree `env_copy` when needed.
 3. Prefer documented compose (`docker-compose.test.yml`, `compose.test.yaml`, README). Ask once if ambiguous; never invent a stack.
 4. **Self-contained compose required for live/review stacks:** use the app's documented listener and private service topology. Do not add cloudflared to app Compose.
 5. **Lifecycle-aware destroy.** Per-ticket TDD loop: developer creates the sandbox and keeps it alive after GREEN (does not destroy); code-review reuses via `sandbox status --id <sandbox_id>` and destroys after `APPROVED` or `ENV_BLOCKED`, keeps alive on `BLOCKED` for developer retry. Feature coder loop (`feature-review`): same reuse/destroy contract — `code-review` destroys after `APPROVED`/`ENV_BLOCKED`, keeps alive on `BLOCKED`. `destroy` unexposes first.

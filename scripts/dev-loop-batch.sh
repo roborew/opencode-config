@@ -157,24 +157,24 @@ merged_subpr() {
 
 # 0 = dependency satisfied (CLOSED, state:done, or merged sub-PR); 1 = not satisfied.
 dep_satisfied() {
-  local d="$1" info st done
+  local d="$1" info st done_flag
   info=$(jq -r --arg k "$d" \
     '(.[$k] // {}) | "\(.state // "")\t\(if (.done // false) then "1" else "0" end)"' "$STATES_FILE")
   st="${info%%$'\t'*}"
-  done="${info##*$'\t'}"
+  done_flag="${info##*$'\t'}"
   if [[ -z "$st" ]]; then
     # Not in this feature's issue set (rare: cross-feature ref) — single fallback lookup.
     info=$(gh issue view "$d" --repo "$REPO" --json state,labels \
       -q '[(.state), (if any(.labels[]?; .name == "state:done") then "1" else "0" end)] | @tsv' \
       2>/dev/null || true)
     st=$(printf '%s' "$info" | cut -f1)
-    done=$(printf '%s' "$info" | cut -f2)
+    done_flag=$(printf '%s' "$info" | cut -f2)
     if [[ -z "$st" ]]; then
       st="OPEN" # lookup failed — treat unsatisfied (safe direction)
-      done="0"
+      done_flag="0"
     fi
   fi
-  if [[ "$st" == "CLOSED" || "$done" == "1" ]]; then
+  if [[ "$st" == "CLOSED" || "$done_flag" == "1" ]]; then
     return 0
   fi
   merged_subpr "$d"

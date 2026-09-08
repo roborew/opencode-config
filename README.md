@@ -12,9 +12,9 @@ Plan in **spec**. Build and sign off the work in each **work repo** (with a revi
 
 **Reminders**
 
-- Sign-off of the **work** (review, remediation, tickets to `state:done`, docs, PR merge-ready) = **architect in the work repo**.
-- Sign-off of the **feature across the stack** (merge + close) = **architect in spec** → **3. Feature complete**.
-- Spec closes tickets that are already `state:done`. Getting them to done and making the PR merge-ready is **work-repo** work — not spec.
+- Sign-off of the **work repo loop** (ticket execution, feature verification, docs, PR merge-ready) = **coder + develop orchestrator** in the work repo.
+- Final work-repo accept (`state:done`) = **develop orchestrator** after the human replies `all reviewed`.
+- Spec **3. Feature complete** runs only after the work repo merged; it verifies `state:done` + merged PRs and closes.
 
 ### How to use
 
@@ -57,19 +57,19 @@ flowchart TB
 
 ```text
 SPEC (start)          WORK REPO (loop until happy)              SPEC (finish)
-architect / 1    →    orchestrate ⇄ architect / 4 (R→1→2)   →   architect / 3
-PRD + handoffs        build → review → (fix → review)*          merge + close
+architect / 1    →    orchestrate ⇄ coder / feature-review   →   architect / 3
+PRD + handoffs        build → review gate → merge               merge + close
 ```
 
 ### Responsibility at each stage
 
-| Stage | Repo | Select | Your choice | Your job | This stage owns |
-|-------|------|--------|-------------|----------|-----------------|
-| Plan / PRD | **spec** | **architect** → `hi` | **1. Product feature / PRD — …** | Answer grill; **approve PRD**; **approve** issue plans | Planning + handoffs only — not code, not PR polish |
-| Build | **work repo** | **orchestrate** | Paste `feature:<slug>` / handoff | Wait for the feature PR | The orchestrator assigns; one **coder** session per ticket worktree produces the code. Each ticket's auto-started GUI session is the coder session, self-bootstraps from the kickoff pointer (injected via `session_kickoff`) and GitHub, returns exactly one `ticket_report:` comment per ticket. |
-| Review / docs / PR | **same work repo, feature worktree** | **coder** (kicked by orchestrator) → loads `feature-review` | (no menu — kicks the loop automatically) | Verify + sign off + docs + feature PR | All PR readiness and ticket acceptance; orchestrator merges after "all reviewed" |
-| Remediation loop | **same work repo** | **orchestrate** ↔ feature-review re-kick | After BLOCKED: FEATURE_REMEDIATION, fixes re-run | Stay until you are happy — **do not go to spec yet** | Work-repo loop only |
-| Final close | **spec** | **architect** → `hi` | **3. Feature complete — …** | After every work repo merged; verify-only close | Verify `state:done` + `verified` + MERGED; close done tickets + PRD |
+| Stage              | Repo                                 | Select                                                      | Your choice                                      | Your job                                               | This stage owns                                                                                                                                                                                                                                                                                    |
+| ------------------ | ------------------------------------ | ----------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Plan / PRD         | **spec**                             | **architect** → `hi`                                        | **1. Product feature / PRD — …**                 | Answer grill; **approve PRD**; **approve** issue plans | Planning + handoffs only — not code, not PR polish                                                                                                                                                                                                                                                 |
+| Build              | **work repo**                        | **orchestrate**                                             | Paste `feature:<slug>` / handoff                 | Wait for the feature PR                                | The orchestrator assigns; one **coder** session per ticket worktree produces the code. Each ticket's auto-started GUI session is the coder session, self-bootstraps from the kickoff pointer (injected via `session_kickoff`) and GitHub, returns exactly one `ticket_report:` comment per ticket. |
+| Review / docs / PR | **same work repo, feature worktree** | **coder** (kicked by orchestrator) → loads `feature-review` | (no menu — kicks the loop automatically)         | Verify + sign off + docs + feature PR                  | All PR readiness and ticket acceptance to `state:ready-for-feature-review`; orchestrator marks `state:done` and merges after `all reviewed`                                                                                                                                                        |
+| Remediation loop   | **same work repo**                   | **orchestrate** ↔ feature-review re-kick                    | After BLOCKED: FEATURE_REMEDIATION, fixes re-run | Stay until you are happy — **do not go to spec yet**   | Work-repo loop only                                                                                                                                                                                                                                                                                |
+| Final close        | **spec**                             | **architect** → `hi`                                        | **3. Feature complete — …**                      | After every work repo merged; verify-only close        | Verify `state:done` + `verified` + MERGED; close done tickets + PRD                                                                                                                                                                                                                                |
 
 Detail (labels, gates): [docs/FEATURE-PIPELINE.md](docs/FEATURE-PIPELINE.md). If the stack is not bootstrapped yet, continue with [Prerequisites](#prerequisites) below.
 
@@ -77,15 +77,13 @@ Detail (labels, gates): [docs/FEATURE-PIPELINE.md](docs/FEATURE-PIPELINE.md). If
 
 ## Prerequisites
 
-
 | Requirement                                                       | Why                                                                                       |
 | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| **`OPENCODE_CONFIG_DIR`** (default `~/.config/opencode` on macOS) | OpenCode loads `opencode.json`, agents, skills, and [rules/](rules/)                    |
+| **`OPENCODE_CONFIG_DIR`** (default `~/.config/opencode` on macOS) | OpenCode loads `opencode.json`, agents, skills, and [rules/](rules/)                      |
 | **GitHub CLI** (`gh`) authenticated                               | Issues, `setup-project`, fanout, PR workflows                                             |
 | **`GH_ORG`** (or `--org`) for stack bootstrap                     | GitHub **owner** in `owner/repo` — your user login or org, not the app slug               |
 | **`GH_PROJECT`** (optional) in `~/.opencode-agent-env`            | Org-wide project board — PRD parent + child issues registered at publish/fanout           |
 | **Sibling clones** before spec bootstrap                          | `setup-project` creates/syncs **`<app>-spec`** and links repos that already exist on disk |
-
 
 Optional but recommended:
 
@@ -115,12 +113,12 @@ Restart OpenCode after the first edit. Per-repo files (`opencode.md`, `CONTEXT.m
 
 **Control:** `mcp.claude-context.enabled` in [`opencode.json`](opencode.json).
 
-| How you run OpenCode | Set host `enabled` to | Indexing backend |
-|----------------------|----------------------|------------------|
-| **Local only** — Desktop or CLI using this checkout as `OPENCODE_CONFIG_DIR`, no remote server | `true` | Host MCP (`npx` / local binary). Turn on when you want indexing. |
-| **Docker server** — Desktop/CLI attached to the [utilities OpenCode stack](https://github.com/roborew/opencode) (`opencode.home.internal:4097` / `127.0.0.1:4097`) | `false` | Container MCP + Milvus (server override forces `enabled: true` inside the image). |
+| How you run OpenCode                                                                                                                                               | Set host `enabled` to | Indexing backend                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------- | --------------------------------------------------------------------------------- |
+| **Local only** — Desktop or CLI using this checkout as `OPENCODE_CONFIG_DIR`, no remote server                                                                     | `true`                | Host MCP (`npx` / local binary). Turn on when you want indexing.                  |
+| **Docker server** — Desktop/CLI attached to the [utilities OpenCode stack](https://github.com/roborew/opencode) (`opencode.home.internal:4097` / `127.0.0.1:4097`) | `false`               | Container MCP + Milvus (server override forces `enabled: true` inside the image). |
 
-**Why the split:** With Desktop on Docker *and* host `enabled: true`, OpenCode can spawn many host `claude-context-mcp` processes (multi‑GB RAM) while the server already indexes via Milvus. Keep **one** side on.
+**Why the split:** With Desktop on Docker _and_ host `enabled: true`, OpenCode can spawn many host `claude-context-mcp` processes (multi‑GB RAM) while the server already indexes via Milvus. Keep **one** side on.
 
 ```json
 "claude-context": {
@@ -139,13 +137,11 @@ Agents already treat a missing MCP as optional — see [docs/RUNBOOK.md](docs/RU
 
 ## Choose your setup path
 
-
 | Situation                                                | What to do                                                                                                     |
 | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | **New product, multiple repos** (web + API + spec)       | [New multi-repo project](#new-multi-repo-project) → shell `setup-project` → OpenCode **setup-project** in spec |
 | **One repo only** (no PRD / fanout stack)                | [Single repository](#single-repository) — `setup-skills` + `opencode.md` / `CONTEXT.md`                        |
 | **Repos already exist** (adding OpenCode or new sibling) | [Existing repositories](#existing-repositories) — re-run `setup-project`, then architect interview             |
-
 
 **Repo naming:** Prefer **surface or capability** (`<app>-web`, `<app>-api`, `<app>-mobile`) over vague “frontend” only.
 
@@ -190,7 +186,6 @@ Project automation runs from central config via **`opencode-run`** (e.g. `openco
 
 Useful flags:
 
-
 | Flag            | Use when                                                           |
 | --------------- | ------------------------------------------------------------------ |
 | `--keep-branch` | First run but you want to stay on a feature branch in spec         |
@@ -199,7 +194,6 @@ Useful flags:
 | `--check-only`  | Validate registry, PRDs, and impl wiring without writes            |
 | `--app <slug>`  | Parent folder name differs from desired slug                       |
 | `--org <org>`   | Override `GH_ORG` for one command                                  |
-
 
 `new-spec-repo` and `link-spec-repo` are **deprecated shims** — use `setup-project` from the project parent.
 
@@ -212,10 +206,10 @@ cd ~/code/myapp/myapp-spec
 opencode
 ```
 
-| Do | Don't |
-|----|--------|
-| Run **architect** → menu **7. Setup / bootstrap stack** (loads **setup-project**) | Open `myapp-web`, `myapp-api`, etc. and run setup-project again |
-| Stay in `myapp-spec` for the whole interview | Run **setup-skills** in each impl repo (that's for single-repo / orphan repos only) |
+| Do                                                                                | Don't                                                                               |
+| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Run **architect** → menu **7. Setup / bootstrap stack** (loads **setup-project**) | Open `myapp-web`, `myapp-api`, etc. and run setup-project again                     |
+| Stay in `myapp-spec` for the whole interview                                      | Run **setup-skills** in each impl repo (that's for single-repo / orphan repos only) |
 
 What **setup-project** does from that one session:
 
@@ -231,11 +225,11 @@ Shell bootstrap and **stack-bootstrap** already copy most scaffolding into **eve
 
 Check or fill in these files (architect/scribe can help during step 3; you can also edit by hand later):
 
-| File | Spec repo (`myapp-spec`) | Each impl repo (`myapp-web`, …) |
-|------|--------------------------|----------------------------------|
-| [`opencode.md`](docs/templates/opencode.md.template) | Stack-wide commands if needed | Build/test/lint commands for that codebase |
-| `CONTEXT.md` | Product glossary | Repo-specific gotchas only (not full product glossary) |
-| `LANGUAGE.md` | Optional shared vocabulary | Usually omitted |
+| File                                                 | Spec repo (`myapp-spec`)      | Each impl repo (`myapp-web`, …)                        |
+| ---------------------------------------------------- | ----------------------------- | ------------------------------------------------------ |
+| [`opencode.md`](docs/templates/opencode.md.template) | Stack-wide commands if needed | Build/test/lint commands for that codebase             |
+| `CONTEXT.md`                                         | Product glossary              | Repo-specific gotchas only (not full product glossary) |
+| `LANGUAGE.md`                                        | Optional shared vocabulary    | Usually omitted                                        |
 
 ### 5. Validate
 
@@ -245,14 +239,12 @@ From the project parent:
 setup-project --check-only ~/code/myapp
 ```
 
-
 | Exit / message | Meaning                                                                       |
 | -------------- | ----------------------------------------------------------------------------- |
 | **0**          | Registry and wiring look complete                                             |
 | **3**          | Shell OK; OpenCode interview still needed (`docs/agents/repos.md` TBD fields) |
 | **4**          | Implementation repo wiring gaps (missing clone, bad `issue-tracker.md`, etc.) |
 | **6**          | PRD / ticket validation errors in spec                                        |
-
 
 Then start product work: [Daily use](#daily-use).
 
@@ -265,10 +257,12 @@ Use this when you will **not** run the spec → PRD → fanout pipeline (small f
 1. Clone or create the repo; point OpenCode at this config (above).
 2. Copy [docs/templates/opencode.md.template](docs/templates/opencode.md.template) → **`opencode.md`**; add **`CONTEXT.md`** (glossary + conventions).
 3. In **`architect`**, run **`setup-skills`** once. It scaffolds:
-  - `docs/agents/issue-tracker.md`
-  - `docs/agents/triage-labels.md`
-  - `docs/agents/domain.md`
-  - `## Agent skills` in **`AGENTS.md`** or **`README.md`** (not both)
+
+- `docs/agents/issue-tracker.md`
+- `docs/agents/triage-labels.md`
+- `docs/agents/domain.md`
+- `## Agent skills` in **`AGENTS.md`** or **`README.md`** (not both)
+
 4. Enable workflow skills on agents as needed ([Optional workflow skills](#optional-workflow-skills)).
 
 Work items: **`to-issues`** → optional **issue-expand** → **`orchestrate`**. No spec repo required.
@@ -323,14 +317,14 @@ tmp/
 
 See **[Feature flow (PRD → sign-off)](#feature-flow-prd--sign-off)** for the full map (including the work-repo review ↔ orchestrate loop). Short session cheat-sheet:
 
-| Step | Repo | Select | You do |
-|------|------|--------|--------|
-| Plan | **spec** | **architect** → `hi` → **1. Product feature / PRD …** | Approve PRD and issue plans; copy handoffs |
-| Build | **each work repo** | **orchestrate** (new session) | Paste `feature:<slug>` / handoff; wait for PR. Tickets are auto-kicked: each ticket worktree's GUI session is the **coder** primary agent (loading `ticket-lifecycle`), self-bootstraps from the kickoff pointer (injected via `session_kickoff`) and GitHub, returns exactly one `ticket_report:` comment per ticket. |
-| Review loop | **same work repo** | **architect** → `hi` → **4. Review / sign-off …** → **R** ↔ **orchestrate** until happy → **1** → **2** | Accept (`state:done`); docs; leave PR merge-ready |
-| Close | **spec** | **architect** → `hi` → **3. Feature complete …** | Verify-only close after every work repo's feature PR merged |
+| Step        | Repo               | Select                                                | You do                                                                                                                                                                                                                                                                                                                 |
+| ----------- | ------------------ | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Plan        | **spec**           | **architect** → `hi` → **1. Product feature / PRD …** | Approve PRD and issue plans; copy handoffs                                                                                                                                                                                                                                                                             |
+| Build       | **each work repo** | **orchestrate** (new session)                         | Paste `feature:<slug>` / handoff; wait for PR. Tickets are auto-kicked: each ticket worktree's GUI session is the **coder** primary agent (loading `ticket-lifecycle`), self-bootstraps from the kickoff pointer (injected via `session_kickoff`) and GitHub, returns exactly one `ticket_report:` comment per ticket. |
+| Review loop | **same work repo** | **orchestrate**                                       | Review the READY handoff; reply `ticket reviewed` / `all reviewed` when satisfied. Human review gate only; feature coder owns docs + PR readiness, orchestrator sets final `state:done` and merges.                                                                                                                    |
+| Close       | **spec**           | **architect** → `hi` → **3. Feature complete …**      | Verify-only close after every work repo's feature PR merged                                                                                                                                                                                                                                                            |
 
-The develop orchestrator wakes on every ticket's terminal report via `session_notify` (in-session message injection into the develop orchestrator's session) and via the optional `scripts/dev-loop-poller.sh` (server-host cron, ~2-min interval) for out-of-band GitHub-UI merges. See **[docs/RUNBOOK.md](docs/RUNBOOK.md)** for the poller timer setup.
+The develop orchestrator wakes on every ticket's terminal report via `session_notify` (in-session message injection into the develop orchestrator's session). The optional `scripts/dev-loop-poller.sh` is the **ticket-only** durable fallback for missed ticket notifies and out-of-band GitHub-UI merges. Feature reports have no poller guarantee; if needed, wake or resume the develop orchestrator manually so it fetches the durable `feature_report:`. See **[docs/RUNBOOK.md](docs/RUNBOOK.md)** for the poller timer setup.
 
 Optional same-session path after a short HANDOFF block: `/compact` then switch agent. If the provider errors on tool history, use `/new` instead.
 
@@ -340,23 +334,21 @@ Optional same-session path after a short HANDOFF block: `/compact` then switch a
 
 ## Quick reference
 
-
-| Topic                                                         | Location                                                                                                                   |
-| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Feature pipeline, two modes                                   | [docs/FEATURE-PIPELINE.md](docs/FEATURE-PIPELINE.md)                                                                     |
-| Pipeline, grading, MCP policy                                 | [docs/RUNBOOK.md](docs/RUNBOOK.md)                                                                                       |
-| Claude Context host vs Docker server                          | [Claude Context indexing](#claude-context-indexing-host-vs-docker-server)                                              |
-| Stack bootstrap skill                                         | [skills/setup-project/SKILL.md](skills/setup-project/SKILL.md)                                                           |
-| Per-repo bootstrap (orphan repo)                              | [skills/setup-skills/SKILL.md](skills/setup-skills/SKILL.md)                                                             |
-| Per-project context template                                  | [docs/templates/opencode.md.template](docs/templates/opencode.md.template)                                               |
-| Spec repo template layout                                     | [templates/spec-repo/](templates/spec-repo/)                                                                             |
-| Shared rules (loaded via `instructions`)                      | [rules/](rules/)                                                                                                         |
-| Helper scripts (secrets scan, session context, format, tests) | [scripts/](scripts/)                                                                                                     |
-| Project automation (fanout, issue-expand, feature-check) | `opencode-run` — see [bin/opencode-run](bin/opencode-run) |
-| Stack cleanup (remove legacy copied bin/) | `opencode-assess-stack` |
-| Git / SQL guardrails (scripts)                                | [scripts/block-dangerous-git.sh](scripts/block-dangerous-git.sh), [scripts/preflight-git.sh](scripts/preflight-git.sh) |
+| Topic                                                         | Location                                                                                                                                                     |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Feature pipeline, two modes                                   | [docs/FEATURE-PIPELINE.md](docs/FEATURE-PIPELINE.md)                                                                                                         |
+| Pipeline, grading, MCP policy                                 | [docs/RUNBOOK.md](docs/RUNBOOK.md)                                                                                                                           |
+| Claude Context host vs Docker server                          | [Claude Context indexing](#claude-context-indexing-host-vs-docker-server)                                                                                    |
+| Stack bootstrap skill                                         | [skills/setup-project/SKILL.md](skills/setup-project/SKILL.md)                                                                                               |
+| Per-repo bootstrap (orphan repo)                              | [skills/setup-skills/SKILL.md](skills/setup-skills/SKILL.md)                                                                                                 |
+| Per-project context template                                  | [docs/templates/opencode.md.template](docs/templates/opencode.md.template)                                                                                   |
+| Spec repo template layout                                     | [templates/spec-repo/](templates/spec-repo/)                                                                                                                 |
+| Shared rules (loaded via `instructions`)                      | [rules/](rules/)                                                                                                                                             |
+| Helper scripts (secrets scan, session context, format, tests) | [scripts/](scripts/)                                                                                                                                         |
+| Project automation (fanout, issue-expand, feature-check)      | `opencode-run` — see [bin/opencode-run](bin/opencode-run)                                                                                                    |
+| Stack cleanup (remove legacy copied bin/)                     | `opencode-assess-stack`                                                                                                                                      |
+| Git / SQL guardrails (scripts)                                | [scripts/block-dangerous-git.sh](scripts/block-dangerous-git.sh), [scripts/preflight-git.sh](scripts/preflight-git.sh)                                       |
 | Worktree env copy / verify (plugin tools)                     | `plugins/sandbox.js` — `env_copy` tool (replaces legacy `scripts/worktree-env.sh` + `scripts/preflight-worktree-verify.sh` + `scripts/preflight-runtime.sh`) |
-
 
 ---
 
@@ -367,7 +359,7 @@ Optional same-session path after a short HANDOFF block: `/compact` then switch a
 ## Custom pipeline (summary)
 
 - **`architect`** — planning; invokes `scribe` for docs artifacts; never executes code. The feature coder owns the post-merge sign-off loop; architect routes post-PR feedback to the impl `orchestrate` session.
-- **`orchestrate`** — outer-loop execution coordinator on `develop`; creates the feature worktree, kicks one **coder** session per ticket (via `worktree-manager` + `session_notify`), gates PR approval, merges + cleans up, and hands off to the feature-architect when all tickets land. Never writes files directly.
+- **`orchestrate`** — outer-loop execution coordinator on `develop`; creates the feature worktree, kicks one **coder** session per ticket (via `worktree-manager` + `session_kickoff`), gates PR approval, merges + cleans up, kicks the feature coder when all tickets land, and merges the feature PR after human approval. Never writes files directly.
 - **`coder`** — primary agent hosted inside each ticket worktree (auto-started GUI session). Loads `ticket-lifecycle`, owns every stage (test-writer RED → owner GREEN → per-stage code-review), runs the **final `all_stages: true` full-suite gate** via the compose test backend, escalates to senior-dev unattended, falls back failed children to kilo/openrouter, returns exactly one terminal `ticket_report:` to the orchestrator. Never writes files directly — delegates everything.
 - **`scribe`** — only writer for plans, `docs/changelog|guides|architecture|adr|agents`, `CONTEXT.md`, `CONTEXT-MAP.md`, root `README`, optional `AGENTS.md`, `.env.example` (per allow list in [agents/scribe.md](agents/scribe.md)).
 - **`review`** — may Task `security-reviewer`, `performance-reviewer`, `doc-reviewer` for focused passes (see agent + skill).

@@ -5,12 +5,12 @@ modelTier: "fast"
 roleReminder: "Load on the first message of any coder session whose cwd is a ticket worktree (any first message — injected kickoff, user 'begin', or resume). The post-completion guard in implementer skills only fires after the terminal report, not between stages."
 ---
 
-> You are operating inside a **coder** session: an OpenCode GUI session that was auto-started by `worktree_create_ticket` inside an `opencode/ticket-<issue>-<slug>-<abbrev>` worktree. You are the wrapping coder for one ticket. You never write or edit files yourself; you own every stage, every per-stage `code-review`, the sub-PR, and the PR stabilization loop. You return exactly **one** terminal report (`READY_FOR_HUMAN_REVIEW` or `BLOCKED`) and stop. The develop orchestrator (`orchestrate`) is reached via the `session_notify` plugin tool (you hold it directly — the previous `session-manager` subagent layer was removed); the durable channel is the `ticket_report:` issue comment.
+> You are operating inside a **coder** session: an OpenCode GUI session that was auto-started by `worktree_create_ticket` inside an `opencode/ticket-<issue>-<slug>-<abbrev>` worktree. You are the wrapping coder for one ticket. You never write or edit files yourself; you own every stage, every per-stage `code-review`, the sub-PR, and the PR stabilization loop. You return exactly **one** terminal report (`READY_FOR_HUMAN_REVIEW` or `BLOCKED`) and stop. The develop orchestrator (`orchestrate`) is reached via the `session_notify` plugin tool; the durable channel is the `ticket_report:` issue comment.
 
 ## Hard rules
 
 1. **One terminal report.** Either `READY_FOR_HUMAN_REVIEW` (sub-PR URL + green CI + comment-clean + complete `human_review_handoff/v1`) or `BLOCKED` (reason + partial evidence). Do not return success after each stage; do not hand off mid-ticket.
-2. **Silent preflight.** Run `worktree-env` + `preflight` once, silently. One auto-repair pass (per `skills/preflight/SKILL.md` repair table). Only on `Status: Blocked` after the single repair pass do you surface to the parent.
+2. **Silent verification-backend bring-up.** Run `worktree-sandbox` `mode: probe_and_create` once, silently. One auto-repair pass is allowed through that bounded setup flow. Only on `Status: Blocked` after the single repair pass do you surface to the parent.
 3. **Stay on `opencode/ticket-<issue>-<slug>-<abbrev>`.** Do not switch branches, do not push to `develop` or `opencode/feat-<slug>` directly — only to your own ticket branch.
 4. **Never delete remote branches.** `git push origin --delete` is owned exclusively by the develop orchestrator (delegated to `developer`). You push your ticket branch only.
 5. **One sub-PR per ticket.** Sub-PR is `head=opencode/ticket-<issue>-<slug>-<abbrev>`, `base=opencode/feat-<slug>`. Do not open additional PRs.
@@ -19,7 +19,7 @@ roleReminder: "Load on the first message of any coder session whose cwd is a tic
 8. **Stabilization is bounded.** PR stabilization loop runs **at most 3 iterations**. On exhaustion, return `BLOCKED: STABILIZATION_EXHAUSTED` with the remaining fix-now items.
 9. **Cross-ticket review comments are not yours to fix.** If `pr-stabilize-watch.sh` returns comments whose fix would touch files in another ticket's branch, return `BLOCKED: CROSS_TICKET_REVIEW` so the develop orchestrator routes it to the feature coder's remediation flow.
 10. **Issue state transitions** (`state:in-progress` on entry, `state:ready-for-ticket-review` when the sub-PR opens) are yours; use `scripts/issue-state-transition.sh` via a delegated `developer` Task.
-11. **You are the auto-started GUI session for this worktree.** The develop orchestrator does **not** dispatch you via `task` (cwd inheritance would put you on `develop`); you are reached via the kickoff message injected by `session_kickoff` (which calls `session_notify`'s underlying `/prompt_async` POST) or via any user message. You must self-bootstrap from your **most recent user message** + the branch + GitHub — there is no brief file written; the kickoff message IS the contract.
+11. **You are the auto-started GUI session for this worktree.** The develop orchestrator does **not** dispatch you via `task` (cwd inheritance would put you on `develop`); you are reached via `session_kickoff` or via any user message. You must self-bootstrap from your **most recent user message** + the branch + GitHub. The kickoff message is the contract.
 12. **Verification backend is containerized only.** Every RED/GREEN/final-gate test run goes through `docker-compose.test.yml` via `sandbox_run_test` from `plugins/sandbox.js` (sandbox exec on opencode-server, or direct `docker compose` on local dev) — **never** host-local suite setup. `compose_test_file: none` after `probe_and_create` → `ENV_BLOCKED` with `recommended_env_fix: add docker-compose.test.yml from templates/project-stub/`. No host npm/pip installs to "get tests running".
 13. **Never run `git merge` without `scripts/assert-merge-cwd.sh`.** If a stage ever needs to merge a ref inside your ticket worktree, source `scripts/assert-merge-cwd.sh` immediately before the `git merge` line with `ASSERT_MERGE_CWD=<worktree abs path>`, `ASSERT_MERGE_BRANCH=<expected_branch>`, `ASSERT_MERGE_REF=origin/<feature_branch>`, `ASSERT_BRANCH_CONTEXT=ticket-worktree`, `ASSERT_REPO=<OWNER/REPO>`. The script enforces no PR exists with `head=<feature_branch>, base=develop`. On any `BLOCKED: *` exit, surface the BLOCKED line verbatim and stop. This is the develop-pollution guard (2026-09-02 incident); ticket worktrees do not normally merge during execution but the rule is here as a tripwire.
 
@@ -69,13 +69,13 @@ Return JSON:
 
 Step ordering is load-bearing: `gh api create_ref` MUST run before `git push` so a missing remote branch surfaces as `BLOCKED: HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED` (or simply succeeds and falls through to `git push`) rather than a confusing `fatal: could not read Username` from `git push`. Step 3 checks `rev-parse --verify origin/<feature_branch>` first so `create_ref` is unreachable when the branch exists (422 means "already exists" — treat as success). Step 4's `git push -u origin <feature_branch>` is naturally idempotent across parallel coder sessions (fast-forward or up-to-date). On any non-zero exit, surface the developer's `blocker_code` verbatim — do not retry from here. Subsequent steps (§0.1 / §0.2 / §0.3 / §0.4) depend on the handshake succeeding.
 
-### §0.1 Brief resolution — REMOVED
+### §0.1 Kickoff pointer contract
 
-The brief file (`<worktree-gitdir>/opencode-ticket-brief.json`) is **no longer written**. There is no file on disk to read. The kickoff message inline is the brief. Skip this section entirely; do not look for `<gitdir>/opencode-ticket-brief.json` on disk. The worktree's `.git` file is irrelevant to bootstrap — `git rev-parse` (via delegated `developer`) is how you confirm `expected_branch`.
+Use the kickoff message inline as the bootstrap contract. Do not expect any on-disk bootstrap artifact. When you need to confirm `expected_branch`, do it from branch state (`git rev-parse` via delegated `developer`), not from worktree metadata.
 
 ### §0.2 GitHub reconstruction (primary fallback — delegated `developer` Task)
 
-If your most recent user message is missing or unparseable, **delegate ONE `developer` Task** with `load: minimal` to reconstruct the kickoff context from the branch + GitHub. This is now the primary resilience path — the durable source of truth is GitHub, not a brief file.
+If your most recent user message is missing or unparseable, **delegate ONE `developer` Task** with `load: minimal` to reconstruct the kickoff context from the branch + GitHub. This is the primary resilience path — the durable sources of truth are GitHub and branch state.
 
 ````text
 Task developer load: minimal
@@ -188,7 +188,7 @@ ticket_report: poll.
 
 You are not dispatched via `task` — the develop orchestrator reaches you via the kickoff pointer. The three sources of truth, in priority order:
 
-1. **Your most recent user message** — the kickoff pointer injected by `session_kickoff` via the underlying `/prompt_async` POST. Treat it as authoritative; it is the contract. Short by design — do not require it to contain the full payload.
+1. **Your most recent user message** — the kickoff pointer delivered by `session_kickoff`. Treat it as authoritative; it is the contract. Short by design — do not require it to contain the full payload.
 2. **GitHub issue + worktree branch** — `opencode-task-yaml` body, `feature:<slug>` label, `state:*` labels, `Blocked by:` section, branch name shape. This is the durable source; it backs §0.2 reconstruction when the kickoff message is missing.
 3. **Worktree branch + GitHub reconstruction** (delegated `developer` Task) — the fallback path for a missing/empty kickoff message.
 
@@ -313,7 +313,7 @@ switch report.classify:
 
 ### 6. Terminal report
 
-Emit the terminal report (in-session, normal prose), **post the `ticket_report:` comment on the issue** (mandatory durable channel — same pattern as `code_review_gate:`), and best-effort call `session_notify` directly to inject the terminal report into the develop orchestrator before stopping. **`session_notify` is a plugin tool you hold directly** — the `session-manager` subagent layer was removed.
+Emit the terminal report (in-session, normal prose), **post the `ticket_report:` comment on the issue** (mandatory durable channel — same pattern as `code_review_gate:`), and best-effort call `session_notify` directly to inject the terminal report into the develop orchestrator before stopping. **`session_notify` is a direct plugin tool you hold.**
 
 #### 6.0 `human_review_handoff/v1` readiness contract (mandatory on READY)
 

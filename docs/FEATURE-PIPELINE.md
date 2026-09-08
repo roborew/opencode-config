@@ -59,14 +59,14 @@ Same-session handoff is optional (`/compact` after a short table HANDOFF block);
 
 ### Sign-off and ticket closure
 
-| Label / state                    | Set when                                                                                          | Meaning                                                                                              |
-| -------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `state:in-progress`              | During **orchestrate** in the work repo                                                           | Actively executing issue/stages                                                                      |
-| `state:ready-for-ticket-review`  | After **orchestrate** finishes an issue                                                           | Sub-PR is open and code-review approved; awaiting human "ticket reviewed"                            |
-| `state:ticket-reviewed`          | Develop orchestrator OR coder session, on "ticket reviewed" reply (or detected out-of-band merge) | Sub-PR approved by human; merge into `opencode/feat-<slug>` is about to happen                       |
-| `state:ready-for-feature-review` | Feature coder inside `feature-review`, after opening the feature PR                               | Every ticket is stacked in `opencode/feat-<slug>`, feature PR is open; awaiting human "all reviewed" |
-| `state:done`                     | Develop orchestrator inside `orchestrate` §8c-i, on "all reviewed" reply                          | Final accept label; issue **stays open** until spec merge                                            |
-| Issue **closed** on GitHub       | Spec **3. Feature complete** at merge                                                             | Ticket complete                                                                                      |
+| Label / state                    | Set when                                                                                              | Meaning                                                                                              |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `state:in-progress`              | Ticket coder inside `ticket-lifecycle` bootstrap                                                      | Actively executing issue/stages                                                                      |
+| `state:ready-for-ticket-review`  | Ticket coder inside `ticket-lifecycle`, when the sub-PR opens                                         | Sub-PR is open and code-review approved; awaiting human "ticket reviewed"                            |
+| `state:ticket-reviewed`          | Develop orchestrator inside `orchestrate`, on "ticket reviewed" reply (or detected out-of-band merge) | Sub-PR approved by human; merge into `opencode/feat-<slug>` is about to happen                       |
+| `state:ready-for-feature-review` | Feature coder inside `feature-review`, after opening the feature PR                                   | Every ticket is stacked in `opencode/feat-<slug>`, feature PR is open; awaiting human "all reviewed" |
+| `state:done`                     | Develop orchestrator inside `orchestrate` §8c-i, on "all reviewed" reply                              | Final accept label; issue **stays open** until spec merge                                            |
+| Issue **closed** on GitHub       | Spec **3. Feature complete** at merge                                                                 | Ticket complete                                                                                      |
 
 **Orchestrate** does not accept tickets, write sign-off docs, close issues, or merge the feature PR. One **feature PR** per work repo after the queue is empty; then the orchestrator kicks the feature coder (`feature-review`) for the verification loop.
 
