@@ -77,7 +77,7 @@ The brief file (`<worktree-gitdir>/opencode-ticket-brief.json`) is **no longer w
 
 If your most recent user message is missing or unparseable, **delegate ONE `developer` Task** with `load: minimal` to reconstruct the kickoff context from the branch + GitHub. This is now the primary resilience path — the durable source of truth is GitHub, not a brief file.
 
-```text
+````text
 Task developer load: minimal
 Resolve the ticket kickoff context for the current worktree from GitHub.
 
@@ -108,7 +108,7 @@ Return JSON:
   "develop_session_id": "<id or null>",
   "merge_base_ok": true
 }
-```
+````
 
 Use the returned JSON as your kickoff pointer. If `develop_session_id` is `null`, the durable `ticket_report:` issue comment is the only wake channel (no `session_notify` target); record this and continue — §6c handles the missing-id case.
 
@@ -148,6 +148,41 @@ Subsequent test execution (test-writer RED, developer GREEN, code-review per-sta
    ```
 
    `state:in-progress` automatically removes `verified` and adds `unverified` — the verification gate will re-arm when this ticket reaches `state:ready-for-ticket-review` again. The swap is enforced centrally in `scripts/issue-state-transition.sh` on **every** state transition; the only inline writer of `verified` is `scripts/issue-verified-transition.sh`, which the coder calls on APPROVED (final-gate step §3 below).
+
+### §0.6 Handshake ack (mandatory, async, do not block)
+
+The kickoff message from the orchestrator carries a return_target
+block naming the orchestrator's sessionID. Before the first RED
+stage (and as the very first user-visible action after the kickoff
+is admitted), send a one-line ack back to the orchestrator:
+
+session_notify({
+sessionID: <return_target.sessionID from kickoff>,
+directory: "",
+agent: "coder",
+message: "ack: ticket-lifecycle §0 bootstrap, return channel OK, durable channel OK. Working on stage 1."
+})
+
+The ack is admitted on HTTP 204, same as any /prompt_async inject.
+Do not wait for a reply from the orchestrator — the ack is a
+one-shot registration, not a conversation opener. Move on to stage 1.
+
+If session_notify errors with "requires exactly one of sessionID or
+directory", the kickoff message is malformed: re-derive the
+return_target from the GitHub issue (orchestrator's most recent
+ticket_report: comment on the issue, or the
+orchestrator_session_id field on the issue body if present) and
+retry once. If still failing, fall back to durable_channel only
+and post a status comment on the issue explaining the ack failure.
+
+Rationale: the 2026-09-07 ticket 259 stall was caused by a
+sessionID-less resume kickoff where the coder had no return
+channel and sat idle after the prior orchestrator's session went
+away. The handshake ack makes the channel observable: the
+orchestrator can detect a live but silent coder via
+handshake_acked: false in its lifecycle log and nudge or
+escalate, instead of waiting indefinitely on a one-way
+ticket_report: poll.
 
 ## Required inputs (truth sources)
 
@@ -242,7 +277,6 @@ Resume-safe idempotence (§0.4 step 2) reads the most recent `code_review_gate:`
 #### 3.2 Local CodeRabbit pre-flight
 
 1. Dispatch `code-review` once with `load: full`, `execution_mode: ticket_coderabbit_preflight`, the ticket worktree path, `base_branch: opencode/feat-<slug>`, and the per-stage code-review evidence. Scope: correctness, obvious bugs, and risky changes only (narrow rule set — narrow further if this and the PR-side feature gate keep producing duplicate noise).
-
    - On `PASS` → proceed to §4.
    - On `BLOCKED` → apply the fix-now suggestions in-worktree (TDD, behaviour changes only), commit `Refs: #<issue_number>`, push the ticket branch, re-run the pre-flight before the sub-PR opens. Max 2 retries, then `BLOCKED: PREFLIGHT_EXHAUSTED`.
    - On `SKIPPED` (CLI/auth unavailable) → record `coderabbit_preflight: SKIPPED` in the ticket_report and proceed. The PR-side feature gate is the policy blocker; missing the pre-flight does not block the ticket terminal report.
@@ -326,53 +360,38 @@ Exactly one of:
 ```yaml
 READY_FOR_HUMAN_REVIEW:
   issue_number: <n>
-  pr_url:      <url>
-  ci_state:    pass|pending
-  evidence:    <pr-stabilize-watch evidence line>
+  pr_url: <url>
+  ci_state: pass|pending
+  evidence: <pr-stabilize-watch evidence line>
   comment_resolutions: [{ author, classification, action }]
-  stages_completed:   <count>
+  stages_completed: <count>
   coderabbit_preflight: PASS | SKIPPED
   awaiting_human_notes: <optional list of WIP/hold comments>
   next_action_for_parent: "merge sub-PR into opencode/feat-<slug> on human approval, then worktree + remote-branch cleanup"
 
 BLOCKED:
   blocker_code: ENV_BLOCKED | STAGE_STUCK | STABILIZATION_EXHAUSTED | CROSS_TICKET_REVIEW | CHECKOUT_CONTRACT_FAILED | SKILL_UNAVAILABLE | FALLBACK_EXHAUSTED | PREFLIGHT_EXHAUSTED | HANDSHAKE_PUSH_FAILED | HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED | TICKET_NOT_FORKED_FROM_FEATURE
-  reason:       <one-line>
+  reason: <one-line>
   partial_evidence:
-    stages_completed:  <count>
-    last_ci_state:     pass|fail|pending
-    last_pr_url:       <url if open>
-    failing_checks:    [<names>]
+    stages_completed: <count>
+    last_ci_state: pass|fail|pending
+    last_pr_url: <url if open>
+    failing_checks: [<names>]
     fix_now_outstanding: <count>
   recommended_helper_request: <one concrete request>
 ```
 
 #### 6c. Best-effort wake via `session_notify` (direct call)
 
-When the explicit `develop_session_id` is passed and `session_list` does not return it, `session_notify` returns `error: "session_not_found"` (hard stop — no silent create) — the durable `ticket_report:` comment + `scripts/dev-loop-poller.sh` are the wake channel.
-
-```text
-message = "ticket_report: <repo>#<n> | status: READY_FOR_HUMAN_REVIEW | pr: <url> | ci: pass | stages: <n>\nnext_action: merge sub-PR on human approval"
-# or, for BLOCKED:
-message = "ticket_report: <repo>#<n> | status: BLOCKED | blocker: <code> | reason: <one-line>"
-
-# The develop_session_id is supplied in the kickoff message inline (see §0 preamble).
-# If it's missing (kickoff truncated, §0.2 reconstruction found no develop_session_id on
-# the issue), pass `directory: <this worktree dir>` instead — session_notify falls
-# back to the newest no-parent session under that directory.
-develop_target = { sessionID: <develop_session_id> } if develop_session_id else { directory: <worktree abs path> }
-
-result = session_notify({
-  ...develop_target,
-  agent: "orchestrate",
-  message,
-})
-
-if result.admitted == true: record notify_status: admitted
-elif result.error == "session_not_found" and result.session_id == develop_session_id: record notify_status: develop_session_id_stale (the kickoff message's stored id may be stale after a restart — the ticket_report: comment + poller are the durable wake path)
-elif result.status == 404: record notify_status: develop_session_id_stale (the kickoff message's stored id may be stale after a restart — the ticket_report: comment + poller are the durable wake path)
-else:                       record notify_status: <error from result.error>
-```
+The terminal ticket_report: comment is the MANDATORY durable channel
+(no change). The session_notify injection is the FAST channel. By
+the time the coder reaches §6, it has already completed the §0.6
+handshake ack, so it knows the orchestrator's sessionID. Reuse the
+same return_target.sessionID here. If session_notify errors
+session_not_found, the durable ticket_report: comment is the fallback
+and the poller will wake the orchestrator within one poll interval.
+Do not retry the inject; do not poll GitHub from this session; just
+post the comment and end the turn.
 
 The `ticket_report:` comment is the **mandatory** durable channel. `session_notify` is best-effort; its failure is recorded in the comment but never blocks the terminal report. **A failed wake is never silent:** when `notify_status` is anything other than `admitted`, end your final in-session report with this user instruction (the coder session is a GUI session — the user reads it):
 
