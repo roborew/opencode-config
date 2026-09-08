@@ -11,7 +11,7 @@ roleReminder: "Loaded by the `coder` agent in the feature worktree after all tic
 
 1. **Stay on `opencode/feat-<slug>`.** Do not switch branches, do not push to `develop` or any ticket branch — only to the feat branch and its feature PR.
 2. **Verifier ≠ implementer.** `code-review` grades, `developer` (delegated) fixes. Never have the same actor both write and grade the same change.
-3. **One terminal report.** Either `READY_FOR_HUMAN_REVIEW` (pr_url + full-suite evidence + CodeRabbit verdict + docs paths) or `BLOCKED` (`BLOCKED: FEATURE_REMEDIATION` with issue numbers, or `CHECKOUT_CONTRACT_FAILED` / `ENV_BLOCKED` / `STABILIZATION_EXHAUSTED`). Do not hand off mid-feature.
+3. **One terminal report.** Either `READY_FOR_HUMAN_REVIEW` (pr_url + full-suite evidence + CodeRabbit verdict + docs paths + complete `human_review_handoff/v1`) or `BLOCKED` (`BLOCKED: FEATURE_REMEDIATION` with issue numbers, or `CHECKOUT_CONTRACT_FAILED` / `ENV_BLOCKED` / `STABILIZATION_EXHAUSTED`). Do not hand off mid-feature.
 4. **No nested fallbacks.** Dispatch `kilo-fallback`/`openrouter-fallback` for failed **children** only — never replace the coder itself, never dispatch one fallback from another.
 5. **No worktree management.** Never call `worktree-manager` or any `worktree_*` tool; never create/switch/delete branches; never `git push origin --delete` — delegated `developer` is the only branch-deleting actor.
 6. **Stabilization is bounded.** Feature PR stabilization loop runs **at most 3 iterations**. On exhaustion, return `BLOCKED: STABILIZATION_EXHAUSTED`.
@@ -224,6 +224,45 @@ When step 1, step 2, step 3, or step 7 surface unmet acceptance criteria that ca
 
 Emit the terminal report (in-session, normal prose), **post the `feature_report:` comment on the PRD parent issue** (mandatory durable channel), and best-effort call `session_notify` directly to inject the terminal report into the develop orchestrator before stopping. **`session_notify` is a plugin tool you hold directly** — the `session-manager` subagent layer was removed.
 
+#### 9.0 `human_review_handoff/v1` readiness contract (mandatory on READY)
+
+`READY_FOR_HUMAN_REVIEW` is valid only when the durable `feature_report:` contains a complete `human_review_handoff/v1` block. The wake channel (`session_notify`) is transport only; the durable PRD-parent issue comment is the contract the develop orchestrator reads before it surfaces the feature PR to the human.
+
+Required READY fields:
+
+- `review_handoff_contract.name: human_review_handoff`
+- `review_handoff_contract.version: 1`
+- `issue_url`
+- `pr_url`
+- `notify_status`
+- `docs_paths`
+- `tickets_state_feature_review`
+- `review_handoff.what_was_done`
+- `review_handoff.wrap_up`
+- `review_handoff.test_report_count`
+- `review_handoff.coderabbit_issues_found`
+- `review_handoff.coderabbit_issues_solved`
+- `review_handoff.local_pr_issues_found`
+- `review_handoff.local_pr_issues_solved`
+- `review_handoff.fix_now_issues_found`
+- `review_handoff.fix_now_issues_resolved`
+
+READY invariants:
+
+- every count field is an integer `>= 0`
+- `review_handoff.test_report_count >= 1`
+- `review_handoff.coderabbit_issues_solved <= review_handoff.coderabbit_issues_found`
+- `review_handoff.local_pr_issues_solved <= review_handoff.local_pr_issues_found`
+- `review_handoff.fix_now_issues_resolved <= review_handoff.fix_now_issues_found`
+- `review_handoff.fix_now_issues_found == review_handoff.coderabbit_issues_found + review_handoff.local_pr_issues_found`
+- `review_handoff.fix_now_issues_resolved == review_handoff.coderabbit_issues_solved + review_handoff.local_pr_issues_solved`
+- if `review_handoff.coderabbit_issues_found > 0`, then `review_handoff.coderabbit_issues_solved > 0`
+- if `review_handoff.local_pr_issues_found > 0`, then `review_handoff.local_pr_issues_solved > 0`
+- for READY, `review_handoff.fix_now_issues_found == review_handoff.fix_now_issues_resolved`
+- `tickets_state_feature_review` is non-empty
+
+If the durable report is missing any required field, or the counts do not reconcile, do **not** emit READY. Return `BLOCKED` instead so the develop orchestrator can stop with `REVIEW_HANDOFF_INCOMPLETE` or `REVIEW_HANDOFF_INCONSISTENT` rather than surfacing an ambiguous feature PR.
+
 #### §9-completion: tear down the verification backend
 
 Before stopping, lifecycle-aware destroy of the compose test backend. Dispatch ONE `worktree-sandbox` Task with `load: minimal`:
@@ -243,9 +282,12 @@ The agent calls `sandbox_status` (confirm idle) then `sandbox_destroy` from the 
 gh issue comment "<prd_parent_number>" --repo "<spec_owner/spec_repo>" --body "$(cat <<'EOF'
 feature_report:
   status: READY_FOR_HUMAN_REVIEW | BLOCKED
+  issue: <spec_owner/spec_repo>#<prd_parent_number>
+  issue_url: <prd_parent_issue_url>
+  prd_url: <url>                          # optional when known
   feature: feature:<slug>
   implementation_repo: <OWNER/REPO>
-  pr_url: <url>                          # READY only
+  pr_url: <url>                           # READY only
   ci_state: pass|pending|fail             # READY only
   full_suite_evidence: <compose test invocation + pass line>
   coderabbit_verdict: PASS | SKIPPED | BLOCKED  # SKIPPED only when difficulty=easy
@@ -254,6 +296,19 @@ feature_report:
     - <other paths written by scribe>
   tickets_state_feature_review: [<n1>, <n2>, ...]
   notify_status: admitted|failed|<reason>
+  review_handoff_contract:
+    name: human_review_handoff
+    version: 1
+  review_handoff:
+    what_was_done: <concise summary of integrated feature work>
+    wrap_up: <concise wrap-up for the human reviewer>
+    test_report_count: <int>
+    coderabbit_issues_found: <int>
+    coderabbit_issues_solved: <int>
+    local_pr_issues_found: <int>
+    local_pr_issues_solved: <int>
+    fix_now_issues_found: <int>
+    fix_now_issues_resolved: <int>
 EOF
 )"
 ```
@@ -267,19 +322,35 @@ Exactly one of:
 ```yaml
 READY_FOR_HUMAN_REVIEW:
   feature_slug: feature:<slug>
+  issue: <spec_owner/spec_repo>#<prd_parent_number>
+  issue_url: <prd_parent_issue_url>
+  prd_url: <url or null>
   pr_url: <url>
   ci_state: pass|pending
   full_suite_evidence: <compose test invocation + pass line>
   coderabbit_verdict: PASS | SKIPPED
+  review_handoff_contract:
+    name: human_review_handoff
+    version: 1
+  review_handoff:
+    what_was_done: <concise summary of integrated feature work>
+    wrap_up: <concise wrap-up for the human reviewer>
+    test_report_count: <int>
+    coderabbit_issues_found: <int>
+    coderabbit_issues_solved: <int>
+    local_pr_issues_found: <int>
+    local_pr_issues_solved: <int>
+    fix_now_issues_found: <int>
+    fix_now_issues_resolved: <int>
   docs_paths: [...]
   tickets_state_feature_review: [<n1>, <n2>, ...]
   awaiting_human_notes: <optional list of WIP/hold comments>
-  next_action_for_parent: "feature PR is open and ready for review; merge is the develop orchestrator's gate on 'all reviewed'"
+  next_action_for_parent: "validate human_review_handoff/v1, present the standard review table, then merge the feature PR on 'all reviewed'"
 
 BLOCKED:
-  blocker_code: FEATURE_REMEDIATION | STABILIZATION_EXHAUSTED | ENV_BLOCKED | CHECKOUT_CONTRACT_FAILED | SKILL_UNAVAILABLE | HANDSHAKE_PUSH_FAILED | HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED | TICKET_NOT_FORKED_FROM_FEATURE
+  blocker_code: FEATURE_REMEDIATION | STABILIZATION_EXHAUSTED | ENV_BLOCKED | CHECKOUT_CONTRACT_FAILED | SKILL_UNAVAILABLE | HANDSHAKE_PUSH_FAILED | HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED | TICKET_NOT_FORKED_FROM_FEATURE | REVIEW_HANDOFF_INCOMPLETE | REVIEW_HANDOFF_INCONSISTENT
   reason: <one-line>
-  remediation_issues: [<n1>, <n2>, ...]      # FEATURE_REMEDIATION only
+  remediation_issues: [<n1>, <n2>, ...] # FEATURE_REMEDIATION only
   partial_evidence:
     full_suite_state: pass|fail|pending
     failing_checks: [<names>]
@@ -292,9 +363,9 @@ BLOCKED:
 When the explicit `develop_session_id` is passed and `session_list` does not return it, `session_notify` returns `error: "session_not_found"` (hard stop — no silent create) — the durable `feature_report:` comment is the wake channel.
 
 ```text
-message = "feature_report: feature:<slug> | status: READY_FOR_HUMAN_REVIEW | pr: <url> | ci: pass | tickets: <n>"
+message = "feature_report: feature:<slug> | status: READY_FOR_HUMAN_REVIEW | contract: human_review_handoff/v1 | pr: <url> | issue: <prd_parent_issue_url> | tests: <int> | coderabbit_found: <int> | coderabbit_solved: <int> | local_pr_found: <int> | local_pr_solved: <int> | fix_now_found: <int> | fix_now_resolved: <int> | tickets: <n>"
 # or, for BLOCKED:
-message = "feature_report: feature:<slug> | status: BLOCKED | blocker: <code> | reason: <one-line>"
+message = "feature_report: feature:<slug> | status: BLOCKED | contract: human_review_handoff/v1 | blocker: <code> | reason: <one-line>"
 
 # The develop_session_id is supplied in the feature coder kickoff message inline.
 # If it's missing (kickoff truncated), pass `directory: <feature worktree dir>` instead —

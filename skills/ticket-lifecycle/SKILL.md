@@ -9,7 +9,7 @@ roleReminder: "Load on the first message of any coder session whose cwd is a tic
 
 ## Hard rules
 
-1. **One terminal report.** Either `READY_FOR_HUMAN_REVIEW` (sub-PR URL + green CI + comment-clean) or `BLOCKED` (reason + partial evidence). Do not return success after each stage; do not hand off mid-ticket.
+1. **One terminal report.** Either `READY_FOR_HUMAN_REVIEW` (sub-PR URL + green CI + comment-clean + complete `human_review_handoff/v1`) or `BLOCKED` (reason + partial evidence). Do not return success after each stage; do not hand off mid-ticket.
 2. **Silent preflight.** Run `worktree-env` + `preflight` once, silently. One auto-repair pass (per `skills/preflight/SKILL.md` repair table). Only on `Status: Blocked` after the single repair pass do you surface to the parent.
 3. **Stay on `opencode/ticket-<issue>-<slug>-<abbrev>`.** Do not switch branches, do not push to `develop` or `opencode/feat-<slug>` directly — only to your own ticket branch.
 4. **Never delete remote branches.** `git push origin --delete` is owned exclusively by the develop orchestrator (delegated to `developer`). You push your ticket branch only.
@@ -315,6 +315,44 @@ switch report.classify:
 
 Emit the terminal report (in-session, normal prose), **post the `ticket_report:` comment on the issue** (mandatory durable channel — same pattern as `code_review_gate:`), and best-effort call `session_notify` directly to inject the terminal report into the develop orchestrator before stopping. **`session_notify` is a plugin tool you hold directly** — the `session-manager` subagent layer was removed.
 
+#### 6.0 `human_review_handoff/v1` readiness contract (mandatory on READY)
+
+`READY_FOR_HUMAN_REVIEW` is valid only when the durable `ticket_report:` contains a complete `human_review_handoff/v1` block. The wake channel (`session_notify`) is transport only; the durable issue comment is the contract the develop orchestrator reads before it surfaces the PR to the human.
+
+Required READY fields:
+
+- `review_handoff_contract.name: human_review_handoff`
+- `review_handoff_contract.version: 1`
+- `issue_url`
+- `pr_url`
+- `notify_status`
+- `review_handoff.what_was_done`
+- `review_handoff.wrap_up`
+- `review_handoff.test_report_count`
+- `review_handoff.coderabbit_issues_found`
+- `review_handoff.coderabbit_issues_solved`
+- `review_handoff.local_pr_issues_found`
+- `review_handoff.local_pr_issues_solved`
+- `review_handoff.fix_now_issues_found`
+- `review_handoff.fix_now_issues_resolved`
+- `final_gate_post.posted_comment_id`
+- `final_gate_post.label_added: true`
+
+READY invariants:
+
+- every count field is an integer `>= 0`
+- `review_handoff.test_report_count >= 1`
+- `review_handoff.coderabbit_issues_solved <= review_handoff.coderabbit_issues_found`
+- `review_handoff.local_pr_issues_solved <= review_handoff.local_pr_issues_found`
+- `review_handoff.fix_now_issues_resolved <= review_handoff.fix_now_issues_found`
+- `review_handoff.fix_now_issues_found == review_handoff.coderabbit_issues_found + review_handoff.local_pr_issues_found`
+- `review_handoff.fix_now_issues_resolved == review_handoff.coderabbit_issues_solved + review_handoff.local_pr_issues_solved`
+- if `review_handoff.coderabbit_issues_found > 0`, then `review_handoff.coderabbit_issues_solved > 0`
+- if `review_handoff.local_pr_issues_found > 0`, then `review_handoff.local_pr_issues_solved > 0`
+- for READY, `review_handoff.fix_now_issues_found == review_handoff.fix_now_issues_resolved`
+
+If the durable report is missing any required field, or the counts do not reconcile, do **not** emit READY. Return `BLOCKED` instead so the develop orchestrator can stop with `REVIEW_HANDOFF_INCOMPLETE` or `REVIEW_HANDOFF_INCONSISTENT` rather than surfacing an ambiguous PR.
+
 #### §0-completion: tear down the verification backend
 
 Before stopping, lifecycle-aware destroy of the compose test backend. Dispatch ONE `worktree-sandbox` Task with `load: minimal`:
@@ -335,15 +373,30 @@ gh issue comment "<issue_number>" --repo "<repo>" --body "$(cat <<'EOF'
 ticket_report:
   status: READY_FOR_HUMAN_REVIEW | BLOCKED
   issue: <repo>#<issue_number>
-  pr_url: <url>                    # READY only
-  ci_state: pass|pending|fail       # READY only
+  issue_url: <issue_url>
+  prd_url: <url>                       # optional when known
+  pr_url: <url>                        # READY only
+  ci_state: pass|pending|fail          # READY only
   stages_completed: <count>
   coderabbit_preflight: PASS | SKIPPED | BLOCKED   # see §3
-  coderabbit_preflight_skip_reason: <reason>  # SKIPPED only
-  blocker_code: <code>             # BLOCKED only
-  reason: <one-line>                # BLOCKED only
+  coderabbit_preflight_skip_reason: <reason>       # SKIPPED only
+  blocker_code: <code>                 # BLOCKED only
+  reason: <one-line>                   # BLOCKED only
   next_action: <what the develop orchestrator should do>
   notify_status: admitted|failed|<reason>   # see §6c
+  review_handoff_contract:
+    name: human_review_handoff
+    version: 1
+  review_handoff:
+    what_was_done: <concise summary of ticket work completed>
+    wrap_up: <concise wrap-up for the human reviewer>
+    test_report_count: <int>
+    coderabbit_issues_found: <int>
+    coderabbit_issues_solved: <int>
+    local_pr_issues_found: <int>
+    local_pr_issues_solved: <int>
+    fix_now_issues_found: <int>
+    fix_now_issues_resolved: <int>
   final_gate_post:
     posted_comment_id: <int>           # from §3.1 step 2a
     label_added: true                  # from §3.1 step 2c
@@ -360,17 +413,32 @@ Exactly one of:
 ```yaml
 READY_FOR_HUMAN_REVIEW:
   issue_number: <n>
+  issue_url: <issue_url>
+  prd_url: <url or null>
   pr_url: <url>
   ci_state: pass|pending
   evidence: <pr-stabilize-watch evidence line>
   comment_resolutions: [{ author, classification, action }]
   stages_completed: <count>
   coderabbit_preflight: PASS | SKIPPED
+  review_handoff_contract:
+    name: human_review_handoff
+    version: 1
+  review_handoff:
+    what_was_done: <concise summary of ticket work completed>
+    wrap_up: <concise wrap-up for the human reviewer>
+    test_report_count: <int>
+    coderabbit_issues_found: <int>
+    coderabbit_issues_solved: <int>
+    local_pr_issues_found: <int>
+    local_pr_issues_solved: <int>
+    fix_now_issues_found: <int>
+    fix_now_issues_resolved: <int>
   awaiting_human_notes: <optional list of WIP/hold comments>
-  next_action_for_parent: "merge sub-PR into opencode/feat-<slug> on human approval, then worktree + remote-branch cleanup"
+  next_action_for_parent: "validate human_review_handoff/v1, present the standard review table, then merge sub-PR into opencode/feat-<slug> on human approval"
 
 BLOCKED:
-  blocker_code: ENV_BLOCKED | STAGE_STUCK | STABILIZATION_EXHAUSTED | CROSS_TICKET_REVIEW | CHECKOUT_CONTRACT_FAILED | SKILL_UNAVAILABLE | FALLBACK_EXHAUSTED | PREFLIGHT_EXHAUSTED | HANDSHAKE_PUSH_FAILED | HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED | TICKET_NOT_FORKED_FROM_FEATURE
+  blocker_code: ENV_BLOCKED | STAGE_STUCK | STABILIZATION_EXHAUSTED | CROSS_TICKET_REVIEW | CHECKOUT_CONTRACT_FAILED | SKILL_UNAVAILABLE | FALLBACK_EXHAUSTED | PREFLIGHT_EXHAUSTED | HANDSHAKE_PUSH_FAILED | HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED | TICKET_NOT_FORKED_FROM_FEATURE | REVIEW_HANDOFF_INCOMPLETE | REVIEW_HANDOFF_INCONSISTENT
   reason: <one-line>
   partial_evidence:
     stages_completed: <count>
@@ -392,6 +460,14 @@ session_not_found, the durable ticket_report: comment is the fallback
 and the poller will wake the orchestrator within one poll interval.
 Do not retry the inject; do not poll GitHub from this session; just
 post the comment and end the turn.
+
+Use a compact wake message that still carries the contract marker:
+
+```text
+message = "ticket_report: <repo>#<n> | status: READY_FOR_HUMAN_REVIEW | contract: human_review_handoff/v1 | pr: <url> | issue: <issue_url> | tests: <int> | coderabbit_found: <int> | coderabbit_solved: <int> | local_pr_found: <int> | local_pr_solved: <int> | fix_now_found: <int> | fix_now_resolved: <int> | stages: <count>"
+# or, for BLOCKED:
+message = "ticket_report: <repo>#<n> | status: BLOCKED | contract: human_review_handoff/v1 | blocker: <code> | reason: <one-line>"
+```
 
 The `ticket_report:` comment is the **mandatory** durable channel. `session_notify` is best-effort; its failure is recorded in the comment but never blocks the terminal report. **A failed wake is never silent:** when `notify_status` is anything other than `admitted`, end your final in-session report with this user instruction (the coder session is a GUI session — the user reads it):
 

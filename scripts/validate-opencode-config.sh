@@ -155,23 +155,28 @@ for j in range(start, len(src)):
 open(out, 'w').write('\n'.join(src[start:end or start+1]))
 PY
 }
-extract_tool_block plugins/session-manager.js session_create /tmp/sm_create_block.$$
+SM_CREATE_BLOCK=$(mktemp "${TMPDIR:-/tmp}/sm_create_block.XXXXXX")
+SM_NOTIFY_BLOCK=$(mktemp "${TMPDIR:-/tmp}/sm_notify_block.XXXXXX")
+SM_KICKOFF_BLOCK=$(mktemp "${TMPDIR:-/tmp}/sm_kickoff_block.XXXXXX")
+SM_DELETE_BLOCK=$(mktemp "${TMPDIR:-/tmp}/sm_delete_block.XXXXXX")
+trap 'rm -f "$SM_CREATE_BLOCK" "$SM_NOTIFY_BLOCK" "$SM_KICKOFF_BLOCK" "$SM_DELETE_BLOCK"' EXIT
+
+extract_tool_block plugins/session-manager.js session_create "$SM_CREATE_BLOCK"
 for needle in directory_match agent_match bind_failed; do
-  if ! grep -q "$needle" /tmp/sm_create_block.$$ 2>/dev/null; then
+  if ! grep -q "$needle" "$SM_CREATE_BLOCK" 2>/dev/null; then
     echo "  MISSING: $needle inside session_create envelope in plugins/session-manager.js"
     ERR=1
   fi
 done
-if grep -Eq 'bind_failed:\s*!\(\s*!directoryMatch\s*\|\|\s*!agentMatch\s*\)' /tmp/sm_create_block.$$; then
+if grep -Eq 'bind_failed:\s*!\(\s*!directoryMatch\s*\|\|\s*!agentMatch\s*\)' "$SM_CREATE_BLOCK"; then
   echo "  REGRESSION: plugins/session-manager.js session_create computes bind_failed as !( !d || !a ) — inverts the spec truth table"
   ERR=1
 fi
-rm -f /tmp/sm_create_block.$$
 # session_notify must wrap its GET /session lookup in a bounded retry (EVENTUAL_CONSISTENCY_RETRY
 # marker) — the server commits POST /session before it surfaces in GET /session, so a freshly-created
 # id can miss the first list attempt for ~250-1000 ms.
-extract_tool_block plugins/session-manager.js session_notify /tmp/sm_notify_block.$$
-if ! grep -q "EVENTUAL_CONSISTENCY_RETRY" /tmp/sm_notify_block.$$ 2>/dev/null; then
+extract_tool_block plugins/session-manager.js session_notify "$SM_NOTIFY_BLOCK"
+if ! grep -q "EVENTUAL_CONSISTENCY_RETRY" "$SM_NOTIFY_BLOCK" 2>/dev/null; then
   echo "  MISSING: EVENTUAL_CONSISTENCY_RETRY marker inside session_notify execute body in plugins/session-manager.js"
   ERR=1
 fi
@@ -179,11 +184,10 @@ fi
 # `/session/{id}/prompt_async?directory=...` — matches the poller's working pattern at
 # scripts/dev-loop-poller.sh and is defense-in-depth against server builds that scope sessions
 # to the directory query param (the historical bug that motivated this guard).
-if ! grep -qE 'query[[:space:]]*[:=][[:space:]]*\{\s*directory:\s*targetDir' /tmp/sm_notify_block.$$ 2>/dev/null; then
+if ! grep -qE 'query[[:space:]]*[:=][[:space:]]*\{\s*directory:\s*targetDir' "$SM_NOTIFY_BLOCK" 2>/dev/null; then
   echo "  REGRESSION: session_notify inject call missing init.query = { directory: targetDir } (Bug A — un-scope inject URL)"
   ERR=1
 fi
-rm -f /tmp/sm_notify_block.$$
 # session_notify's sessionID branch does a single bounded GET /session lookup (EVENTUAL_CONSISTENCY_RETRY)
 # to resolve the target row's directory for the `?directory=` inject URL. This is intentional and
 # differs from the pre-fix design (which trusted the sessionID without listing). The old check
@@ -191,42 +195,39 @@ rm -f /tmp/sm_notify_block.$$
 # because (a) it is bounded (3 attempts / 250-500-1000 ms), (b) it feeds the inject URL, not
 # stale-row validation. Guard: there must be NO unbounded retry / sleep loops in the sessionID
 # branch between the `if (sessionID)` keyword and the matching `} else {`.
-extract_tool_block plugins/session-manager.js session_notify /tmp/sm_notify_block.$$
-if awk '/if \(sessionID\)/{f=1; next} f && /^[[:space:]]*\} else \{/{f=0} f' /tmp/sm_notify_block.$$ | grep -qE "while\s*\(\s*true|for\s*\(\s*[^;]*;\s*[^;]*;\s*[^)]*\)"; then
+extract_tool_block plugins/session-manager.js session_notify "$SM_NOTIFY_BLOCK"
+if awk '/if \(sessionID\)/{f=1; next} f && /^[[:space:]]*\} else \{/{f=0} f' "$SM_NOTIFY_BLOCK" | grep -qE "while\s*\(\s*true|for\s*\(\s*[^;]*;\s*[^;]*;\s*[^)]*\)"; then
   echo "  REGRESSION: session_notify sessionID branch contains an unbounded loop (single bounded listWithRetry is allowed)"
   ERR=1
 fi
-rm -f /tmp/sm_notify_block.$$
 # session_kickoff must use the create envelope's exact id for the inject — never any other id
 # (the previous design's failure mode was the model scanning the global list and picking a
 # stale row to inject into, which is structurally impossible when the inject id comes from
 # the create envelope inline).
-extract_tool_block plugins/session-manager.js session_kickoff /tmp/sm_kickoff_block.$$
-if ! grep -q "session_kickoff" /tmp/sm_kickoff_block.$$ 2>/dev/null; then
+extract_tool_block plugins/session-manager.js session_kickoff "$SM_KICKOFF_BLOCK"
+if ! grep -q "session_kickoff" "$SM_KICKOFF_BLOCK" 2>/dev/null; then
   echo "  MISSING: session_kickoff tool body in plugins/session-manager.js"
   ERR=1
 fi
-if ! grep -qE "scopedListInit|query:\s*\{\s*directory\s*\}" /tmp/sm_kickoff_block.$$ 2>/dev/null; then
+if ! grep -qE "scopedListInit|query:\s*\{\s*directory\s*\}" "$SM_KICKOFF_BLOCK" 2>/dev/null; then
   echo "  REGRESSION: session_kickoff must use a scoped list (?directory=) — never unfiltered global"
   ERR=1
 fi
-if ! grep -qE "create_if_absent|NO_SESSION_FOR_WORKTREE" /tmp/sm_kickoff_block.$$ 2>/dev/null; then
+if ! grep -qE "create_if_absent|NO_SESSION_FOR_WORKTREE" "$SM_KICKOFF_BLOCK" 2>/dev/null; then
   echo "  REGRESSION: session_kickoff must honor create_if_absent and surface NO_SESSION_FOR_WORKTREE"
   ERR=1
 fi
-if ! grep -qE "session_id:\s*targetId|targetId\s*=\s*sessionId\(chosen\)" /tmp/sm_kickoff_block.$$ 2>/dev/null; then
+if ! grep -qE "session_id:\s*targetId|targetId\s*=\s*sessionId\(chosen\)" "$SM_KICKOFF_BLOCK" 2>/dev/null; then
   echo "  REGRESSION: session_kickoff must inject using the chosen session id (create envelope's id or the reuse list row's id) — never a model-picked id"
   ERR=1
 fi
-rm -f /tmp/sm_kickoff_block.$$
 # session_delete args must include force (orphan-cleanup path). Scope to the args block
 # (the session_delete tool body, not the whole module).
-extract_tool_block plugins/session-manager.js session_delete /tmp/sm_delete_block.$$
-if ! grep -qE "^[[:space:]]+force:" /tmp/sm_delete_block.$$ 2>/dev/null; then
+extract_tool_block plugins/session-manager.js session_delete "$SM_DELETE_BLOCK"
+if ! grep -qE "^[[:space:]]+force:" "$SM_DELETE_BLOCK" 2>/dev/null; then
   echo "  MISSING: force arg in session_delete args in plugins/session-manager.js"
   ERR=1
 fi
-rm -f /tmp/sm_delete_block.$$
 
 echo "Checking session-manager blocker_code allowlist + obsolete NO_SESSION_IN_DIRECTORY sweep..."
 SESSION_KNOWN_BLOCKER_CODES='SESSION_TOOLS_NOT_REGISTERED|SESSION_API_FAILED|NO_SESSION_FOR_WORKTREE|SESSION_NOT_FOUND|LIST_SCOPE_INCOMPLETE|AMBIGUOUS_TARGET|CREATE_BIND_MISMATCH|KICKOFF_FAILED|KICKOFF_DIRECTORY_BIND_FAILED|KICKOFF_AGENT_BIND_MISMATCH|KICKOFF_BIND_CONFIRMATION_MISSING|KICKOFF_ALREADY_DELIVERED|KICKOFF_RESOLVED_TO_SELF|WORKTREE_API_FAILED|WORKTREE_TOOLS_NOT_REGISTERED|WORKTREE_NAME_COLLISION|WORKTREE_NOT_CLEAN_OR_PUSHED|WORKTREE_PREFLIGHT_FAILED|WORKTREE_SESSION_ATTEMPTS_EXCEEDED|BASE_NOT_PUSHED|PROTECTED_PROJECT_ROOT|NOT_A_GIT_WORKTREE|WORKTREE_RECOVERY_FAILED|HANDSHAKE_PUSH_FAILED|HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED|TICKET_NOT_FORKED_FROM_FEATURE|FEATURE_BRANCH_STALE|directory_bind_failed|agent_bind_mismatch|no_session_in_directory|session_not_found|ambiguous_target|list_scope_incomplete|create_response_missing_id'
@@ -475,7 +476,7 @@ for needle in 'kickoff' 'KICKOFF_ALREADY_DELIVERED' 'session_delete: true'; do
     ERR=1
   fi
 done
-for needle in 'ticket_report:' 'Bootstrap' 'opencode-task-yaml'; do
+for needle in 'ticket_report:' 'Bootstrap' 'opencode-task-yaml' 'human_review_handoff' 'review_handoff_contract' 'what_was_done' 'wrap_up' 'test_report_count' 'coderabbit_issues_found' 'coderabbit_issues_solved' 'local_pr_issues_found' 'local_pr_issues_solved' 'fix_now_issues_found' 'fix_now_issues_resolved' 'REVIEW_HANDOFF_INCOMPLETE' 'REVIEW_HANDOFF_INCONSISTENT'; do
   if ! grep -q "$needle" skills/ticket-lifecycle/SKILL.md 2>/dev/null; then
     echo "  MISSING: $needle in skills/ticket-lifecycle/SKILL.md"
     ERR=1
@@ -514,7 +515,7 @@ if ! grep -q '"worktree-manager"' opencode.json 2>/dev/null; then
 fi
 
 echo "Checking orchestrate bootstrap delegation (bash-less host)..."
-for needle in 'You have no bash tool' '## §0 Bootstrap' 'Task developer load: minimal' 'scripts/checkout-contract.sh'; do
+for needle in 'You have no bash tool' '## §0 Bootstrap' 'Task developer load: minimal' 'scripts/checkout-contract.sh' 'human_review_handoff/v1' 'REVIEW_HANDOFF_INCOMPLETE' 'REVIEW_HANDOFF_INCONSISTENT' '### Ready for ticket review' '### Ready for feature review'; do
   if ! grep -q "$needle" skills/orchestrate/SKILL.md 2>/dev/null; then
     echo "  MISSING: $needle in skills/orchestrate/SKILL.md"
     ERR=1
@@ -587,7 +588,7 @@ if grep -R -n "${DEAD_NAME_EXCLUDES[@]}" -E 'Mode F|Mode B|Phase R' . >/dev/null
 fi
 
 echo "Checking feature-review wiring..."
-for needle in 'feature_report:' 'feature-finish-pr.sh' 'state:done' 'remediation:'; do
+for needle in 'feature_report:' 'feature-finish-pr.sh' 'state:done' 'remediation:' 'human_review_handoff' 'review_handoff_contract' 'what_was_done' 'wrap_up' 'test_report_count' 'coderabbit_issues_found' 'coderabbit_issues_solved' 'local_pr_issues_found' 'local_pr_issues_solved' 'fix_now_issues_found' 'fix_now_issues_resolved' 'REVIEW_HANDOFF_INCOMPLETE' 'REVIEW_HANDOFF_INCONSISTENT'; do
   if ! grep -q "$needle" skills/feature-review/SKILL.md 2>/dev/null; then
     echo "  MISSING: $needle in skills/feature-review/SKILL.md"
     ERR=1

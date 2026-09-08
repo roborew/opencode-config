@@ -408,9 +408,56 @@ worktree with no live coder session, the orchestrator MUST:
 
 For each `READY_FOR_HUMAN_REVIEW` (received via `session_notify` or by parsing the latest `ticket_report:` comment from `scripts/dev-loop-watch.sh`):
 
-```text
-notify user: "Ready for ticket review: <pr_url>"   # ONLY HUMAN GATE
-wait for user: "ticket reviewed" (or user has already merged, including via GitHub UI — watch script handles the state transition + cleanup, see §5e)
+1. Treat the wake as **advisory only**. `scripts/dev-loop-watch.sh` is a wake helper, not the readiness contract.
+2. Dispatch a `developer` Task (`load: minimal`) to fetch the **raw latest durable `ticket_report:` comment** from the issue.
+3. Validate `human_review_handoff/v1` before surfacing anything to the user.
+
+Required checks before READY is surfaced:
+
+- `review_handoff_contract.name == human_review_handoff`
+- `review_handoff_contract.version == 1`
+- `issue_url`, `pr_url`, `notify_status`, `review_handoff.what_was_done`, and `review_handoff.wrap_up` are present
+- `review_handoff.test_report_count >= 1`
+- every `review_handoff.*count` field is an integer `>= 0`
+- `review_handoff.coderabbit_issues_solved <= review_handoff.coderabbit_issues_found`
+- `review_handoff.local_pr_issues_solved <= review_handoff.local_pr_issues_found`
+- `review_handoff.fix_now_issues_resolved <= review_handoff.fix_now_issues_found`
+- `review_handoff.fix_now_issues_found == review_handoff.coderabbit_issues_found + review_handoff.local_pr_issues_found`
+- `review_handoff.fix_now_issues_resolved == review_handoff.coderabbit_issues_solved + review_handoff.local_pr_issues_solved`
+- if `review_handoff.coderabbit_issues_found > 0`, then `review_handoff.coderabbit_issues_solved > 0`
+- if `review_handoff.local_pr_issues_found > 0`, then `review_handoff.local_pr_issues_solved > 0`
+- for READY, `review_handoff.fix_now_issues_found == review_handoff.fix_now_issues_resolved`
+- `final_gate_post.posted_comment_id` is present and `final_gate_post.label_added == true`
+
+Failure behavior:
+
+- Missing required fields or unreadable durable report → `BLOCKED: REVIEW_HANDOFF_INCOMPLETE`
+- Count mismatch or unresolved fix-now debt → `BLOCKED: REVIEW_HANDOFF_INCONSISTENT`
+- On either BLOCKED state, do **not** present the PR to the user and do **not** say it is ready for human review.
+
+On success, surface this exact markdown handoff table:
+
+```md
+### Ready for ticket review
+
+| Field                       | Value                                     |
+| --------------------------- | ----------------------------------------- |
+| What was done               | <review_handoff.what_was_done>            |
+| Test reports                | <review_handoff.test_report_count>        |
+| CodeRabbit issues found     | <review_handoff.coderabbit_issues_found>  |
+| CodeRabbit issues solved    | <review_handoff.coderabbit_issues_solved> |
+| Local PR issues found       | <review_handoff.local_pr_issues_found>    |
+| Local PR issues solved      | <review_handoff.local_pr_issues_solved>   |
+| Fix-now issues found        | <review_handoff.fix_now_issues_found>     |
+| Fix-now issues resolved     | <review_handoff.fix_now_issues_resolved>  |
+| PR                          | <pr_url>                                  |
+| Issue                       | <issue_url>                               |
+| PRD                         | <prd_url or —>                            |
+| Notify back to orchestrator | <notify_status>                           |
+
+Wrap-up: <review_handoff.wrap_up>
+
+Reply `ticket reviewed` when approved.
 ```
 
 > **Idempotency guard:** if the most recent `ticket_report:` (or poller-driven `DEV_LOOP_WAKE`) for the same `<repo>#<n>` has already been surfaced in this session, skip the notify and the wait — the operator is mid-review and the second surface is noise.
@@ -527,23 +574,41 @@ End the turn after kicking. Do not poll. The feature coder owns the entire verif
 
 ### §8a. On `feature_report:` wake
 
-When the feature coder wakes you (via `session_notify` or poller or user message), read the terminal `feature_report:` status. You do **not** re-verify code-review or CodeRabbit evidence — every verification gate already ran inside the coder sessions; the terminal report plus the human approval below are your only gates.
+When the feature coder wakes you (via `session_notify` or poller or user message), treat the wake as **advisory only**. You do **not** re-verify code-review or CodeRabbit evidence, but you **do** verify the durable `human_review_handoff/v1` contract before surfacing the feature PR.
 
-- `READY_FOR_HUMAN_REVIEW` → **first** verify every child ticket of `feature:<slug>` carries `state:ready-for-feature-review` (delegated `developer` Task: `gh issue list -l "feature:<slug>" --state all --json number,labels` — filter to entries whose labels include `state:ready-for-feature-review`; the count must equal the total child-issue count). If any child is missing `state:ready-for-feature-review`, surface `BLOCKED: STATE_FEATURE_REVIEW_INCOMPLETE` with the offending ticket numbers and pause — do not advance to §8b. Capture `pr_url` and continue to §8b once verified.
+- `READY_FOR_HUMAN_REVIEW` → first fetch the raw latest durable `feature_report:` comment from the PRD parent issue, then validate `human_review_handoff/v1` exactly as in §5c (same required fields and count invariants, plus non-empty `docs_paths` and `tickets_state_feature_review`). Missing fields → `BLOCKED: REVIEW_HANDOFF_INCOMPLETE`; mismatched counts or unresolved fix-now debt → `BLOCKED: REVIEW_HANDOFF_INCONSISTENT`. Only after the contract passes do you continue.
+- Then verify every child ticket of `feature:<slug>` carries `state:ready-for-feature-review` (delegated `developer` Task: `gh issue list -l "feature:<slug>" --state all --json number,labels` — filter to entries whose labels include `state:ready-for-feature-review`; the count must equal the total child-issue count). If any child is missing `state:ready-for-feature-review`, surface `BLOCKED: STATE_FEATURE_REVIEW_INCOMPLETE` with the offending ticket numbers and pause — do not advance to §8b. Capture `pr_url` and continue to §8b once verified.
 - `BLOCKED: FEATURE_REMEDIATION` with `remediation:` issue numbers → re-batch those issues through the normal ticket pipeline (§5 batch loop); when they merge, kick the feature coder again.
 - Any other `BLOCKED` → surface verbatim and pause the loop.
 
 ### §8b. Human gate
 
-On READY (and verified every child carries `state:ready-for-feature-review`), print exactly:
+On READY (and only after `human_review_handoff/v1` and `state:ready-for-feature-review` both pass), print this exact markdown handoff table:
 
-```text
-Ready for feature review: <pr_url>
+```md
+### Ready for feature review
 
-state:ready-for-feature-review is set on every ticket; say "all reviewed" to mark every ticket state:done and merge the feature PR (squash, --delete-branch=false).
+| Field                       | Value                                     |
+| --------------------------- | ----------------------------------------- |
+| What was done               | <review_handoff.what_was_done>            |
+| Test reports                | <review_handoff.test_report_count>        |
+| CodeRabbit issues found     | <review_handoff.coderabbit_issues_found>  |
+| CodeRabbit issues solved    | <review_handoff.coderabbit_issues_solved> |
+| Local PR issues found       | <review_handoff.local_pr_issues_found>    |
+| Local PR issues solved      | <review_handoff.local_pr_issues_solved>   |
+| Fix-now issues found        | <review_handoff.fix_now_issues_found>     |
+| Fix-now issues resolved     | <review_handoff.fix_now_issues_resolved>  |
+| PR                          | <pr_url>                                  |
+| Issue                       | <issue_url>                               |
+| PRD                         | <prd_url or —>                            |
+| Notify back to orchestrator | <notify_status>                           |
+
+Wrap-up: <review_handoff.wrap_up>
+
+state:ready-for-feature-review is set on every ticket; reply `all reviewed` to mark every ticket `state:done` and merge the feature PR (squash, `--delete-branch=false`).
 ```
 
-Then wait for the user's "all reviewed" message. Do not auto-merge.
+Then wait for the user's `all reviewed` message. Do not auto-merge.
 
 ### §8c-i. Mark every child ticket `state:done`
 
@@ -663,13 +728,13 @@ If any of these three is out of sync, repair FIRST (via the DB-direct procedure 
 
 ## §11 Hand-off markers
 
-| Marker                                                                                  | Emitted by                                                                                                                                                                                               | Consumed by                                                                                                                                                                                                                                                      |
-| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `feature_report:` (issue comment on PRD parent)                                         | feature coder on terminal report                                                                                                                                                                         | develop orchestrator reads the status: READY → §8a verify + §8b human gate + §8c-i state:done + §8c-ii merge; `FEATURE_REMEDIATION` → re-batch `remediation:` issues; other BLOCKED → surface + pause                                                            |
-| `READY_FOR_HUMAN_REVIEW`                                                                | coder session when sub-PR is green and comment-clean (ticket mode)                                                                                                                                       | develop orchestrator surfaces to user (single human gate per PR); reply "ticket reviewed" → §5d marks `state:ticket-reviewed` then merges                                                                                                                        |
-| `BLOCKED`                                                                               | coder session on environment-after-repair, CI-exhaustion, fallback-exhaustion, or cross-ticket review                                                                                                    | develop orchestrator surfaces verbatim and pauses the batch                                                                                                                                                                                                      |
-| `ticket_report:` (issue comment)                                                        | coder session on terminal report (ticket mode)                                                                                                                                                           | develop orchestrator's `scripts/dev-loop-watch.sh` + `scripts/dev-loop-poller.sh` — durable wake channel and out-of-band merge detector; the `ticket_report:` body is the canonical durable channel for the review-ready signal even when `session_notify` fails |
-| `DEV_LOOP_WAKE: { repo, feature, reason: TICKET_REVIEW_READY \| FEATURE_REVIEW_READY }` | poller (`scripts/dev-loop-poller.sh`) when `ticket_report:` / `feature_report:` delta detected, or manual operator fallback via `gh issue comment` (see `skills/orchestrate/session-notify-fallback.md`) | develop orchestrator; ignored if no active loop for that feature. `TICKET_REVIEW_READY` → §5c surface; `FEATURE_REVIEW_READY` → §8a verify + §8b gate.                                                                                                           |
+| Marker                                                                                  | Emitted by                                                                                                                                                                                               | Consumed by                                                                                                                                                                                                                                                            |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `feature_report:` (issue comment on PRD parent, carrying `human_review_handoff/v1`)     | feature coder on terminal report                                                                                                                                                                         | develop orchestrator reads the durable contract first: READY → validate `human_review_handoff/v1` + §8a verify + §8b standard handoff table + §8c-i state:done + §8c-ii merge; `FEATURE_REMEDIATION` → re-batch `remediation:` issues; other BLOCKED → surface + pause |
+| `READY_FOR_HUMAN_REVIEW`                                                                | coder session when sub-PR is green and comment-clean (ticket mode)                                                                                                                                       | develop orchestrator surfaces to user (single human gate per PR); reply "ticket reviewed" → §5d marks `state:ticket-reviewed` then merges                                                                                                                              |
+| `BLOCKED`                                                                               | coder session on environment-after-repair, CI-exhaustion, fallback-exhaustion, or cross-ticket review                                                                                                    | develop orchestrator surfaces verbatim and pauses the batch                                                                                                                                                                                                            |
+| `ticket_report:` (issue comment, carrying `human_review_handoff/v1`)                    | coder session on terminal report (ticket mode)                                                                                                                                                           | develop orchestrator's `scripts/dev-loop-watch.sh` + `scripts/dev-loop-poller.sh` — durable wake channel and out-of-band merge detector; the `ticket_report:` body is the canonical durable channel and must validate before READY is surfaced                         |
+| `DEV_LOOP_WAKE: { repo, feature, reason: TICKET_REVIEW_READY \| FEATURE_REVIEW_READY }` | poller (`scripts/dev-loop-poller.sh`) when `ticket_report:` / `feature_report:` delta detected, or manual operator fallback via `gh issue comment` (see `skills/orchestrate/session-notify-fallback.md`) | develop orchestrator; ignored if no active loop for that feature. `TICKET_REVIEW_READY` → §5c surface; `FEATURE_REVIEW_READY` → §8a verify + §8b gate.                                                                                                                 |
 
 There is no ticket-dispatch marker — the coder session is the auto-started GUI session for the worktree, not a `task`-tool dispatch. The `session_notify` plugin tool injects report-back messages into an existing session via `POST /session/{id}/prompt_async`; it does not dispatch a new subagent.
 
