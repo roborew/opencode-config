@@ -127,7 +127,7 @@ Call `report_to_parent` once with:
   - `test_commit` — the test-only RED commit SHA, subject, and file manifest
   - `green_phase` — the **same** test(s) passing **after** the change, using the **same** test identifier so the parent can match RED -> GREEN
   - `implementation_commit` — the production-only GREEN commit SHA, subject, and file manifest
-  - `test_amendments` — separate test-only amendment commits, or an empty list
+  - `test_amendments` — separate test-only amendment commits, or an empty list. Each amendment includes `sha`, `files`, `reason`, and either a follow-up `implementation_commit` or `test_only_amendment: { existing_implementation_passes: true, review_explanation }` when no production change is required.
   - `assertion_delta` — list of any existing assertions removed or weakened, each with a one-line justification (empty list if none)
   - `acceptance_to_test` — for every numbered acceptance criterion: `criterion -> test file + test name (+ line)`, plus an explicit `uncovered: [...]` list for criteria with no automated test
 - `acceptance_check_status`
