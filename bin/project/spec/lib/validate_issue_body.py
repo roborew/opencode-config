@@ -60,6 +60,10 @@ def has_explicit_test_first(stage: dict[str, Any]) -> bool:
     return stage.get("test_first") is True
 
 
+def has_non_empty_string(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
 def validate(body: str, level: str, expected_task_id: str | None) -> list[str]:
     errors: list[str] = []
 
@@ -127,6 +131,13 @@ def validate(body: str, level: str, expected_task_id: str | None) -> list[str]:
             ):
                 if sf not in stage:
                     errors.append(f"stages[{i}] missing {sf}")
+            for message_field in ("commit_message", "test_commit_message"):
+                if message_field in stage and not has_non_empty_string(
+                    stage[message_field]
+                ):
+                    errors.append(
+                        f"stages[{i}] {message_field} must be a non-empty string"
+                    )
             if not has_explicit_test_first(stage):
                 errors.append(
                     f"stages[{i}] requires tdd.test_first=true "

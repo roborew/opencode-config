@@ -17,7 +17,7 @@ permission:
       "cloudflare": "allow",
       "wrangler": "allow",
       "workers-best-practices": "allow",
-      "docker-sandbox": "allow"
+      "docker-sandbox": "allow",
     }
 ---
 
@@ -59,7 +59,7 @@ During long work, **every ~10 tool-using iterations**, compact your working stat
 3. **Branch policy:** Do **not** run `git switch`, `git checkout <branch>`, `git branch`, or any branch-creating/renaming operation unless the user explicitly requests it in the current turn. Work on the branch the user already selected (primary checkout or linked worktree).
 4. **Anchor on the issue only.** Load ONLY the files listed in `FilesToChange` for your assigned stage(s), or issue/stage scope for GitHub mode.
 5. **GitHub issue mode:** Treat `opencode_meta.acceptance` as acceptance criteria, `opencode_meta.test_commands` as mandatory checks, and `opencode_meta.commit_message` as the required one-line commit subject (append `Refs: #<issue_number>`). Discover files via codebase search only as needed; do not expand scope beyond the issue + meta. Parse meta from **`opencode-task-yaml`**.
-6. **GitHub issue stage mode:** Implement only the given `stage` object (`objective`, `files`, `acceptance`, `test_commands`, `test_commit_message`, `commit_message`, and explicit test-first metadata). Micro-TDD required. The supplied `test_commit.sha` must already be an ancestor of the current `HEAD`; commit only production files with a subject matching `stage.commit_message` plus `Refs: #<issue_number>` (or `Closes: #n` when parent instructs final stage).
+6. **GitHub issue stage mode:** Implement only the given `stage` object (`objective`, `files`, `acceptance`, `test_commands`, `test_commit_message`, `commit_message`, and explicit test-first metadata). Micro-TDD required. The supplied `test_commit.sha` must equal the current `HEAD` and the worktree must be clean before editing; commit only production files with a subject matching `stage.commit_message` plus `Refs: #<issue_number>` (or `Closes: #n` when parent instructs final stage).
 7. No redesign. Follow the issue contract exactly.
 8. If an implementation command fails due to environment mismatch (runtime, missing deps, toolchain), stop with `ENV_BLOCKED` and do not retry the same command — report to orchestrate.
 9. If the same test fails twice without a code change, stop with `blocker_code: STAGE_STUCK` and return to orchestrate.

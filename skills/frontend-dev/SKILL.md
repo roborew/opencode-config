@@ -41,7 +41,7 @@ Before writing interface code, search the codebase to understand existing patter
 
 - **Every stage must have tests.** Do not deliver UI work without tests. Follow the artifact's StageAcceptanceChecks exactly.
 - **Test-first commit protocol:** When adding or changing component behavior, `test-writer` creates and commits a failing component, integration, or accessibility test as a test-only RED commit. Do not begin implementation until the RED commit SHA is supplied.
-- Implement only the GREEN portion, run the same test through the canonical backend, and commit production/UI changes separately as a production-only GREEN commit. Do not add or modify tests in GREEN.
+- Before editing, verify `git rev-parse HEAD` equals the supplied `test_commit.sha` and `git status --short` is empty. Implement only the GREEN portion, run the same test through the canonical backend, stage only declared production/UI files, verify no test files are staged, and commit separately as a production-only GREEN commit. Verify the worktree is clean afterward. Do not add or modify tests in GREEN.
 - If a test needs correction or expansion, return `TEST_CHANGE_REQUIRED`; the coder dispatches a new test-only amendment commit before implementation resumes.
 - **Run StageAcceptanceChecks:** Execute every test/verification command listed for your stage. Report outcomes and both commit manifests in the completion report.
 - If the artifact lacks tests for your stage, report blocker: "Stage lacks StageAcceptanceChecks; cannot proceed without tests." Do not implement without tests.
@@ -139,7 +139,10 @@ Do not browse broadly; capture only evidence relevant to the current stage.
 
 Before delivering, verify:
 
+- [ ] `HEAD` equals the supplied RED commit and the worktree is clean before editing
 - [ ] A test-only RED commit precedes the production-only GREEN commit
+- [ ] Only declared production/UI files are staged for GREEN and no test files are staged
+- [ ] The worktree is clean after the GREEN commit
 - [ ] Tests exist and pass for changed components (StageAcceptanceChecks run successfully)
 - [ ] Used project's existing design tokens and components
 - [ ] All interactive elements have visible focus states

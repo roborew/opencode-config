@@ -13,7 +13,7 @@ The parent is always a **coder** session (ticket worktree or feature worktree) �
 
 Dispatches from a ticket coder session (`ticket-lifecycle`):
 
-- **Per-stage gate** (between stages): inspect the supplied `test_commit` and `implementation_commit`; require the test-only RED commit to precede the production-only GREEN commit; reject production files in RED, test files in GREEN, missing commit SHAs, or a dirty worktree. Run focused lint, unit, contract, and schema checks; replay RED then GREEN; inspect assertion delta and scope drift; require docs when behaviour changes. **No full regression per stage. No CodeRabbit per stage.**
+- **Per-stage gate** (between stages): inspect the supplied `test_commit` and `implementation_commit`; require both SHAs, require the test-only RED commit to precede the production-only GREEN commit, and require the RED commit to be an ancestor of GREEN. Reject production files in RED, test files in GREEN, missing commit SHAs, or a dirty worktree. Run and report `git show --stat <test_commit>`, `git show --stat <implementation_commit>`, `git diff <test_commit>^ <test_commit>`, `git diff <test_commit> <implementation_commit>`, and `git status --short`. Replay RED then GREEN; confirm the RED test meets acceptance criteria, is behavior-focused rather than implementation-coupled, actually failed before implementation, and was not weakened or replaced by GREEN. Inspect assertion delta and scope drift; require docs when behaviour changes. **No full regression per stage. No CodeRabbit per stage.**
 
 - **Final `all_stages: true` gate** (after every per-stage gate has APPROVED, before `state:ready-for-ticket-review`): require every stage's committed RED/GREEN pair and amendment history to be present and already approved, then run the **full test suite** via the compose test backend (`docker-compose.test.yml` via `sandbox exec` on the opencode-server, or direct `docker compose -f <compose_test_file>` on local dev — `skills/docker-sandbox/SKILL.md` invocation matrix). Inspect full-suite assertion delta and cross-stage integration. Your `APPROVED` here is what the coder records in the `code_review_gate:` comment (`all_stages: true`). The coder session posts this comment and adds the `verified` label **as part of the same sub-procedure** (`ticket-lifecycle` §3.1 `final_gate_post`) — not as a follow-up. Failure to do both atomically is `BLOCKED: FINAL_GATE_NOT_POSTED`.
 
@@ -41,7 +41,20 @@ Dispatches from the feature coder session (`feature-review` §1):
 
 ## Report shapes
 
-Return `report_to_parent` with `verdict: APPROVED|NEEDS_CHANGES|BLOCKED`, criterion coverage, tests, scope findings, security status, residual risks, and a `commit_protocol` block. `APPROVED` requires `test_commit_before_implementation`, `test_commit_test_only`, `implementation_commit_production_only`, `same_test_red_then_green`, and `worktree_clean` to be true. For the CodeRabbit runs, use:
+Return `report_to_parent` with `verdict: APPROVED|NEEDS_CHANGES|BLOCKED`, criterion coverage, tests, scope findings, security status, residual risks, and a complete `commit_protocol` block. `APPROVED` requires every field below to be present and true:
+
+```yaml
+commit_protocol:
+  test_commit_present: true
+  test_commit_before_implementation: true
+  test_commit_test_only: true
+  implementation_commit_present: true
+  implementation_commit_production_only: true
+  worktree_clean: true
+  same_test_red_then_green: true
+```
+
+For the CodeRabbit runs, use:
 
 ```markdown
 ## CodeRabbit <pre-flight|gate>

@@ -11,7 +11,7 @@ roleReminder: Write only declared .prototype/<slug>/ files; never modify React a
 
 # UX Dev
 
-Build an optional prototype only for `Owner: ux-dev` stages with `design_delivery: prototype-required`. The approved design brief and GitHub issue are the source of truth. Behavior-bearing prototype stages still follow the test-only RED commit → prototype-only GREEN commit contract.
+Build an optional prototype only for `Owner: ux-dev` stages with `design_delivery: prototype-required`. The approved design brief and GitHub issue are the source of truth. Behavior-bearing prototype stages still follow the test-only RED commit → prototype-only GREEN commit contract: verify `HEAD` equals `test_commit.sha` and the worktree is clean before editing, stage only declared prototype files, verify no test files are staged, commit GREEN separately, and leave the worktree clean.
 
 ## Hard Rules
 

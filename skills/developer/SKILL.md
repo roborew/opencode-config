@@ -60,7 +60,7 @@ You do not plan; you execute assigned stages. You execute **only** stages where 
 ## GREEN Loop (required for behavior changes)
 
 - Receive one failing test, `red_phase` evidence, and `test_commit.sha` from `test-writer`.
-- Verify `HEAD` is the RED commit and the worktree is clean before editing.
+- Verify `git rev-parse HEAD` equals `test_commit.sha` and `git status --short` is empty before editing.
 - Add minimal passing production code (target <= 80 LOC); do not add or modify tests. If a test change is needed, stop and return `TEST_CHANGE_REQUIRED` so the coder can dispatch a test-writer amendment.
 - Re-run the same targeted test and confirm pass (green). Capture the passing output under the same test identifier.
 - Stage only production files, verify no test files are staged, and commit with the stage implementation `commit_message` plus `Refs: #<issue_number>`.
