@@ -75,17 +75,23 @@ For each issue in this repo (respect **Blocked by** / `depends_on`):
 
 ```markdown
 ### Context
+
 ### Goal
+
 ### Current state
+
 ### Stage plan
+
 ### Files to change
+
 ### Tests
+
 ### Refactor / risks
 ```
 
 4. If design uncertainty required `designer`, embed its brief in the Implementation plan and set `design_delivery` to `brief-only` or `prototype-required`. For `prototype-required`, build ordered stages with `ux-prototype` owned by `ux-dev` and `react-implementation` owned by `frontend-dev`, with the latter depending on the former. For `brief-only`, route directly to `frontend-dev`.
-5. Build **`opencode-task-yaml`** `stages[]` from the stage plan.
-5. Show the human a concise summary → on approval → Task **developer** `load: minimal` with `repo: owner/name` → `gh issue edit <n> --repo owner/name --body-file …`.
+5. Build **`opencode-task-yaml`** `stages[]` from the stage plan. Every expanded stage must preserve the existing stage fields and include both a separate `test_commit_message` and explicit test-first metadata: canonical form `tdd: { test_first: true }`. For compatibility, a stage-level `test_first: true` is an equivalent machine-readable form. Keep `commit_message` for the implementation commit; `test_commit_message` is the preceding test commit message.
+6. Show the human a concise summary → on approval → Task **developer** `load: minimal` with `repo: owner/name` → `gh issue edit <n> --repo owner/name --body-file …`.
 
 ### 4. Gates — you run
 
@@ -112,13 +118,30 @@ Do not list shell commands. Do not say only “switch to orchestrate.”
 
 ## Issue body (target)
 
-| Section | Owner | Content |
-|---------|-------|---------|
-| User stories covered | spec | PRD mapping |
-| Blocked by | spec (fanout) | `**Blocked by:** #n, #m` or `(none)` — preserved verbatim, never rewritten by expand |
-| Requirements | spec | Product outcomes |
-| Implementation plan | **you** | Context, Current state, Stage plan, Tests |
-| opencode-task-yaml | **you** | `task_id`, `owner`, `depends_on`, `stages[]`, `acceptance`, `test_commands`, `commit_message` |
+| Section              | Owner         | Content                                                                                                                                                                                                                                                |
+| -------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| User stories covered | spec          | PRD mapping                                                                                                                                                                                                                                            |
+| Blocked by           | spec (fanout) | `**Blocked by:** #n, #m` or `(none)` — preserved verbatim, never rewritten by expand                                                                                                                                                                   |
+| Requirements         | spec          | Product outcomes                                                                                                                                                                                                                                       |
+| Implementation plan  | **you**       | Context, Current state, Stage plan, Tests                                                                                                                                                                                                              |
+| opencode-task-yaml   | **you**       | `task_id`, `owner`, `depends_on`, `stages[]`, `acceptance`, `test_commands`, `commit_message`; each expanded stage also retains its existing fields and includes `test_commit_message` plus `tdd.test_first: true` (or stage-level `test_first: true`) |
+
+Each expanded stage keeps the existing implementation `commit_message` and adds a separate test-first commit message:
+
+```yaml
+stages:
+  - stage_id: behavior-slice
+    owner: developer
+    objective: Implement the behavior slice
+    acceptance: The behavior is covered and works
+    test_commands: pytest tests/test_behavior.py
+    tdd:
+      test_first: true
+    test_commit_message: "test: cover behavior slice"
+    commit_message: "feat: implement behavior slice"
+```
+
+The nested `tdd.test_first: true` form is canonical. A stage-level boolean `test_first: true` is accepted as an equivalent machine-readable compatibility form. The fanout contract is unchanged; these additional fields are required when validating expanded/orchestrate stages.
 
 ## PRD changed after fanout
 

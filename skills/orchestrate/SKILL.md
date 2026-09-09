@@ -478,7 +478,7 @@ After user approval reply (or after out-of-band merge detection per §5e):
 
    ```text
    cd <feature worktree directory>
-   gh pr merge <pr_url> --squash --delete-branch=false
+   gh pr merge <pr_url> --merge --delete-branch=false
    ```
 
    On failure: surface `gh pr view --json mergeable` verbatim, pause the batch. On success: continue.
@@ -605,7 +605,7 @@ On READY (and only after `human_review_handoff/v1` and `state:ready-for-feature-
 
 Wrap-up: <review_handoff.wrap_up>
 
-state:ready-for-feature-review is set on every ticket; reply `all reviewed` to mark every ticket `state:done` and merge the feature PR (squash, `--delete-branch=false`).
+state:ready-for-feature-review is set on every ticket; reply `all reviewed` to mark every ticket `state:done` and merge the feature PR with `--merge --delete-branch=false` so the reviewed RED/GREEN commit history remains auditable.
 ```
 
 Then wait for the user's `all reviewed` message. Do not auto-merge.
@@ -632,7 +632,7 @@ ASSERT_MERGE_REF="origin/opencode/feat-<slug>" \
 ASSERT_REPO="<OWNER/REPO>" \
 ASSERT_BRANCH_CONTEXT="feature-worktree" \
   source "${OPENCODE_CONFIG:-$HOME/.config/opencode}/scripts/assert-merge-cwd.sh"
-gh pr merge <pr_url> --squash --delete-branch=false
+gh pr merge <pr_url> --merge --delete-branch=false
 ```
 
 On `BLOCKED: *` exit: surface verbatim, pause. On failure: surface `gh pr view --json mergeable` verbatim, pause. On success: continue to §8d.

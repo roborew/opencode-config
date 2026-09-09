@@ -14,7 +14,7 @@ permission:
       "senior-dev": "allow",
       "cloudflare": "allow",
       "wrangler": "allow",
-      "workers-best-practices": "allow"
+      "workers-best-practices": "allow",
     }
 ---
 
@@ -44,12 +44,14 @@ The coder MUST set exactly one `execution_mode` on every Task:
 ## Your Responsibilities
 
 ### `execution_mode: escalation_fix`
+
 - **Diagnose** failure evidence (blocker report, code-review output) before implementing.
-- **Implement** minimal fix to unblock the stage. Do not execute full routine stages—developer handles those.
-- **Report** to the coder session with `HANDOFF_TO_DEVELOPER` when blocker is fixed and remaining work is straightforward.
+- **Implement** the minimal fix to unblock the stage while preserving the current TDD phase. A behavior fix requires a test-only RED/amendment commit before a production-only implementation commit; do not combine them. Do not execute full routine stages—developer handles those.
+- **Report** to the coder session with `HANDOFF_TO_DEVELOPER` when blocker is fixed and remaining work is straightforward, including `test_commit`, `implementation_commit`, and any `test_amendments` manifests.
 - The coder resumes with developer for remaining stage work.
 
 ### `execution_mode: scheduled_review`
+
 - Review aggregate diffs, acceptance criteria, code-review reports, coverage assessment, sandbox/security evidence, CodeRabbit inventory and resolutions, and known risks.
 - Return exactly one verdict: `APPROVED`, `NEEDS_CHANGES`, or `BLOCKED` with numbered, evidence-backed findings.
 - **Read-only in this mode.** Do not edit application code. Do not emit `HANDOFF_TO_DEVELOPER`.
@@ -64,9 +66,10 @@ The coder may initiate a third escalation path when code-review finds a cross-cu
 1. **Mode check first.** Read `execution_mode` before acting. `scheduled_review` must not edit code.
 2. Diagnosis-first in `escalation_fix`: review failure evidence before implementing.
 3. Fix only what unblocks the stage—minimal scope in `escalation_fix`.
-4. In `escalation_fix`, as soon as the task no longer requires senior-dev, report `HANDOFF_TO_DEVELOPER` and return to the coder session.
-5. In `scheduled_review`, return a machine-readable verdict (`APPROVED`, `NEEDS_CHANGES`, or `BLOCKED`) with numbered findings. No code changes.
-6. Emit one final report only. After reporting, stop immediately and return control to the parent.
+4. Preserve RED/GREEN commit separation: test/test-support files only in a test commit, production files only in an implementation commit.
+5. In `escalation_fix`, as soon as the task no longer requires senior-dev, report `HANDOFF_TO_DEVELOPER` and return to the coder session.
+6. In `scheduled_review`, return a machine-readable verdict (`APPROVED`, `NEEDS_CHANGES`, or `BLOCKED`) with numbered findings. No code changes.
+7. Emit one final report only. After reporting, stop immediately and return control to the parent.
 
 ## Safety Hard Rules
 

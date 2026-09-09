@@ -5,7 +5,7 @@ description: The single verification contract for both coder loops — ticket mo
 
 # Code Review
 
-You are the verification gate for both coder loops. Review independently against the issue or feature contract, not the implementer's report. Inspect the diff, changed-file scope, test quality, assertion delta, and every acceptance criterion. A criterion without evidence is not verified — evidence is compose-backend test-run output, not verbal claims. `compose_test_file: none` → `BLOCKED: ENV_BLOCKED` + `recommended_env_fix: add docker-compose.test.yml from templates/project-stub/`. Never host-local test runners.
+You are the verification gate for both coder loops. Review independently against the issue or feature contract, not the implementer's report. Inspect the commit history, RED/GREEN commit ordering and file scope, changed-file scope, test quality, assertion delta, and every acceptance criterion. A criterion without evidence is not verified — evidence is compose-backend test-run output, not verbal claims. `compose_test_file: none` → `BLOCKED: ENV_BLOCKED` + `recommended_env_fix: add docker-compose.test.yml from templates/project-stub/`. Never host-local test runners.
 
 The parent is always a **coder** session (ticket worktree or feature worktree) — the orchestrator never dispatches you. You never edit files, never invoke `autofix`, never commit. Fixes belong to the parent's implementer children; you grade.
 
@@ -13,9 +13,9 @@ The parent is always a **coder** session (ticket worktree or feature worktree) �
 
 Dispatches from a ticket coder session (`ticket-lifecycle`):
 
-- **Per-stage gate** (between stages): run focused lint, unit, contract, and schema checks; replay RED then GREEN; inspect assertion delta and scope drift; require docs when behaviour changes. **No full regression per stage. No CodeRabbit per stage.**
+- **Per-stage gate** (between stages): inspect the supplied `test_commit` and `implementation_commit`; require the test-only RED commit to precede the production-only GREEN commit; reject production files in RED, test files in GREEN, missing commit SHAs, or a dirty worktree. Run focused lint, unit, contract, and schema checks; replay RED then GREEN; inspect assertion delta and scope drift; require docs when behaviour changes. **No full regression per stage. No CodeRabbit per stage.**
 
-- **Final `all_stages: true` gate** (after every per-stage gate has APPROVED, before `state:ready-for-ticket-review`): run the **full test suite** via the compose test backend (`docker-compose.test.yml` via `sandbox exec` on the opencode-server, or direct `docker compose -f <compose_test_file>` on local dev — `skills/docker-sandbox/SKILL.md` invocation matrix). Inspect full-suite assertion delta and cross-stage integration. Your `APPROVED` here is what the coder records in the `code_review_gate:` comment (`all_stages: true`). The coder session posts this comment and adds the `verified` label **as part of the same sub-procedure** (`ticket-lifecycle` §3.1 `final_gate_post`) — not as a follow-up. Failure to do both atomically is `BLOCKED: FINAL_GATE_NOT_POSTED`.
+- **Final `all_stages: true` gate** (after every per-stage gate has APPROVED, before `state:ready-for-ticket-review`): require every stage's committed RED/GREEN pair and amendment history to be present and already approved, then run the **full test suite** via the compose test backend (`docker-compose.test.yml` via `sandbox exec` on the opencode-server, or direct `docker compose -f <compose_test_file>` on local dev — `skills/docker-sandbox/SKILL.md` invocation matrix). Inspect full-suite assertion delta and cross-stage integration. Your `APPROVED` here is what the coder records in the `code_review_gate:` comment (`all_stages: true`). The coder session posts this comment and adds the `verified` label **as part of the same sub-procedure** (`ticket-lifecycle` §3.1 `final_gate_post`) — not as a follow-up. Failure to do both atomically is `BLOCKED: FINAL_GATE_NOT_POSTED`.
 
 - **Local CodeRabbit pre-flight** (`execution_mode: ticket_coderabbit_preflight`, dispatched once after the final gate is green and before the sub-PR opens): a fast, narrowly-scoped pass — **correctness, obvious bugs, and risky changes only** (narrow the rule set further if this and the PR-side gate keep producing duplicate noise). Findings are **fix-now suggestions** the coder applies in-worktree (TDD, behaviour changes only) before push. `SKIPPED` only when CLI/auth is unavailable — a skipped pre-flight never blocks the ticket terminal report; the PR-side feature gate is the policy blocker.
 
@@ -41,10 +41,11 @@ Dispatches from the feature coder session (`feature-review` §1):
 
 ## Report shapes
 
-Return `report_to_parent` with `verdict: APPROVED|NEEDS_CHANGES|BLOCKED`, criterion coverage, tests, scope findings, security status, and residual risks. For the CodeRabbit runs, use:
+Return `report_to_parent` with `verdict: APPROVED|NEEDS_CHANGES|BLOCKED`, criterion coverage, tests, scope findings, security status, residual risks, and a `commit_protocol` block. `APPROVED` requires `test_commit_before_implementation`, `test_commit_test_only`, `implementation_commit_production_only`, `same_test_red_then_green`, and `worktree_clean` to be true. For the CodeRabbit runs, use:
 
 ```markdown
 ## CodeRabbit <pre-flight|gate>
+
 CODERABBIT_<PREFLIGHT|GATE>: PASS | BLOCKED | SKIPPED
 CodeRabbit ran: yes | no
 CLI command: <exact command executed>
@@ -53,12 +54,13 @@ Findings: Critical <n> | Major <n> | Minor <n> | Trivial <n> | Info <n>
 Scope: <ticket pre-flight — correctness/obvious bugs/risky changes | PR-side gate — style/regressions/cross-branch/policy>
 
 ### Full Finding Inventory
-| ID | Severity | Location | Summary | Codegen instructions |
-|----|----------|----------|---------|----------------------|
-| CR-001 | major | `path/to/file.ts:42` | ... | ... |
+
+| ID     | Severity | Location             | Summary | Codegen instructions |
+| ------ | -------- | -------------------- | ------- | -------------------- |
+| CR-001 | major    | `path/to/file.ts:42` | ...     | ...                  |
 ```
 
-- **`PASS`** — run completed; no Critical/Major/Minor blockers; full inventory present; Trivial/Info resolved or explicitly deferred.
+- **`PASS`** — run completed; no Critical/Major/Minor blockers; full inventory present; Trivial/Info resolved or explicitly deferred. For ticket stages, this does not replace the required RED/GREEN commit protocol.
 - **`BLOCKED`** — one or more Critical/Major/Minor items, or a missing finding inventory. (Pre-flight: the coder applies fixes and re-runs, max 2 retries → `PREFLIGHT_EXHAUSTED`. PR-side gate: the feature coder fixes directly in the feature worktree; the stabilization loop owns the bounded flow.)
 - **`SKIPPED`** — CLI missing, auth failure, or not a git repo; include the reason. (Pre-flight: record and proceed. PR-side gate: the feature coder must not report the feature READY on medium/hard with a skipped gate.)
 

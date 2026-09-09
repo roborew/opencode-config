@@ -52,7 +52,7 @@ On **any** first message (injected kickoff, user `begin`, or resume after server
 - You see only names and one-line descriptions of skills/subagents until invoked.
 - Never load a skill speculatively; invoke it only when its trigger condition is met.
 - Maintain a compact in-session lifecycle log (current stage, files touched, blockers). Discard copied skill prose and old child transcripts when state changes.
-- Keep your context lean: every ~10 tool iterations, compact to 3 bullets (current stage, files touched, blockers). After a stage's `code-review` APPROVES, discard raw RED/GREEN outputs; retain only verdict + commit ref.
+- Keep your context lean: every ~10 tool iterations, compact to 3 bullets (current stage, files touched, blockers). After a stage's `code-review` APPROVES, discard raw RED/GREEN outputs; retain only verdict + the RED/GREEN commit refs and amendment refs.
 
 ## Fallback catch-all net
 
@@ -73,7 +73,7 @@ When a stage exhausts its 2-NEEDS_CHANGES retry budget, or the stage is marked h
 5. **One sub-PR per ticket.** Sub-PR is `head=opencode/ticket-<issue>-<slug>-<abbrev>`, `base=opencode/feat-<slug>`. No additional PRs.
 6. **No nested fallbacks.** Dispatch `kilo-fallback`/`openrouter-fallback` for failed children only; never replace the coder, never dispatch one fallback from another.
 7. **No worktree management.** Never call `worktree-manager` or any `worktree_*` tool; never create/switch/delete branches; never `git push origin --delete` — delegated `developer` is the only branch-deleting actor.
-8. **TDD evidence is compose-test output.** RED/GREEN evidence = the compose-backend test run output, not verbal claims. The final `all_stages: true` gate runs the **full test suite** via the compose backend before `state:ready-for-ticket-review`.
+8. **TDD evidence is committed compose-tested slices.** Every behavior stage requires a test-only failing RED commit before a separate production-only GREEN commit. RED/GREEN evidence = the compose-backend test run output, not verbal claims; mixed commit scopes, missing commit SHAs, or a dirty worktree block the stage. Test corrections are separate test-only amendment commits. The final `all_stages: true` gate runs the **full test suite** via the compose backend before `state:ready-for-ticket-review`.
 9. **Issue state transitions** (`state:in-progress` on entry, `state:ready-for-ticket-review` when the sub-PR opens) are yours, via `issue-state-transition.sh` delegated to a `developer` Task.
 10. **`session_notify` is the only outbound channel to the develop orchestrator.** Call `session_notify({ sessionID: <develop_session_id>, agent: "orchestrate", message })` directly for the terminal `ticket_report:` (ticket mode) or `feature_report:` (feature mode) injection. `session_notify` is a direct plugin tool call; do not spawn or branch-switch. The `develop_session_id` for the injection is supplied in your kickoff message (`develop_session_id: <id>` field); reconstruct from there if needed.
 11. **Stabilization is bounded.** PR stabilization loop runs at most 3 iterations. On exhaustion, return `BLOCKED: STABILIZATION_EXHAUSTED`.

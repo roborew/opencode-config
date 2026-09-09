@@ -7,6 +7,7 @@ Usage:
 
 Exit 0 = pass; 1 = fail (errors on stderr as JSON lines).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -51,6 +52,14 @@ def is_placeholder(text: str | None) -> bool:
     return any(marker in text for marker in PLACEHOLDER_MARKERS)
 
 
+def has_explicit_test_first(stage: dict[str, Any]) -> bool:
+    tdd = stage.get("tdd")
+    if isinstance(tdd, dict) and tdd.get("test_first") is True:
+        return True
+    # Compatibility form for stage schemas that keep the flag flat.
+    return stage.get("test_first") is True
+
+
 def validate(body: str, level: str, expected_task_id: str | None) -> list[str]:
     errors: list[str] = []
 
@@ -66,14 +75,22 @@ def validate(body: str, level: str, expected_task_id: str | None) -> list[str]:
         if not meta.get("task_id"):
             errors.append("opencode-task-yaml missing task_id")
         elif expected_task_id and meta.get("task_id") != expected_task_id:
-            errors.append(f"task_id mismatch: expected {expected_task_id}, got {meta.get('task_id')}")
+            errors.append(
+                f"task_id mismatch: expected {expected_task_id}, got {meta.get('task_id')}"
+            )
 
         for field in ("owner", "commit_message", "acceptance", "test_commands"):
             if field not in meta:
                 errors.append(f"opencode-task-yaml missing {field}")
         if meta.get("owner") not in {"developer", "frontend-dev", "ux-dev"}:
-            errors.append("opencode-task owner must be developer, frontend-dev, or ux-dev")
-        if meta.get("design_delivery") not in (None, "brief-only", "prototype-required"):
+            errors.append(
+                "opencode-task owner must be developer, frontend-dev, or ux-dev"
+            )
+        if meta.get("design_delivery") not in (
+            None,
+            "brief-only",
+            "prototype-required",
+        ):
             errors.append("design_delivery must be brief-only or prototype-required")
 
     us = extract_section(body, "User stories covered")
@@ -99,18 +116,35 @@ def validate(body: str, level: str, expected_task_id: str | None) -> list[str]:
             if not isinstance(stage, dict):
                 errors.append(f"stages[{i}] is not an object")
                 continue
-            for sf in ("stage_id", "owner", "objective", "acceptance", "test_commands", "commit_message"):
+            for sf in (
+                "stage_id",
+                "owner",
+                "objective",
+                "acceptance",
+                "test_commands",
+                "commit_message",
+                "test_commit_message",
+            ):
                 if sf not in stage:
                     errors.append(f"stages[{i}] missing {sf}")
+            if not has_explicit_test_first(stage):
+                errors.append(
+                    f"stages[{i}] requires tdd.test_first=true "
+                    "or equivalent stage-level test_first=true"
+                )
             if stage.get("owner") not in {"developer", "frontend-dev", "ux-dev"}:
-                errors.append(f"stages[{i}] owner must be developer, frontend-dev, or ux-dev")
+                errors.append(
+                    f"stages[{i}] owner must be developer, frontend-dev, or ux-dev"
+                )
 
     return errors
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--level", choices=("fanout", "expand", "orchestrate"), default="expand")
+    parser.add_argument(
+        "--level", choices=("fanout", "expand", "orchestrate"), default="expand"
+    )
     parser.add_argument("--task-id", default=None)
     parser.add_argument("--file", default=None)
     args = parser.parse_args()

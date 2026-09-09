@@ -202,15 +202,16 @@ Already done in §0.3 — compose-backend resolved + built + warmed via the `wor
 
 ### 2. Loop every `opencode_meta.stages[]` entry
 
-For each `stage` in `opencode_meta.stages` (in order, **starting from `last_approved_stage_index + 1`** on resume):
+For each `stage` in `opencode_meta.stages` (in order, **starting from `last_approved_stage_index + 1`** on resume), enforce one committed vertical slice before advancing:
 
-1. **RED** — dispatch `test-writer` (or implementer RED for non-test stages) with the stage scope; capture `red_phase` proof of RED from the compose-backend test run (test identifier + failure output). RED evidence is the **plugin `sandbox_run_test` output**, not claims — `test-writer` calls `sandbox_run_test` from `plugins/sandbox.js` directly with `sandbox_id` + `compose_test_file` from §0.3.
-2. **GREEN** — execute the stage as `Owner` (developer | frontend-dev | ux-dev) per `stage.owner`. The Owner implements, then **runs the same compose-backend test via `sandbox_run_test` as part of red→green** and confirms green **before** reporting. Capture `green_phase` and `assertion_delta`. GREEN evidence is the plugin tool output, not claims.
-3. **`code-review` (ticket mode)** — dispatch `code-review` with `load: full`, the stage's `diff_base`, `files_changed`, `red_phase` + `green_phase` evidence, and the issue's acceptance mapping. Focused per-stage checks (design, correctness, stage scope, RED/GREEN replay). **No full regression per stage.** `code-review` reuses the built images via `sandbox_run_test`; destroys the sandbox after `APPROVED` or `ENV_BLOCKED`, keeps alive on `BLOCKED` (per `docker-sandbox` §5 — still applies; the destroy now goes through `sandbox_destroy` from the plugin, not bash).
-   - On `APPROVED` → stage done. Compact context, retain only gate summary.
-   - On `NEEDS_CHANGES` → fix in-worktree (TDD), re-run code-review (max 2 stage retries).
+0. **Stage contract** — require `stage.tdd.test_first: true` (or the accepted flat compatibility flag), `stage.test_commit_message`, `stage.commit_message`, acceptance mapping, and test commands. Capture the stage base SHA and require a clean worktree before RED.
+1. **RED test commit** — dispatch `test-writer` with `execution_mode: test_first_red`, the stage scope, `test_commit_message`, issue number, expected branch, and compose handles. The test writer writes exactly one behavior test, runs it through `sandbox_run_test`, and proves the intended failure. It then stages only test/test-support files and creates the test-only RED commit. Require `red_phase`, `test_commit.sha`, `test_commit.files`, and `worktree_clean: true`; missing evidence or a mixed RED commit is `BLOCKED: TEST_COMMIT_INVALID`.
+2. **GREEN implementation commit** — dispatch the stage `Owner` (developer | frontend-dev | ux-dev) with `execution_mode: test_first_green`, the complete RED report, and `test_commit.sha`. The owner must verify that HEAD is the RED commit, implement production changes only, run the same compose-backed test, stage only production files, and create the implementation-only GREEN commit using `stage.commit_message` plus `Refs: #<issue_number>`. Require `green_phase`, `implementation_commit.sha`, `implementation_commit.files`, and `worktree_clean: true`; test changes in GREEN are `BLOCKED: IMPLEMENTATION_COMMIT_MIXED`.
+3. **`code-review` (ticket mode)** — dispatch `code-review` with `load: full`, the stage's `diff_base`, `test_commit`, `implementation_commit`, any `test_amendments`, `files_changed`, `red_phase` + `green_phase` evidence, and the issue's acceptance mapping. The reviewer must validate commit order, test-only RED scope, production-only GREEN scope, clean worktree, test quality, acceptance coverage, and RED/GREEN replay. **No full regression per stage.** `code-review` reuses the built images via `sandbox_run_test`; destroys the sandbox after `APPROVED` or `ENV_BLOCKED`, keeps alive on `BLOCKED`.
+   - On `APPROVED` → record `{ stage_id, red_commit, implementation_commit, test_amendments }`, compact context, and retain the commit refs.
+   - On `NEEDS_CHANGES` → classify the finding. Test-quality changes go through a new `test-writer` `execution_mode: test_amendment` task and a separate test-only amendment commit; behavior changes then go through a new GREEN implementation-only commit. Never fix both sides in one commit. Re-run `code-review` with the complete commit history (max 2 stage retries).
    - On `BLOCKED` → return `BLOCKED` from the ticket (cross-cutting blocker).
-4. After the final stage → run `StageAcceptanceChecks` end-to-end. Commit any remaining stage outputs with `Refs: #<issue_number>`.
+4. After the final stage → run `StageAcceptanceChecks` end-to-end. Do not create a catch-up mixed commit; every stage output must already be committed and reviewed before the final gate.
 
 #### 2.5 Senior-dev escalation + provider fallback
 
@@ -266,7 +267,7 @@ Steps in order; no early exit until ALL THREE succeed:
 
 1. Dispatch `code-review` (`load: full`) for the **final** `all_stages: true` gate (full suite via compose backend).
 2. On `APPROVED`, dispatch ONE delegated `developer` Task (`load: minimal`) that performs steps 2a–2c atomically:
-   a. Post the `code_review_gate:` comment via `gh issue comment`. **Note:** `gh issue comment … --json id` does not exist in the CLI; capture the comment id by back-resolving from the issue's comments list — `gh issue view <n> --repo <repo> --comments --json comments -q '[.comments[]|select(.body|startswith("code_review_gate:"))]|last|.id'` (the coder-as-author identity is implicit because you are operating inside a coder session; the env var `OPENCODE_CODER_AUTHOR` is the strict-precondition contract enforced by `scripts/issue-state-transition.sh`, not by this capture shape).
+   a. Post the `code_review_gate:` comment via `gh issue comment`, including `all_stages: true`, `verdict: APPROVED`, and the complete `stage_commit_history` (`stage_id`, `red_commit`, `implementation_commit`, and `test_amendments`) for every approved stage. **Note:** `gh issue comment … --json id` does not exist in the CLI; capture the comment id by back-resolving from the issue's comments list — `gh issue view <n> --repo <repo> --comments --json comments -q '[.comments[]|select(.body|startswith("code_review_gate:"))]|last|.id'` (the coder-as-author identity is implicit because you are operating inside a coder session; the env var `OPENCODE_CODER_AUTHOR` is the strict-precondition contract enforced by `scripts/issue-state-transition.sh`, not by this capture shape).
    b. Run `scripts/issue-verified-transition.sh "<repo>" "<issue_number>" verified` from the same delegated Task. The wrapper is the **only** writer of `verified` — do **not** run `gh issue edit --add-label verified` inline, that leaves a stale `unverified` and creates the duplicate pair.
    c. Verify via `gh issue view <n> --repo <repo> --json labels -q '.labels[].name' | grep -qx verified` inside the same delegated Task.
 3. Return `final_gate_post: { posted_comment_id, label_added, evidence_url }` from the delegated Task and record it in the terminal `ticket_report:` (§6a).
@@ -278,7 +279,7 @@ Resume-safe idempotence (§0.4 step 2) reads the most recent `code_review_gate:`
 
 1. Dispatch `code-review` once with `load: full`, `execution_mode: ticket_coderabbit_preflight`, the ticket worktree path, `base_branch: opencode/feat-<slug>`, and the per-stage code-review evidence. Scope: correctness, obvious bugs, and risky changes only (narrow rule set — narrow further if this and the PR-side feature gate keep producing duplicate noise).
    - On `PASS` → proceed to §4.
-   - On `BLOCKED` → apply the fix-now suggestions in-worktree (TDD, behaviour changes only), commit `Refs: #<issue_number>`, push the ticket branch, re-run the pre-flight before the sub-PR opens. Max 2 retries, then `BLOCKED: PREFLIGHT_EXHAUSTED`.
+   - On `BLOCKED` → apply each behavior fix through the same protocol: test-only RED/amendment commit first, then production-only GREEN fix commit, then rerun the targeted test and pre-flight. Never combine the test and fix. Push the ticket branch and re-run the pre-flight before the sub-PR opens. Max 2 retries, then `BLOCKED: PREFLIGHT_EXHAUSTED`.
    - On `SKIPPED` (CLI/auth unavailable) → record `coderabbit_preflight: SKIPPED` in the ticket_report and proceed. The PR-side feature gate is the policy blocker; missing the pre-flight does not block the ticket terminal report.
 
 ### 4. Open the sub-PR
@@ -306,8 +307,8 @@ switch report.classify:
     for each fix-now item in (report.ci failing checks (via `gh pr checks <pr_url> --json name,state,conclusion`), report.comments, report.reviews):
       if item spans another ticket's branch files:
         return BLOCKED: CROSS_TICKET_REVIEW { item, evidence }
-      fix in-worktree with TDD (RED→GREEN, behavior changes only),
-      commit "Refs: #<issue_number>", push branch
+      fix in-worktree with the TDD commit protocol (test-only RED/amendment commit → production-only GREEN implementation commit, behavior changes only),
+      commit each phase separately with `Refs: #<issue_number>`, push branch
     loop back to next iter
 ```
 
@@ -378,6 +379,11 @@ ticket_report:
   pr_url: <url>                        # READY only
   ci_state: pass|pending|fail          # READY only
   stages_completed: <count>
+  stage_commit_history:
+    - stage_id: <stage id>
+      red_commit: <sha>
+      implementation_commit: <sha>
+      test_amendments: [<sha>]
   coderabbit_preflight: PASS | SKIPPED | BLOCKED   # see §3
   coderabbit_preflight_skip_reason: <reason>       # SKIPPED only
   blocker_code: <code>                 # BLOCKED only
@@ -420,6 +426,11 @@ READY_FOR_HUMAN_REVIEW:
   evidence: <pr-stabilize-watch evidence line>
   comment_resolutions: [{ author, classification, action }]
   stages_completed: <count>
+  stage_commit_history:
+    - stage_id: <stage id>
+      red_commit: <sha>
+      implementation_commit: <sha>
+      test_amendments: [<sha>]
   coderabbit_preflight: PASS | SKIPPED
   review_handoff_contract:
     name: human_review_handoff
@@ -484,15 +495,15 @@ Emit the terminal report and stop. The implementer Hard Rules' post-completion g
 
 ## Code-review grading gate
 
-Per-stage `code-review` (focused): APPROVED requires non-missing criterion coverage, manual criteria with evidence or accepted deviation, security resolved, complete report. Empty/malformed/step-limited report = `BLOCKED`; retry once with `load: full`, then senior-dev escalation.
+Per-stage `code-review` (focused): APPROVED requires non-missing criterion coverage, manual criteria with evidence or accepted deviation, security resolved, complete report, and a valid committed pair: test-only RED commit before production-only GREEN commit, clean worktree, same test RED then GREEN, and separately listed test amendments. Empty/malformed/step-limited or mixed commit scope = `BLOCKED`; retry once with `load: full`, then senior-dev escalation.
 
-Final `all_stages: true` gate (before `state:ready-for-ticket-review`): same grading, plus the full-suite compose test run is green and `StageAcceptanceChecks` passed. Empty/malformed/step-limited → retry once with `load: full`, then senior-dev escalation.
+Final `all_stages: true` gate (before `state:ready-for-ticket-review`): same grading, plus every stage has a valid committed pair, the full-suite compose test run is green, and `StageAcceptanceChecks` passed. Empty/malformed/step-limited or missing stage commit history → retry once with `load: full`, then senior-dev escalation.
 
 ## Anti-loop
 
 - Do not emit the same verbal statement twice. Move after the first intent statement.
 - Do not re-announce file writes or commands.
-- After a stage's `code-review` APPROVED, compact: discard raw RED/GREEN outputs; retain only the verdict + commit ref.
+- After a stage's `code-review` APPROVED, compact: discard raw RED/GREEN outputs; retain only the verdict + RED/GREEN commit refs and amendment refs.
 
 ## See also
 

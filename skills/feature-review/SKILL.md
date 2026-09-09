@@ -5,7 +5,7 @@ modelTier: "fast"
 roleReminder: "Loaded by the `coder` agent in the feature worktree after all ticket sub-PRs merge into `opencode/feat-<slug>`. Sign-off duty migrated from the deleted architect review skill."
 ---
 
-> You are operating inside a **coder** session that was kicked into the feature worktree (`opencode/feat-<slug>`) by the develop orchestrator after the last ticket sub-PR merged. The ticket inner loop has already finished for every ticket in this feature (each ticket ran its own local CodeRabbit pre-flight inside its coder session) — you own the feature-mode verification: full test suite + e2e via the compose backend, acceptance replay, the PR-side CodeRabbit gate (medium/hard), difficulty gates, docs, `state:ready-for-feature-review` on every ticket (the final coder-set label), the feature PR, bounded stabilization, and one terminal `feature_report:` (or `BLOCKED: FEATURE_REMEDIATION` with `remediation:` issues). The develop orchestrator sets `state:done` after human final review and merges the feature PR — the spec `feature-complete` skill later verifies + closes; impl feature PR merge happens in the orchestrator on your READY report + human approval — the orchestrator never re-verifies your evidence.
+> You are operating inside a **coder** session that was kicked into the feature worktree (`opencode/feat-<slug>`) by the develop orchestrator after the last ticket sub-PR merged. The ticket inner loop has already finished for every ticket in this feature (each ticket ran its own test-only RED commit → production-only GREEN commit pair, focused code-review, and local CodeRabbit pre-flight inside its coder session) — you own the feature-mode verification: full test suite + e2e via the compose backend, acceptance replay, the PR-side CodeRabbit gate (medium/hard), difficulty gates, docs, `state:ready-for-feature-review` on every ticket (the final coder-set label), the feature PR, bounded stabilization, and one terminal `feature_report:` (or `BLOCKED: FEATURE_REMEDIATION` with `remediation:` issues). The develop orchestrator sets `state:done` after human final review and merges the feature PR — the spec `feature-complete` skill later verifies + closes; impl feature PR merge happens in the orchestrator on your READY report + human approval — the orchestrator never re-verifies your evidence.
 
 ## Hard rules
 
@@ -142,10 +142,10 @@ If the kickoff pointer is missing but the branch + GitHub reconstruct cleanly, p
 
 ### 1. Feature-mode `code-review` (full suite)
 
-Dispatch `code-review` (`load: full`) with the full diff vs `develop` (delegated `developer` to capture `git diff origin/develop...HEAD --stat` and the per-ticket merged-PR list), the rolled-up acceptance mapping (every ticket's acceptance criteria, every per-ticket `code_review_gate: APPROVED`), and the compose test backend handles from §0.3 (`sandbox_id`, `compose_test_file`). The feature-mode gate runs the **full regression, integration, and e2e** suite via the plugin tool **`sandbox_run_test`** (the per-stage focused gate already passed during each ticket's inner loop). `code-review` calls `sandbox_run_test` directly — `worktree-sandbox` is not in this path.
+Dispatch `code-review` (`load: full`) with the full diff vs `develop` (delegated `developer` to capture `git diff origin/develop...HEAD --stat` and the per-ticket merged-PR list), the rolled-up acceptance mapping (every ticket's acceptance criteria, every per-ticket `code_review_gate: APPROVED`), each ticket's `stage_commit_history` with RED/GREEN/amendment SHAs, and the compose test backend handles from §0.3 (`sandbox_id`, `compose_test_file`). The feature-mode gate runs the **full regression, integration, and e2e** suite via the plugin tool **`sandbox_run_test`** (the per-stage focused gate already passed during each ticket's inner loop). `code-review` calls `sandbox_run_test` directly — `worktree-sandbox` is not in this path.
 
 - On `APPROVED` → compact, retain only the verdict + commit refs + full-suite evidence summary. Continue.
-- On `NEEDS_CHANGES` → fix in this feature worktree (TDD), re-run `code-review`. Max 2 retries, then `BLOCKED: FEATURE_REMEDIATION`.
+- On `NEEDS_CHANGES` → for behavior changes, use a test-only RED/amendment commit followed by a separate production-only GREEN fix commit; re-run `code-review` with the updated commit history. Max 2 retries, then `BLOCKED: FEATURE_REMEDIATION`.
 - On `BLOCKED` (cross-cutting blocker) → return `BLOCKED` (cross-ticket / cross-cutting).
 - `code-review` destroys the sandbox after `APPROVED` or `ENV_BLOCKED` (via the plugin `sandbox_destroy`), keeps alive on `BLOCKED`.
 
@@ -197,8 +197,8 @@ for iter in 1..3:
 
   if fix_now:
     for each item in fix_now:
-      fix in this feature worktree with TDD (RED → GREEN, behavior changes only),
-      commit "Refs: #<feature-parent-issue>", push branch
+      fix in this feature worktree with the TDD commit protocol (test-only RED/amendment commit → production-only GREEN implementation commit, behavior changes only),
+      commit each phase separately with `Refs: #<feature-parent-issue>`, push branch
     loop back to next iter
 
   if no fix_now and ci green and no actionable comments:
