@@ -12,19 +12,23 @@ subagent host) that previously incentivized bypassing the code-review gate.
 
 - Every project with `test_commands` ships a **`docker-compose.test.yml`** (or
   `compose.test.yaml`) at the repo root.
-- The compose file defines a **`test` service** that runs the project's
+- The compose file defines a **runnable service** that runs the project's
   `test_commands` self-contained, OR provides sufficient tooling to mock external
-  dependencies.
+  dependencies. New stubs (`templates/project-stub/`) name it `test` by convention,
+  but existing repos may not — **the service name is repo-specific; read the
+  compose file, never assume `test`.**
 - The compose file **volume-mounts the project source** so uncommitted edits are
   tested without a rebuild.
 - Cleanup: `docker compose -f docker-compose.test.yml down` in a finally path.
 
 ## Backends (same compose file)
 
-| Environment | Backend | Command |
-|-------------|---------|---------|
-| opencode-server | Sysbox sibling | `sandbox exec --id <slug> -- docker compose -f docker-compose.test.yml run --rm test` |
-| Local dev / Mac | Docker Desktop | `docker compose -f docker-compose.test.yml run --rm test` |
+| Environment     | Backend        | Command                                                                                    |
+| --------------- | -------------- | ------------------------------------------------------------------------------------------ |
+| opencode-server | Sysbox sibling | `sandbox exec --id <slug> -- docker compose -f docker-compose.test.yml run --rm <service>` |
+| Local dev / Mac | Docker Desktop | `docker compose -f docker-compose.test.yml run --rm <service>`                             |
+
+`<service>` comes from reading the compose file, not from this table.
 
 Probe order: `sandbox probe` → `sandbox exec`; else `docker` present → direct
 `docker compose`; else `BLOCKED` (do not silently fall back to host).

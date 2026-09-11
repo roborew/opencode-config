@@ -60,7 +60,14 @@ const KNOWN_BLOCKER_CODES = {
   COMPOSE_TEST_FILE_MISSING: "ENV_BLOCKED",
   DOCKER_UNAVAILABLE: "ENV_BLOCKED",
   SANDBOX_UNAVAILABLE_NO_FALLBACK: "ENV_BLOCKED",
+  SANDBOX_ID_TOO_LONG: "SANDBOX_ID_TOO_LONG",
 };
+
+// Docker/Linux hostname cap is 64 bytes; the sandbox CLI names the container
+// `opencode-sandbox-<id>` (17-byte prefix), so anything pushing the full
+// hostname past 63 bytes fails the `sandbox create` call outright.
+const SANDBOX_HOSTNAME_PREFIX = "opencode-sandbox-";
+const SANDBOX_HOSTNAME_MAX_BYTES = 63;
 
 function clientError(msg, blocker) {
   return JSON.stringify({
@@ -152,7 +159,15 @@ function execCapture(bin, args, opts = {}) {
 }
 
 async function sandboxExec(sandboxId, dockerArgs, _worktreePath) {
-  const args = ["exec", "--id", sandboxId, "--", "docker", "compose", ...dockerArgs];
+  const args = [
+    "exec",
+    "--id",
+    sandboxId,
+    "--",
+    "docker",
+    "compose",
+    ...dockerArgs,
+  ];
   return execCapture("sandbox", args);
 }
 
@@ -245,7 +260,8 @@ export const SandboxPlugin = async () => {
               "env_copy requires a non-empty 'main_path' argument.",
             );
           }
-          const list = (args && args.files) ||
+          const list =
+            (args && args.files) ||
             process.env.WORKTREE_ENV_FILES ||
             ".env .env.local";
           const files = list.split(/\s+/).filter((f) => f.length > 0);
@@ -276,9 +292,8 @@ export const SandboxPlugin = async () => {
                 isRegular = true;
               }
             } catch (err) {
-              status = err.code === "ENOENT"
-                ? "skipped_missing_source"
-                : "failed_cp";
+              status =
+                err.code === "ENOENT" ? "skipped_missing_source" : "failed_cp";
               isRegular = false;
             }
             fileEntries.push({
@@ -300,13 +315,17 @@ export const SandboxPlugin = async () => {
               ? "skipped_missing_source"
               : "ok";
 
-          const evidencePath = await writeEvidence("env_copy", path.basename(wtRoot), {
-            tool: "env_copy",
-            worktree_path: wtRoot,
-            main_path: mainRoot,
-            files: fileEntries,
-            overall,
-          });
+          const evidencePath = await writeEvidence(
+            "env_copy",
+            path.basename(wtRoot),
+            {
+              tool: "env_copy",
+              worktree_path: wtRoot,
+              main_path: mainRoot,
+              files: fileEntries,
+              overall,
+            },
+          );
 
           return JSON.stringify({
             ok: !hadFailed,
@@ -355,6 +374,15 @@ export const SandboxPlugin = async () => {
               "sandbox_create requires a non-empty 'worktree_path' argument.",
             );
           }
+          const hostnameLen = Buffer.byteLength(
+            `${SANDBOX_HOSTNAME_PREFIX}${id}`,
+          );
+          if (hostnameLen > SANDBOX_HOSTNAME_MAX_BYTES) {
+            return clientError(
+              `sandbox_create: id "${id}" makes the sandbox hostname ${hostnameLen} bytes (max ${SANDBOX_HOSTNAME_MAX_BYTES}). Shorten sandbox_id.`,
+              KNOWN_BLOCKER_CODES.SANDBOX_ID_TOO_LONG,
+            );
+          }
 
           const caps = await resolveCapabilities();
 
@@ -392,23 +420,26 @@ export const SandboxPlugin = async () => {
           }
 
           if (caps.sandbox === "ready") {
-            const statusProbe = await execCapture("sandbox", [
-              "status",
+            // `sandbox status` can report exit 0 even when the container
+            // doesn't exist on some CLI builds, which previously caused a
+            // false "reused" short-circuit that skipped `sandbox create`
+            // entirely. `sandbox exec -- true` only succeeds against a real
+            // running container, so it's a reliable existence check.
+            const existsProbe = await execCapture("sandbox", [
+              "exec",
               "--id",
               id,
+              "--",
+              "true",
             ]);
-            if (statusProbe.exit_code === 0) {
-              const evidencePath = await writeEvidence(
-                "sandbox_create",
-                id,
-                {
-                  tool: "sandbox_create",
-                  reused: true,
-                  sandbox_id: id,
-                  backend: "sandbox",
-                  compose_test_file: composeTestFile,
-                },
-              );
+            if (existsProbe.exit_code === 0) {
+              const evidencePath = await writeEvidence("sandbox_create", id, {
+                tool: "sandbox_create",
+                reused: true,
+                sandbox_id: id,
+                backend: "sandbox",
+                compose_test_file: composeTestFile,
+              });
               return JSON.stringify({
                 ok: true,
                 status: 200,
@@ -450,10 +481,10 @@ export const SandboxPlugin = async () => {
                   blocker_code: blocker,
                   stderr_tail: tailString(createRes.stderr),
                   evidence_path: evidencePath,
-                  recommended_env_fix: blocker ===
-                    KNOWN_BLOCKER_CODES.SANDBOX_ID_COLLISION
-                    ? "Pick a different sandbox_id or run sandbox_destroy on the colliding id."
-                    : "sandbox create failed — inspect opencode-server sandbox logs.",
+                  recommended_env_fix:
+                    blocker === KNOWN_BLOCKER_CODES.SANDBOX_ID_COLLISION
+                      ? "Pick a different sandbox_id or run sandbox_destroy on the colliding id."
+                      : "sandbox create failed — inspect opencode-server sandbox logs.",
                 },
               });
             }
@@ -497,7 +528,8 @@ export const SandboxPlugin = async () => {
         args: {
           id: {
             type: "string",
-            description: "Required. Sandbox id (also used for the backend hint).",
+            description:
+              "Required. Sandbox id (also used for the backend hint).",
           },
           compose_file: {
             type: "string",
@@ -534,9 +566,10 @@ export const SandboxPlugin = async () => {
           }
 
           const dockerArgs = [...parseComposeFileArg(composeFile), "build"];
-          const buildRes = caps.sandbox === "ready"
-            ? await sandboxExec(id, dockerArgs, worktreePath)
-            : await directDockerExec(dockerArgs, worktreePath);
+          const buildRes =
+            caps.sandbox === "ready"
+              ? await sandboxExec(id, dockerArgs, worktreePath)
+              : await directDockerExec(dockerArgs, worktreePath);
 
           const evidencePath = await writeEvidence("sandbox_build", id, {
             tool: "sandbox_build",
@@ -595,12 +628,12 @@ export const SandboxPlugin = async () => {
           service: {
             type: "string",
             description:
-              "Required. Compose service name to run the smoke command in (typically 'test').",
+              "Required. Compose service name to run the smoke command in. Service names are repo-specific (not every compose file has a 'test' service) — read the target compose_file first and pass the actual runnable service.",
           },
           smoke_command: {
             type: "string",
             description:
-              "Required. JSON-encoded string[] — the command (and args) to run inside the compose service for the warm pass. Example: '[\"mise\",\"exec\",\"--\",\"bin/rails\",\"test\",\"test/test_helper.rb\"]'.",
+              'Required. JSON-encoded string[] — the command (and args) to run inside the compose service for the warm pass, e.g. \'["bin/rails","test","test/test_helper.rb"]\' or \'["npm","test"]\'. Use the runner that\'s actually installed in the compose image (check its Dockerfile) — don\'t assume a host-only version manager (mise/asdf/rbenv/nvm) is present inside the container.',
           },
           worktree_path: {
             type: "string",
@@ -645,9 +678,10 @@ export const SandboxPlugin = async () => {
             service,
             ...smokeCommand,
           ];
-          const warmRes = caps.sandbox === "ready"
-            ? await sandboxExec(id, dockerArgs, worktreePath)
-            : await directDockerExec(dockerArgs, worktreePath);
+          const warmRes =
+            caps.sandbox === "ready"
+              ? await sandboxExec(id, dockerArgs, worktreePath)
+              : await directDockerExec(dockerArgs, worktreePath);
 
           const evidencePath = await writeEvidence("sandbox_warm", id, {
             tool: "sandbox_warm",
@@ -699,7 +733,8 @@ export const SandboxPlugin = async () => {
           },
           service: {
             type: "string",
-            description: "Required. Compose service name (typically 'test').",
+            description:
+              "Required. Compose service name. Service names are repo-specific — read the target compose_file first and pass the actual runnable service (don't assume 'test' or 'web').",
           },
           command: {
             type: "string",
@@ -757,9 +792,10 @@ export const SandboxPlugin = async () => {
             service,
             ...command,
           ];
-          const runRes = caps.sandbox === "ready"
-            ? await sandboxExec(id, dockerArgs, worktreePath)
-            : await directDockerExec(dockerArgs, worktreePath);
+          const runRes =
+            caps.sandbox === "ready"
+              ? await sandboxExec(id, dockerArgs, worktreePath)
+              : await directDockerExec(dockerArgs, worktreePath);
 
           const evidencePath = await writeEvidence("sandbox_run_test", id, {
             tool: "sandbox_run_test",
@@ -824,9 +860,10 @@ export const SandboxPlugin = async () => {
                 compose_test_file: null,
                 last_warm_at: null,
                 last_build_at: null,
-                note: caps.sandbox === "unavailable"
-                  ? "Sandbox CLI unavailable; direct-Docker backend (compose images persist between runs; status is implicit)."
-                  : "Sandbox CLI enabled but not currently installed on PATH.",
+                note:
+                  caps.sandbox === "unavailable"
+                    ? "Sandbox CLI unavailable; direct-Docker backend (compose images persist between runs; status is implicit)."
+                    : "Sandbox CLI enabled but not currently installed on PATH.",
               },
             });
           }
@@ -872,7 +909,8 @@ export const SandboxPlugin = async () => {
           },
           worktree_path: {
             type: "string",
-            description: "Optional. Absolute worktree root (for docker compose down cwd).",
+            description:
+              "Optional. Absolute worktree root (for docker compose down cwd).",
           },
         },
         async execute(args) {
@@ -898,13 +936,14 @@ export const SandboxPlugin = async () => {
             events.push({ step: "unexpose", ok: unexposeRes.ok });
           }
 
-          let destroyRes = { ok: true, exit_code: 0, stderr: "", duration_seconds: 0 };
+          let destroyRes = {
+            ok: true,
+            exit_code: 0,
+            stderr: "",
+            duration_seconds: 0,
+          };
           if (caps.sandbox === "ready") {
-            destroyRes = await execCapture("sandbox", [
-              "destroy",
-              "--id",
-              id,
-            ]);
+            destroyRes = await execCapture("sandbox", ["destroy", "--id", id]);
             events.push({ step: "sandbox_destroy", ok: destroyRes.ok });
           }
 

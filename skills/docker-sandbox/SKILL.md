@@ -48,7 +48,10 @@ sandbox probe
 # env gate: test -f .env ; Infisical key names only
 sandbox create --id <slug> --worktree "$(git rev-parse --show-toplevel)"
 sandbox exec --id <slug> -- docker compose -f docker-compose.test.yml build
-sandbox exec --id <slug> -- docker compose -f docker-compose.test.yml run --rm test
+sandbox exec --id <slug> -- docker compose -f docker-compose.test.yml run --rm <service>
+# <service> is repo-specific — read docker-compose.test.yml for the actual
+# runnable service name; many stacks call it `test`, some don't have one and
+# reuse their app service (e.g. `web`).
 # developer keeps the sandbox alive after GREEN; code-review reuses it via
 # sandbox status --id <slug> and destroys after APPROVED or ENV_BLOCKED
 ```
@@ -59,14 +62,15 @@ When `sandbox probe` is unavailable but `docker` is present (e.g. Docker Desktop
 
 ```bash
 docker compose -f docker-compose.test.yml build
-docker compose -f docker-compose.test.yml run --rm test
+docker compose -f docker-compose.test.yml run --rm <service>   # same <service> as above — read the compose file
 # developer does NOT run `down` after GREEN — code-review reuses the built
-# images with `run --rm test`, then runs `down` after APPROVED or ENV_BLOCKED
+# images with `run --rm <service>`, then runs `down` after APPROVED or ENV_BLOCKED
 # (keeps alive on BLOCKED for developer retry)
 ```
 
-- Same compose file and `test` service as the Sysbox path — the two backends are interchangeable for verification.
-- **Volume-mount contract:** the compose file must volume-mount the project source so uncommitted edits are tested without a rebuild.
+- Same compose file and service as the Sysbox path — the two backends are interchangeable for verification.
+- **Volume-mount contract:** the compose file must volume-mount the project source so uncommitted edits are tested without a rebuild. If the mount shadows image-built output (compiled assets, installed deps, generated code), re-run that build step inside the container after the mount, not on the host.
+- **Path-visibility requirement:** the direct-Docker fallback only works when the Docker daemon can resolve the worktree's absolute path (bind mounts resolve against the daemon's filesystem, not the caller's). If the caller runs inside a container that the daemon can't see (e.g. a nested opencode-server session), the bind mount resolves empty and the service fails to boot. The Sysbox `sandbox` backend mounts the worktree at the same absolute path the daemon sees and is required for those sessions — treat direct-Docker as Mac/local-dev only, not a universal fallback.
 - Never ad-hoc `docker run --runtime=sysbox-runc`; never mount host `docker.sock` into nested app compose.
 - If neither `sandbox` nor `docker` is available, report `sandbox: unavailable` (or `docker: unavailable`) and treat as `BLOCKED` when the stage requires compose/Docker.
 

@@ -88,7 +88,8 @@ The `worktree-sandbox` agent runs **exactly one** mode per Task. The parent sequ
 2. **Never write `.env` contents.** `env_copy` returns paths only.
 3. **Plugin is the source of truth for invocation form.** Agents do not write `sandbox create|exec|destroy` or `docker compose` invocations directly; they call plugin tools. The `docker-sandbox` skill is the canonical Sysbox-vs-direct-Docker reference for the plugin's fallback logic, not for agents writing bash.
 4. **Sandbox destroy is explicit.** Per `docker-sandbox` §5, `code-review` keeps the sandbox alive on `BLOCKED` and destroys on `APPROVED` / `ENV_BLOCKED`. For the **ticket/feature terminal teardown** the `worktree-sandbox` agent always destroys.
-5. **`mise exec --` stays.** It's the project's pinned runner inside the container; not a Mac-only thing in this config.
+5. **Service name and in-container runner are repo-specific.** Read the target compose file before calling `sandbox_warm` / `sandbox_run_test` — do not assume a service called `test` exists, and do not assume a host-only version manager (mise/asdf/rbenv/nvm) is installed in the compose image. Use whatever the compose file's actual runnable service and the image's Dockerfile show.
+6. **`sandbox_id` must stay short.** The sandbox CLI names the container `opencode-sandbox-<id>`; Docker's hostname cap is 64 bytes, so `sandbox_create` rejects ids that push the full name past 63 bytes (`SANDBOX_ID_TOO_LONG`). Derive short ids from the worktree basename, abbreviating when needed.
 
 ## Permissions
 

@@ -120,12 +120,13 @@ After the brief is in hand, delegate ONE `worktree-sandbox` Task with `load: min
 Task worktree-sandbox load: minimal
 mode: probe_and_create
 cwd: <worktree absolute path>
-sandbox_id: <id>            # optional; if absent, agent derives from worktree basename (DNS-label)
+sandbox_id: <id>            # optional; if absent, agent derives from worktree basename (DNS-label, keep it short —
+                             # sandbox_create rejects ids that push the `opencode-sandbox-<id>` hostname past 63 bytes)
 ```
 
 The returned `sandbox_id` + `compose_test_file` are the canonical handles every later dispatch uses. Compose-test-backend bring-up is no longer a developer concern — it lives in the plugin. `worktree-sandbox` is entry/exit only; it does not run per-stage tests.
 
-Subsequent test execution (test-writer RED, developer GREEN, code-review per-stage focused checks, final-gate full suite) uses the same backend. `opencode-task-yaml` `test_commands` execute **inside/through** the compose test service via the plugin tool **`sandbox_run_test`** (registered by `plugins/sandbox.js`). Stage implementers and `code-review` call `sandbox_run_test` **directly** from the plugin — they do not write `docker compose` invocations themselves, and they do not route through `worktree-sandbox` for per-stage runs. The `docker-sandbox` skill remains the canonical Sysbox-vs-direct-Docker reference for the plugin's fallback logic, not for agents writing bash.
+Subsequent test execution (test-writer RED, developer GREEN, code-review per-stage focused checks, final-gate full suite) uses the same backend. `opencode-task-yaml` `test_commands` execute **inside/through** the compose test service via the plugin tool **`sandbox_run_test`** (registered by `plugins/sandbox.js`). Stage implementers and `code-review` call `sandbox_run_test` **directly** from the plugin — they do not write `docker compose` invocations themselves, and they do not route through `worktree-sandbox` for per-stage runs. **`service` is repo-specific** — read `compose_test_file` for the actual runnable service (don't assume `test`). The `docker-sandbox` skill remains the canonical Sysbox-vs-direct-Docker reference for the plugin's fallback logic, not for agents writing bash.
 
 ### §0.4 Other bootstrap steps
 
