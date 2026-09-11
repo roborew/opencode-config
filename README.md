@@ -27,38 +27,91 @@ Plan in **spec**. Build and sign off the work in each **work repo** (with a revi
 
 ```mermaid
 flowchart TB
-  subgraph specStart ["1. Spec — architect → hi → 1. Product feature / PRD"]
-    S1["Your job: approve PRD and issue plans"]
-    S2["Done when: you have handoffs for each work repo"]
-  end
-
-  subgraph workLoop ["2. Work repo — LOOP until you are happy"]
+  subgraph specStart ["1. SPEC repo — agent: architect → hi → 1. Product feature / PRD"]
     direction TB
-    W1["Select orchestrate\nPaste feature:slug\nDone when: feature PR exists"]
-    W2["Orchestrator kicks the feature coder\n(feature-review) in the feature worktree"]
-    W3{"Changes needed?"}
-    W4["Select orchestrate again\nDo the remediation work\nOrchestrator re-kicks feature-review"]
-    W5["Orchestrator merges the feature PR after\n'all reviewed' on the dev orchestrator"]
-    W6["Spec feature-complete closes the feature"]
-    W1 --> W2 --> W3
-    W3 -->|yes| W4 --> W2
-    W3 -->|no — happy| W5 --> W6
+    S1["skill: grill-me — clarify scope, run the PRD grill"]
+    S2["skill: to-prd — draft + approve docs/prd/&lt;slug&gt;.md"]
+    S3["skill: fanout-issues — publish the PRD's child issues\nto GitHub as each impl repo's backlog"]
+    S4["skill: issue-expand — add TDD stages[] per impl repo\nDone: readiness gates pass, handoff per work repo"]
+    S1 --> S2 --> S3 --> S4
   end
 
-  subgraph specEnd ["3. Spec — architect → hi → 3. Feature complete"]
-    E1["Only after every work repo finished feature-review"]
+  subgraph batchLoop ["2. WORK repo — agent: orchestrate, skill: orchestrate — LOOP over the backlog"]
+    direction TB
+    W1["Bootstrap: create the feature worktree\n(opencode/feat-&lt;slug&gt;)"]
+    W2["Fetch the next runnable batch from the GitHub\nbacklog (dev-loop-batch.sh, dependency-aware)"]
+    W3["subagent: worktree-manager\ncreates a ticket worktree + session_kickoff\nfor every runnable ticket — one agent: coder session each"]
+
+    subgraph ticketLoop ["Per ticket — agent: coder, skill: ticket-lifecycle"]
+      direction TB
+      T1["Next stage in the ticket's stages[]"]
+      C1["subagent: test-writer\nRED — failing test-only commit"]
+      C2["subagent: developer / frontend-dev / ux-dev\nGREEN — production-only commit"]
+      C3["subagent: code-review\nAPPROVED / NEEDS_CHANGES / BLOCKED"]
+      C4{"NEEDS_CHANGES twice,\nor hard/stuck stage?"}
+      C5["subagent: senior-dev — one-shot\nescalation fix, resume GREEN"]
+      C6{"More stages\nleft in this ticket?"}
+      C7["Final full-suite gate + skill: code-review\nCodeRabbit pre-flight → open ticket sub-PR\nreturns ticket_report:"]
+      T1 --> C1 --> C2 --> C3 --> C4
+      C4 -->|yes| C5 --> C2
+      C4 -->|no, approved| C6
+      C6 -->|yes| T1
+      C6 -->|no| C7
+    end
+
+    W4["Orchestrator surfaces the ticket_report:\nas a 'Ready for ticket review' handoff"]
+    W5["Wait for human 'ticket reviewed' reply"]
+    W6["Merge the sub-PR, fast-forward the feature\nbranch, delete the ticket worktree + branch"]
+    W7{"Runnable tickets\nremain in the backlog?"}
+
+    W1 --> W2 --> W3 --> ticketLoop --> W4 --> W5 --> W6 --> W7
+    W7 -->|yes| W2
+  end
+
+  subgraph featureLoop ["3. WORK repo — same agent: coder, skill: feature-review"]
+    direction TB
+    F1["subagent: code-review\nfull-suite + PR-side CodeRabbit gate"]
+    F2["docs, difficulty gates,\nstate:ready-for-feature-review on every ticket"]
+    F3{"Unmet acceptance or\ncross-ticket findings?"}
+    F4["Publish remediation:&lt;slug&gt; issues to the backlog\nreturn BLOCKED: FEATURE_REMEDIATION"]
+    F5["Open the feature PR\nreturns feature_report:"]
+    F1 --> F2 --> F3
+    F3 -->|yes| F4
+    F3 -->|no| F5
+  end
+
+  subgraph signOff ["Orchestrator — human sign-off + merge"]
+    direction TB
+    H1["Wait for human 'all reviewed' reply"]
+    H2["Orchestrator sets state:done on every ticket,\nmerges the feature PR"]
+    H1 --> H2
+  end
+
+  subgraph specEnd ["4. SPEC repo — agent: architect → hi → 3. Feature complete"]
+    direction TB
+    E1["skill: feature-complete"]
     E2["Verify-only: confirm state:done + verified + MERGED"]
-    E3["Closes done tickets + PRD\nNo PR prep here"]
+    E3["Closes done tickets + PRD parent\nNo PR prep here"]
+    E1 --> E2 --> E3
   end
 
-  S1 --> S2 --> W1
-  W6 --> E1 --> E2 --> E3
+  S4 --> W1
+  W7 -->|no, backlog empty| F1
+  F4 -.->|re-batch remediation issues\nas new backlog work| W2
+  F5 --> H1
+  H2 --> E1
 ```
 
 ```text
-SPEC (start)          WORK REPO (loop until happy)              SPEC (finish)
-architect / 1    →    orchestrate ⇄ coder / feature-review   →   architect / 3
-PRD + handoffs        build → review gate → merge               merge + close
+1. SPEC (start)             2. WORK repo -- backlog loop                    3. WORK repo -- finish          4. SPEC (finish)
+architect / menu 1          orchestrate: batch the backlog, one agent:      same agent: coder session,      architect / menu 3
+grill-me -> to-prd ->       coder session per ticket (skill:                skill: feature-review           skill: feature-complete
+fanout-issues ->            ticket-lifecycle: test-writer -> developer/     (code-review full suite +       verify state:done +
+issue-expand                frontend-dev/ux-dev -> code-review, senior-dev  CodeRabbit PR gate) ->           verified + MERGED,
+                             if stuck) -> CodeRabbit preflight -> sub-PR     feature PR -> human "all         close tickets + PRD
+                             -> human "ticket reviewed" -> merge -> next     reviewed" -> merge
+                             ticket, repeat until backlog empty              (BLOCKED: FEATURE_REMEDIATION re-batches
+                                                                             remediation issues into the backlog loop)
 ```
 
 ### Per-slice TDD commit contract
