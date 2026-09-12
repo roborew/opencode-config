@@ -19,6 +19,8 @@ roleReminder: "Loaded by the `coder` agent in the feature worktree after all tic
 8. **Sandbox lifecycle.** `code-review` destroys the sandbox after `APPROVED` or `ENV_BLOCKED`, keeps it alive on `BLOCKED` for developer retry.
 9. **Skill load failure is fatal.** `SKILL_UNAVAILABLE: <skill>` halts the feature review — never substitute implementer output for a missing required skill.
 10. **Context discipline.** Every ~10 tool iterations, compact state to 3 bullets (current step, files touched, blockers). Discard old per-stage outputs after the final `code-review` APPROVES the full-suite gate; keep only concise gate summaries.
+11. **Always close the fast channel.** Every feature-coder boundary listed in §F.1 MUST result in a `session_notify` attempt this turn. Default `notify_status: admitted|failed|develop_session_id_stale|not_attempted`. A durable comment with `not_attempted` is acceptable; a durable comment with a false `admitted` is a hard error.
+12. **Always close the PR-comment loop.** §7's final pass must reconcile every inline PR review-thread comment AND every issue-conversation comment before §9a. Unreconciled comments block READY with `PR_COMMENTS_UNRESOLVED`.
 
 ## §0 Bootstrap (must run before any verification work)
 
@@ -138,6 +140,80 @@ In priority order:
 
 If the kickoff pointer is missing but the branch + GitHub reconstruct cleanly, proceed. Only bounce out on `BLOCKED: CHECKOUT_CONTRACT_FAILED`.
 
+## Feature-coder visibility (mandatory fast + durable pings)
+
+Mirrors `ticket-lifecycle` §2.6 / §2.7 at the feature-coder boundary. So the develop orchestrator (§8a wake handler) can see progress without having to drop in.
+
+### §F.1 Feature progress envelope
+
+For every boundary below the feature coder MUST post, in this order, BOTH:
+
+- `session_notify` to the develop orchestrator (fast channel, same `develop_session_id` from the kickoff pointer), carrying a compact `feature_progress:` payload.
+- A durable `feature_progress:` comment on the **PRD parent issue** (parseable as durable fallback — there is no poller guarantee for `feature_report:`).
+
+Boundaries:
+
+- Full-suite `code-review` verdict (APPROVED / NEEDS_CHANGES / BLOCKED).
+- Difficulty gate verdict (PR-side CodeRabbit, senior-dev scheduled_review).
+- Doc build complete (changelog + guides/architecture paths known).
+- Feature PR opened (PR URL known).
+- Every `pr-stabilize-watch.sh` invocation completes — emit at non-`ready` classifications and at the FINAL iter's `ready` verdict.
+- Terminal reached (§9a posted).
+
+Payload schema (both channels):
+
+```yaml
+feature_progress:
+  feature: feature:<slug>
+  prd_parent_issue: <spec_owner/spec_repo>#<n>
+  event: full_suite_verdict | difficulty_gate_verdict | docs_committed |
+         feature_pr_opened | stabilization_iter_complete | terminal
+  summary: <one-line>
+  pr_url: <url|null>
+  notify_status: admitted|failed|develop_session_id_stale|not_attempted
+  next_action_required: none|<short ask>
+```
+
+`next_action_required: none` is the honest default during normal progress. The orchestrator may still surface it to the human for visibility, but it is not a request.
+
+### §F.2 Feature coder needs help envelope
+
+Invoke when the feature coder detects it is stuck and cannot proceed without the orchestrator. Triggers: token / step exhaustion imminent; bounded retry budget exhausted (senior-dev escalation, fallback exhaustion, preflight exhaustion, stabilization exhaustion); post-completion guard fired and the orchestrator is required to resume or spawn a new session.
+
+Action: post BOTH `session_notify` (fast) and a durable `feature_needs_help:` comment on the PRD parent issue:
+
+```yaml
+feature_needs_help:
+  feature: feature:<slug>
+  prd_parent_issue: <spec_owner/spec_repo>#<n>
+  reason: <one-line>
+  resume_instruction: <one concrete instruction the orchestrator can
+                      run verbatim — e.g.
+                      "re-kick feature coder for <feature worktree> with
+                       load: feature-review and current §0.4 reconstructed state"
+                      or "re-batch remediation issue <n> then re-kick feature coder">
+  notify_status: admitted|failed|develop_session_id_stale|not_attempted
+```
+
+The feature coder MUST stop after emitting this envelope. The orchestrator decides resume vs. spawn vs. escalate.
+
+### §F.3 End-of-feature verification checklist (mandatory before posting §9a)
+
+```text
+End-of-feature checklist (answer each; do not post §9a comment until
+all four are answered truthfully):
+  [ ] session_notify attempted this turn (ok if errored; must have
+      been called)
+  [ ] §9a notify_status reflects actual session_notify outcome
+      (admitted only on HTTP 204; else one of
+       failed|develop_session_id_stale|not_attempted)
+  [ ] every count field in human_review_handoff/v1 reconciles per
+      §9.0 invariants
+  [ ] final pr-stabilize-watch.sh invocation ran on this feature PR and
+      its report is the canonical PR-review evidence (covers issue
+      comments + inline review-thread comments)
+```
+
 ## Procedure
 
 ### 1. Feature-mode `code-review` (full suite)
@@ -182,15 +258,21 @@ bash "$OC/scripts/issue-state-transition.sh" "<repo>" "<issue_number>" state:rea
 
 Dispatch `developer` (`load: minimal`) to run `scripts/feature-finish-pr.sh <slug>`. Expect `pr-created` / `pr-exists`. On `skipped-*`, surface verbatim and stop. Capture `pr_url` for the terminal report.
 
-### 7. PR stabilization loop (max 3 iterations)
+### 7. PR stabilization loop (max 3 iterations, mandatory final pass)
+
+Inline review-thread comments are reported under `report.inline_review_comments[]` by `scripts/pr-stabilize-watch.sh`. The `fix-now` / `awaiting-human` classification is computed over BOTH `comments[]` (issue conversation) AND `inline_review_comments[]`. The final `pr-stabilize-watch.sh` invocation at the end of §7 is mandatory before §9, even when iter 1 returned `ready` immediately.
 
 ```text
+last_report = None
 for iter in 1..3:
   ci = delegated developer load: minimal: gh pr checks <pr_url> --watch --json name,state,conclusion
-  comments = delegated developer load: minimal: gh pr view <pr_url> --json comments,reviews,statusCheckRollup,mergeable
+  comments = delegated developer load: minimal: \
+    bash <OC>/scripts/pr-stabilize-watch.sh <pr_url>
+
+  emit feature_progress: stabilization_iter_complete on this iter (per §F.1)
 
   fix_now = []
-  for each ci failure or actionable review comment:
+  for each ci failure or actionable item in comments.comments, comments.inline_review_comments, comments.reviews:
     if it spans files already merged across multiple tickets here:
       return BLOCKED: FEATURE_REMEDIATION [the offending comment + evidence]
     fix_now.append(item)
@@ -202,12 +284,33 @@ for iter in 1..3:
     loop back to next iter
 
   if no fix_now and ci green and no actionable comments:
-    sealed report: stabilization_status: ready_for_human_merge,
-    feedback_cutoff_at: <ISO timestamp now>, CI evidence, comment resolutions.
+    if iter < 3:
+      # DO NOT break on first ready — run one more invocation so the final
+      # pass captures late-arriving inline review-thread comments.
+      continue
+    # iter == 3 AND ready: canonical final PR-review evidence for §9
+    last_report = comments
     break loop
 
   on iter == 3 with remaining fix_now:
     return BLOCKED: STABILIZATION_EXHAUSTED
+
+# Final mandatory pass before §9. Catches inline review-thread comments that
+# landed after iter 3's `ready` (or between §7 and §9). The result is the
+# canonical PR-review evidence §9 reads.
+final_report = delegated developer load: minimal: \
+  bash <OC>/scripts/pr-stabilize-watch.sh <pr_url>
+emit feature_progress: stabilization_iter_complete (final) on this invocation
+
+if final_report.classify != "ready":
+  # Newly arrived fix-now items after stabilization finished → loop back up
+  # to 3 more iterations total from here (the cap is per-feature, not per-loop).
+  re-enter the loop body with final_report as the new starting point.
+  # If stabilization genuinely cannot resolve after this restart,
+  # return BLOCKED: STABILIZATION_EXHAUSTED with the remaining fix-now items.
+
+# local_pr_issues_found in §9.0 = final_report.comments.fix_now + final_report.inline_review_comments.fix_now
+# local_pr_issues_solved must equal local_pr_issues_found before READY is admitted (§9.0 invariants).
 ```
 
 After **any** stabilization fix, re-run step 1 (full-suite `code-review`) before continuing — the gate must reflect the post-fix tree. Bounded at 3 full-suite re-runs total.
@@ -222,7 +325,7 @@ When step 1, step 2, step 3, or step 7 surface unmet acceptance criteria that ca
 
 ### 9. Terminal report
 
-Emit the terminal report (in-session, normal prose), **post the `feature_report:` comment on the PRD parent issue** (mandatory durable channel), and best-effort call `session_notify` directly to inject the terminal report into the develop orchestrator before stopping. **`session_notify` is a direct plugin tool you hold.**
+Emit the terminal report (in-session, normal prose), **post the `feature_report:` comment on the PRD parent issue** (mandatory durable channel), and **attempt `session_notify` once** (§9c contract — mandatory first attempt + honest fallback; never silently swallowed) to inject the terminal report into the develop orchestrator before stopping. **`session_notify` is a direct plugin tool you hold.**
 
 #### 9.0 `human_review_handoff/v1` readiness contract (mandatory on READY)
 
@@ -263,6 +366,8 @@ READY invariants:
 
 If the durable report is missing any required field, or the counts do not reconcile, do **not** emit READY. Return `BLOCKED` instead so the develop orchestrator can stop with `REVIEW_HANDOFF_INCOMPLETE` or `REVIEW_HANDOFF_INCONSISTENT` rather than surfacing an ambiguous feature PR.
 
+Source for `local_pr_issues_found` / `local_pr_issues_solved` / `fix_now_issues_*`: the FINAL `pr-stabilize-watch.sh` invocation from §7 (its `comments[]` + `inline_review_comments[]`, after the last fix pass). The READY invariants hold over the COMBINED source — issue conversation comments plus inline review-thread comments. A mismatch is `BLOCKED: PR_COMMENTS_UNRESOLVED` before §9a is posted.
+
 #### §9-completion: tear down the verification backend
 
 Before stopping, lifecycle-aware destroy of the compose test backend. Dispatch ONE `worktree-sandbox` Task with `load: minimal`:
@@ -295,7 +400,7 @@ feature_report:
     - docs/changelog/<YYYY-MM-DD>-<slug>.md
     - <other paths written by scribe>
   tickets_state_feature_review: [<n1>, <n2>, ...]
-  notify_status: admitted|failed|<reason>
+  notify_status: admitted|failed|develop_session_id_stale|not_attempted   # see §9c — never `admitted` without an HTTP 204 from session_notify
   review_handoff_contract:
     name: human_review_handoff
     version: 1
@@ -348,7 +453,7 @@ READY_FOR_HUMAN_REVIEW:
   next_action_for_parent: "validate human_review_handoff/v1, present the standard review table, then merge the feature PR on 'all reviewed'"
 
 BLOCKED:
-  blocker_code: FEATURE_REMEDIATION | STABILIZATION_EXHAUSTED | ENV_BLOCKED | CHECKOUT_CONTRACT_FAILED | SKILL_UNAVAILABLE | HANDSHAKE_PUSH_FAILED | HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED | TICKET_NOT_FORKED_FROM_FEATURE | REVIEW_HANDOFF_INCOMPLETE | REVIEW_HANDOFF_INCONSISTENT
+  blocker_code: FEATURE_REMEDIATION | STABILIZATION_EXHAUSTED | ENV_BLOCKED | CHECKOUT_CONTRACT_FAILED | SKILL_UNAVAILABLE | HANDSHAKE_PUSH_FAILED | HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED | TICKET_NOT_FORKED_FROM_FEATURE | REVIEW_HANDOFF_INCOMPLETE | REVIEW_HANDOFF_INCONSISTENT | PR_COMMENTS_UNRESOLVED
   reason: <one-line>
   remediation_issues: [<n1>, <n2>, ...] # FEATURE_REMEDIATION only
   partial_evidence:
@@ -358,31 +463,27 @@ BLOCKED:
   recommended_helper_request: <one concrete request>
 ```
 
-#### 9c. Best-effort wake via `session_notify` (direct call)
+#### 9c. Mandatory first-attempt wake via `session_notify` (direct call) — honest `notify_status`
 
-When the explicit `develop_session_id` is passed and `session_notify` does not find it, `session_notify` returns `error: "session_not_found"` (hard stop — no silent create). The durable `feature_report:` comment remains authoritative. If notify fails, do **not** fall back to directory-mode `session_notify`; the recovery path is to wake or resume the develop orchestrator manually so it fetches the durable `feature_report:` from the PRD parent issue.
+The durable `feature_report:` comment is the **authoritative handoff** the develop orchestrator reads before surfacing the feature PR. `session_notify` is the primary wake. Attempt it once this turn and record the honest outcome:
 
 ```text
-message = "feature_report: feature:<slug> | status: READY_FOR_HUMAN_REVIEW | contract: human_review_handoff/v1 | pr: <url> | issue: <prd_parent_issue_url> | tests: <int> | coderabbit_found: <int> | coderabbit_solved: <int> | local_pr_found: <int> | local_pr_solved: <int> | fix_now_found: <int> | fix_now_resolved: <int> | tickets: <n>"
-# or, for BLOCKED:
-message = "feature_report: feature:<slug> | status: BLOCKED | contract: human_review_handoff/v1 | blocker: <code> | reason: <one-line>"
-
-if develop_session_id:
-  result = session_notify({
-    sessionID: <develop_session_id>,
-    agent: "orchestrate",
-    message,
-  })
-
-  if result.admitted == true: record notify_status: admitted
-  elif result.error == "session_not_found" and result.session_id == develop_session_id: record notify_status: develop_session_id_stale
-  elif result.status == 404: record notify_status: develop_session_id_stale
-  else:                      record notify_status: failed
-else:
-  record notify_status: failed
+You MUST attempt session_notify once:
+  - via sessionID if the kickoff develop_session_id is present and non-null
+  - else record notify_status: failed (no sessionID target) and continue
+On HTTP 204 → notify_status: admitted.
+On session_not_found / 404 / SESSION_NOT_FOUND →
+  notify_status: develop_session_id_stale
+  AND emit the session-notify-fallback markdown block
+  (skills/orchestrate/session-notify-fallback.md).
+On any other error → notify_status: failed (record error class).
+If you did not call it → notify_status: not_attempted.
+Never default to admitted without an HTTP 204.
 ```
 
-The `feature_report:` comment is the **mandatory** durable channel. `session_notify` is best-effort; its failure is recorded in the comment but never blocks the terminal report. If it fails, the fallback is manual user/orchestrator wake plus durable `feature_report:` fetch — not a poller guarantee.
+A durable `feature_report:` with `not_attempted` is acceptable (the operator wakes the orchestrator manually); a durable `feature_report:` with a false `admitted` is a hard error (Hard Rule #11). The §9a `notify_status:` field MUST reflect the actual session_notify outcome this turn.
+
+If notify fails, the fallback is manual user/orchestrator wake plus durable `feature_report:` fetch — not a poller guarantee.
 
 Emit the terminal report and stop. The coder agent Hard Rules' post-completion guard now fires — any subsequent user message is answered with: "Task complete. Switch to the `orchestrate` agent to continue."
 

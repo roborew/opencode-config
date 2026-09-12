@@ -84,6 +84,7 @@ meaningful_delta() {
     def same($a; $b):
       ($a.number == $b.number)
       and (($a.ticket_report // "") == ($b.ticket_report // ""))
+      and (($a.coder_progress // "") == ($b.coder_progress // ""))
       and (($a.pr_state // "") == ($b.pr_state // ""))
       and (($a.out_of_band_merged // false) == ($b.out_of_band_merged // false))
       and (($a.verified_drift // false) == ($b.verified_drift // false));
@@ -189,11 +190,16 @@ for repo_raw in "${REPO_LIST[@]}"; do
       --argjson delta "$delta" \
       --argjson current "$current" '
         ($current | map(select(.verified_drift == true) | .number)) as $drift
+        | ($current | map(select((.coder_progress // "") | startswith("needs_help:")) | .number)) as $needs_help
+        | ($current | map(select(((.coder_progress // "") != "none") and ((.coder_progress // "") | startswith("needs_help:") | not)) | .number)) as $progress
         | "DEV_LOOP_WAKE: { repo: \($repo), feature: \($feat), reason: \"ticket delta\""
           + (if ($drift | length) > 0 then ", advisory: VERIFIED_LABEL_MISSING_AT_REVIEW, drift_issues: " + ($drift | tostring) else "" end)
+          + (if ($needs_help | length) > 0 then ", advisory: CODER_NEEDS_HELP, needs_help_issues: " + ($needs_help | tostring) else "" end)
+          + (if ($progress | length) > 0 then ", coder_progress: " + (([$current[] | select(.number as $n | $progress | index($n))] | map({number, coder_progress})) | tostring) else "" end)
           + " }\n\n"
           + ($delta | tostring)
           + (if ($drift | length) > 0 then "\nVERIFIED_LABEL_MISSING_AT_REVIEW: " + ($drift | tostring) else "" end)
+          + (if ($needs_help | length) > 0 then "\nCODER_NEEDS_HELP: " + ($needs_help | tostring) else "" end)
       ')
 
     if wake_session "$sid" "$project_dir" "$msg"; then

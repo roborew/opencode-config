@@ -22,6 +22,8 @@ roleReminder: "Load on the first message of any coder session whose cwd is a tic
 11. **You are the auto-started GUI session for this worktree.** The develop orchestrator does **not** dispatch you via `task` (cwd inheritance would put you on `develop`); you are reached via `session_kickoff` or via any user message. You must self-bootstrap from your **most recent user message** + the branch + GitHub. The kickoff message is the contract.
 12. **Verification backend is containerized only.** Every RED/GREEN/final-gate test run goes through `docker-compose.test.yml` via `sandbox_run_test` from `plugins/sandbox.js` (sandbox exec on opencode-server, or direct `docker compose` on local dev) — **never** host-local suite setup. `compose_test_file: none` after `probe_and_create` → `ENV_BLOCKED` with `recommended_env_fix: add docker-compose.test.yml from templates/project-stub/`. No host npm/pip installs to "get tests running".
 13. **Never run `git merge` without `scripts/assert-merge-cwd.sh`.** If a stage ever needs to merge a ref inside your ticket worktree, source `scripts/assert-merge-cwd.sh` immediately before the `git merge` line with `ASSERT_MERGE_CWD=<worktree abs path>`, `ASSERT_MERGE_BRANCH=<expected_branch>`, `ASSERT_MERGE_REF=origin/<feature_branch>`, `ASSERT_BRANCH_CONTEXT=ticket-worktree`, `ASSERT_REPO=<OWNER/REPO>`. The script enforces no PR exists with `head=<feature_branch>, base=develop`. On any `BLOCKED: *` exit, surface the BLOCKED line verbatim and stop. This is the develop-pollution guard (2026-09-02 incident); ticket worktrees do not normally merge during execution but the rule is here as a tripwire.
+14. **Always close the fast channel.** Every coder boundary listed in §2.6 MUST result in a `session_notify` attempt this turn. Default `notify_status: admitted|failed|develop_session_id_stale|not_attempted`. A durable comment with `not_attempted` is acceptable; a durable comment with a false `admitted` is a hard error.
+15. **Always close the PR-comment loop.** §5's final pass must reconcile every inline PR review-thread comment AND every issue-conversation comment before §6a. Unreconciled comments block READY with `PR_COMMENTS_UNRESOLVED`.
 
 ## §0 Bootstrap (must run before any stage work)
 
@@ -251,6 +253,66 @@ fallback_context: {
 
 One attempt per provider per bounded Task; track `attempted_providers`. After both fail → `BLOCKED: FALLBACK_EXHAUSTED` and prompt the operator. **Never** dispatch one fallback from another. **Never** replace a primary agent (`coder`, `orchestrate`, `architect`).
 
+#### 2.6 Stage progress visibility (mandatory fast+durable pings)
+
+For every boundary below the coder MUST post, in this order, BOTH:
+
+- `session_notify` to the develop orchestrator (fast channel, same `return_target.sessionID` as the §0.6 handshake ack), carrying a compact `coder_progress:` payload.
+- A durable `coder_progress:` issue comment on the child issue (parseable by `scripts/dev-loop-watch.sh` / `scripts/dev-loop-poller.sh`).
+
+Boundaries (emit both channels at each):
+
+- Stage `k` entered (after §2 step 0 contract validated).
+- RED commit landed (`test_commit.sha` known).
+- GREEN commit landed (`implementation_commit.sha` known).
+- Per-stage `code-review` verdict (`APPROVED | NEEDS_CHANGES | BLOCKED`).
+- Sub-PR opened (PR URL known).
+- Every `pr-stabilize-watch.sh` invocation completes — emit at non-`ready` classifications and at the FINAL iter's `ready` verdict.
+- Terminal reached (§6a posted).
+
+Payload schema (both channels):
+
+```yaml
+coder_progress:
+  issue: <repo>#<n>
+  stage_id: <id|null if post-loop>
+  stage_index: <int|null>
+  event: stage_entered | red_committed | green_committed |
+         review_verdict | sub_pr_opened |
+         stabilization_iter_complete | terminal
+  summary: <one-line>
+  pr_url: <url|null>
+  notify_status: admitted|failed|develop_session_id_stale|not_attempted
+  next_action_required: none|<short ask>
+```
+
+`next_action_required: none` is the honest default during normal progress — it is a status ping, not a request. Set it to a short ask only when the coder is genuinely blocked on the orchestrator's input.
+
+#### 2.7 Coder needs help envelope
+
+Invoke when the coder detects it is stuck and cannot proceed without the orchestrator. Triggers:
+
+- Token / step exhaustion imminent.
+- Bounded retry budget exhausted (senior-dev escalation, fallback exhaustion, preflight exhaustion, stabilization exhaustion).
+- Post-completion guard fired and the orchestrator is required to resume or spawn a new session.
+
+Action: post BOTH `session_notify` (fast) and a durable `coder_needs_help:` issue comment with this shape:
+
+```yaml
+coder_needs_help:
+  issue: <repo>#<n>
+  stage_id: <id|null>
+  reason: <one-line>
+  resume_instruction: <one concrete instruction the orchestrator can
+                      run verbatim — e.g.
+                      "spawn new session_kickoff for <worktree> with
+                       load: ticket-lifecycle" or
+                      "re-batch ticket <n> as remediation and re-kick">
+  notify_status: admitted|failed|develop_session_id_stale|not_attempted
+```
+
+The coder MUST stop after emitting this envelope. The orchestrator decides resume vs. spawn vs. escalate.
+
 ### 3. Final gate — full suite + CodeRabbit pre-flight (before push/PR)
 
 #### 3.1 `final_gate_post` sub-procedure (mandatory, atomic)
@@ -289,33 +351,68 @@ Resume-safe idempotence (§0.4 step 2) reads the most recent `code_review_gate:`
 2. Open the sub-PR via `gh pr create --base opencode/feat-<slug> --head <expected_branch> --title "feat(<slug>): ticket <issue> — <title>" --body <auto-body>` (delegated developer).
 3. Only after `final_gate_post` returned success (§3.1): `state:ready-for-ticket-review` on the issue via `scripts/issue-state-transition.sh` (the sub-PR is now open; the final gate + `verified` label already landed in §3).
 
-### 5. PR stabilization loop (max 3 iterations)
+### 5. PR stabilization loop (max 3 iterations, mandatory final pass)
 
-For `iter` in 1..3:
+Inline review-thread comments are reported under `report.inline_review_comments[]` by `scripts/pr-stabilize-watch.sh`. The `fix-now` / `awaiting-human` classification is computed over BOTH `comments[]` (issue conversation) AND `inline_review_comments[]` — a `fix-now` inline thread blocks READY just like a fix-now issue comment.
+
+The final `pr-stabilize-watch.sh` invocation at the end of §5 is mandatory before §6, even when iter 1 returned `ready` immediately. Reason: today, `ready` means "no fix-now items at this instant"; inline review threads can land after that instant.
 
 ```text
-report = delegated developer load: minimal \
-  bash <OC>/scripts/pr-stabilize-watch.sh <pr_url>
+last_report = None
+for iter in 1..3:
+  report = delegated developer load: minimal \
+    bash <OC>/scripts/pr-stabilize-watch.sh <pr_url>
 
-switch report.classify:
-  case "ready":
-    break loop
-  case "awaiting-human":
-    # comments explicitly marked WIP / hold / do not merge — exit stabilization,
-    # treat as READY_FOR_HUMAN_REVIEW with note
-    break loop
-  case "fix-now":
-    for each fix-now item in (report.ci failing checks (via `gh pr checks <pr_url> --json name,state,conclusion`), report.comments, report.reviews):
-      if item spans another ticket's branch files:
-        return BLOCKED: CROSS_TICKET_REVIEW { item, evidence }
-      fix in-worktree with the TDD commit protocol (test-only RED/amendment commit → production-only GREEN implementation commit, behavior changes only),
-      commit each phase separately with `Refs: #<issue_number>`, push branch
-    loop back to next iter
+  emit coder_progress: stabilization_iter_complete on this iter (per §2.6)
+
+  switch report.classify:
+    case "ready":
+      if iter < 3:
+        # DO NOT break on first ready — run one more invocation so the final
+        # pass captures late-arriving inline review-thread comments.
+        continue
+      # iter == 3 AND ready: canonical final PR-review evidence for §6
+      last_report = report
+      break loop
+    case "awaiting-human":
+      # comments explicitly marked WIP / hold / do not merge — exit stabilization,
+      # treat as READY_FOR_HUMAN_REVIEW with note; record report as final
+      last_report = report
+      break loop
+    case "fix-now":
+      for each fix-now item in (report.ci failing checks (via `gh pr checks <pr_url> --json name,state,conclusion`),
+                                report.comments,
+                                report.inline_review_comments,
+                                report.reviews):
+        if item spans another ticket's branch files:
+          return BLOCKED: CROSS_TICKET_REVIEW { item, evidence }
+        fix in-worktree with the TDD commit protocol (test-only RED/amendment commit → production-only GREEN implementation commit, behavior changes only),
+        commit each phase separately with `Refs: #<issue_number>`, push branch
+      loop back to next iter
+
+# Stabilization loop has exited — run the FINAL mandatory pass before §6.
+# This catches inline review-thread comments that landed after iter 3's
+# `ready` (or between §5 and §6). The result is the canonical PR-review
+# evidence §6 reads; §6.0 invariants reconcile against it.
+final_report = delegated developer load: minimal \
+  bash <OC>/scripts/pr-stabilize-watch.sh <pr_url>
+emit coder_progress: stabilization_iter_complete (final) on this invocation
+
+if final_report.classify != "ready":
+  # Newly arrived fix-now items after stabilization finished → loop back up
+  # to 3 more iterations total from here (the cap is per-ticket, not per-loop).
+  re-enter the loop body with final_report as the new starting point.
+  # If stabilization genuinely cannot resolve after this restart,
+  # return BLOCKED: STABILIZATION_EXHAUSTED with the remaining fix-now items.
+
+# final_report is now the canonical PR-review evidence.
+# local_pr_issues_found in §6.0 = final_report.comments.fix_now + final_report.inline_review_comments.fix_now
+# local_pr_issues_solved must equal local_pr_issues_found before READY is admitted (§6.0 invariants).
 ```
 
 ### 6. Terminal report
 
-Emit the terminal report (in-session, normal prose), **post the `ticket_report:` comment on the issue** (mandatory durable channel — same pattern as `code_review_gate:`), and best-effort call `session_notify` directly to inject the terminal report into the develop orchestrator before stopping. **`session_notify` is a direct plugin tool you hold.**
+Emit the terminal report (in-session, normal prose), **post the `ticket_report:` comment on the issue** (mandatory durable channel — same pattern as `code_review_gate:`), and **attempt `session_notify` once** (§6c contract — mandatory first attempt + honest fallback; never silently swallowed) to inject the terminal report into the develop orchestrator before stopping. **`session_notify` is a direct plugin tool you hold.**
 
 #### 6.0 `human_review_handoff/v1` readiness contract (mandatory on READY)
 
@@ -355,6 +452,26 @@ READY invariants:
 
 If the durable report is missing any required field, or the counts do not reconcile, do **not** emit READY. Return `BLOCKED` instead so the develop orchestrator can stop with `REVIEW_HANDOFF_INCOMPLETE` or `REVIEW_HANDOFF_INCONSISTENT` rather than surfacing an ambiguous PR.
 
+Source for `local_pr_issues_found` / `local_pr_issues_solved` / `fix_now_issues_*`: the FINAL `pr-stabilize-watch.sh` invocation from §5 (its `comments[]` + `inline_review_comments[]`, after the last fix pass). The READY invariant `local_pr_issues_solved == local_pr_issues_found` (and the equivalent `fix_now_issues_resolved == fix_now_issues_found`) holds over the COMBINED source — issue conversation comments plus inline review-thread comments. A mismatch is `BLOCKED: PR_COMMENTS_UNRESOLVED` before §6a is posted.
+
+#### §6-pre End-of-ticket verification checklist (mandatory, answer truthfully before posting §6a)
+
+```text
+End-of-ticket checklist (answer each; do not post §6a comment until
+all four are answered truthfully):
+  [ ] session_notify attempted this turn (ok if errored; must have
+      been called)
+  [ ] §6a notify_status reflects actual session_notify outcome
+      (admitted only on HTTP 204; else one of
+       failed|develop_session_id_stale|not_attempted)
+  [ ] every count field in human_review_handoff/v1 reconciles per
+      §6.0 invariants (including combined source for local_pr_* /
+      fix_now_* from the final §5 pr-stabilize-watch.sh run)
+  [ ] final pr-stabilize-watch.sh invocation ran on this ticket and
+      its report is the canonical PR-review evidence (covers issue
+      comments + inline review-thread comments)
+```
+
 #### §0-completion: tear down the verification backend
 
 Before stopping, lifecycle-aware destroy of the compose test backend. Dispatch ONE `worktree-sandbox` Task with `load: minimal`:
@@ -390,7 +507,7 @@ ticket_report:
   blocker_code: <code>                 # BLOCKED only
   reason: <one-line>                   # BLOCKED only
   next_action: <what the develop orchestrator should do>
-  notify_status: admitted|failed|<reason>   # see §6c
+  notify_status: admitted|failed|develop_session_id_stale|not_attempted   # see §6c — never `admitted` without an HTTP 204 from session_notify
   review_handoff_contract:
     name: human_review_handoff
     version: 1
@@ -450,7 +567,7 @@ READY_FOR_HUMAN_REVIEW:
   next_action_for_parent: "validate human_review_handoff/v1, present the standard review table, then merge sub-PR into opencode/feat-<slug> on human approval"
 
 BLOCKED:
-  blocker_code: ENV_BLOCKED | STAGE_STUCK | STABILIZATION_EXHAUSTED | CROSS_TICKET_REVIEW | CHECKOUT_CONTRACT_FAILED | SKILL_UNAVAILABLE | FALLBACK_EXHAUSTED | PREFLIGHT_EXHAUSTED | HANDSHAKE_PUSH_FAILED | HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED | TICKET_NOT_FORKED_FROM_FEATURE | REVIEW_HANDOFF_INCOMPLETE | REVIEW_HANDOFF_INCONSISTENT
+  blocker_code: ENV_BLOCKED | STAGE_STUCK | STABILIZATION_EXHAUSTED | CROSS_TICKET_REVIEW | CHECKOUT_CONTRACT_FAILED | SKILL_UNAVAILABLE | FALLBACK_EXHAUSTED | PREFLIGHT_EXHAUSTED | HANDSHAKE_PUSH_FAILED | HANDSHAKE_FEATURE_BRANCH_CREATE_FAILED | TICKET_NOT_FORKED_FROM_FEATURE | REVIEW_HANDOFF_INCOMPLETE | REVIEW_HANDOFF_INCONSISTENT | PR_COMMENTS_UNRESOLVED
   reason: <one-line>
   partial_evidence:
     stages_completed: <count>
@@ -461,17 +578,33 @@ BLOCKED:
   recommended_helper_request: <one concrete request>
 ```
 
-#### 6c. Best-effort wake via `session_notify` (direct call)
+#### 6c. Mandatory first-attempt wake via `session_notify` (direct call) — honest `notify_status`
 
 The terminal ticket_report: comment is the MANDATORY durable channel
 (no change). The session_notify injection is the FAST channel. By
 the time the coder reaches §6, it has already completed the §0.6
 handshake ack, so it knows the orchestrator's sessionID. Reuse the
-same return_target.sessionID here. If session_notify errors
-session_not_found, the durable ticket_report: comment is the fallback
-and the poller will wake the orchestrator within one poll interval.
-Do not retry the inject; do not poll GitHub from this session; just
-post the comment and end the turn.
+same return_target.sessionID here.
+
+Contract — attempt session_notify once this turn and record the honest outcome:
+
+```text
+You MUST attempt session_notify once:
+  - via sessionID if the kickoff return_target.sessionID is present
+  - else via directory = worktree absolute path
+On HTTP 204 → notify_status: admitted.
+On session_not_found / 404 / SESSION_NOT_FOUND →
+  notify_status: develop_session_id_stale
+  AND emit the session-notify-fallback markdown block
+  (skills/orchestrate/session-notify-fallback.md).
+On any other error → notify_status: failed (record error class).
+If you did not call it → notify_status: not_attempted.
+Never default to admitted without an HTTP 204.
+```
+
+A durable comment with `not_attempted` is acceptable (the orchestrator's poller will pick it up); a durable comment with a false `admitted` is a hard error (Hard Rule #14). The §6a `notify_status:` field MUST reflect the actual session_notify outcome this turn — never a copy of a previous turn's status.
+
+If `session_notify` errors with `session_not_found`, the durable ticket_report: comment is the fallback and the poller will wake the orchestrator within one poll interval. Do not retry the inject; do not poll GitHub from this session; just post the comment and end the turn.
 
 Use a compact wake message that still carries the contract marker:
 

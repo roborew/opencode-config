@@ -13,11 +13,19 @@
 #     "base":  "opencode/feat-<slug>",
 #     "ci":    {"state":"pass|fail|pending","checks":[...],"timeout":false},
 #     "comments":     [{"author","body","classification":"fix-now|defer|awaiting-human"}],
+#     "inline_review_comments": [{"id","author","body","path","line","classification"}],
 #     "reviews":      [...],
 #     "mergeable":    "MERGEABLE|CONFLICTING|UNKNOWN",
 #     "classify":     "ready|fix-now|awaiting-human",
-#     "evidence":     "<one-line summary>"
+#     "evidence":     "<one-line summary, combined fix_now over comments[] + inline_review_comments[]>"
 #   }
+#
+# `inline_review_comments[]` is populated from
+# `gh api repos/:o/:r/pulls/:n/comments --paginate` (review-thread comments,
+# distinct from the issue-conversation comments in `comments[]`). The
+# `fix-now` / `awaiting-human` classification is computed over the UNION of
+# `comments[]` + `inline_review_comments[]` — a fix-now inline thread blocks
+# READY just like a fix-now issue comment.
 #
 # Usage:
 #   pr-stabilize-watch.sh <pr_url> [--timeout SECONDS]
@@ -94,8 +102,32 @@ CLASSIFY_REVIEWS=$(printf '%s' "$PR_JSON" | jq -c '
   })
 ')
 
-FIX_NOW=$(jq '[.[] | select(.classification=="fix-now")] | length' <<<"$CLASSIFY_COMMENTS")
-AWAIT=$(jq '[.[] | select(.classification=="awaiting-human")] | length' <<<"$CLASSIFY_COMMENTS")
+# Inline review-thread comments (gh api repos/:o/:r/pulls/:n/comments).
+# Distinct from the issue-conversation comments in CLASSIFY_COMMENTS — these
+# are the comments code-review historically missed on the final pass. Same
+# classification regex as CLASSIFY_COMMENTS.
+INLINE_REVIEW_JSON=$(gh api "repos/${REPO}/pulls/${PR_NUMBER}/comments?per_page=100" --paginate 2>/dev/null || echo '[]')
+CLASSIFY_INLINE=$(printf '%s' "$INLINE_REVIEW_JSON" | jq -c '
+  [.] | flatten | map({
+    id:      (.id // null),
+    author:  (.user.login // "unknown"),
+    body:    (.body // ""),
+    path:    (.path // null),
+    line:    (.line // .original_line // null),
+    classification: (
+      if (.body | test("(?i)\\b(wip|do not merge|do-not-merge|hold)\\b")) then "awaiting-human"
+      elif (.body | test("(?i)\\b(security|vulnerability|sql injection|xss|csrf|rce)\\b")) then "fix-now"
+      elif (.body | test("(?i)\\b(typo|nit:|nitpick|optional|suggestion|fyi)\\b")) then "defer"
+      else "fix-now"
+      end
+    )
+  })
+')
+
+# Combined fix-now / awaiting-human counts over comments[] + inline_review_comments[].
+COMBINED=$(jq -c -n --argjson a "$CLASSIFY_COMMENTS" --argjson b "$CLASSIFY_INLINE" '$a + $b')
+FIX_NOW=$(jq '[.[] | select(.classification=="fix-now")] | length' <<<"$COMBINED")
+AWAIT=$(jq '[.[] | select(.classification=="awaiting-human")] | length' <<<"$COMBINED")
 EVIDENCE="ci=$CI_STATE fix_now=$FIX_NOW awaiting_human=$AWAIT mergeable=$MERGEABLE"
 
 if [[ "$CI_STATE" == "fail" || "$FIX_NOW" -gt 0 || "$MERGEABLE" == "CONFLICTING" ]]; then
@@ -116,6 +148,7 @@ jq -nc \
   --argjson ci_state "$([ "$CI_STATE" = "pass" ] && echo '"pass"' || ([ "$CI_STATE" = "fail" ] && echo '"fail"' || echo '"pending"'))" \
   --argjson checks "$WATCH_JSON" \
   --argjson comments "$CLASSIFY_COMMENTS" \
+  --argjson inline_review_comments "$CLASSIFY_INLINE" \
   --argjson reviews "$CLASSIFY_REVIEWS" \
   --arg classify "$CLASS" \
   --arg evidence "$EVIDENCE" \
@@ -128,6 +161,7 @@ jq -nc \
     mergeable: $mergeable,
     ci:        { state: $ci_state, checks: $checks, timeout: false },
     comments:  $comments,
+    inline_review_comments: $inline_review_comments,
     reviews:   $reviews,
     classify:  $classify,
     evidence:  $evidence

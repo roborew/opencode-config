@@ -2,13 +2,15 @@
 # Per-issue watcher for the develop orchestrator. Poll-only (no server auth
 # needed) — emits a JSON array of open issues for feature:<slug> in any active
 # state label, with PR URL (if any), latest ticket_report: comment summary,
-# and an `out_of_band_merged` flag set when a sub-PR has been merged via the
+# the latest coder_progress: comment summary (the new stage-boundary visibility
+# stream — see skills/ticket-lifecycle/SKILL.md §2.6), and an
+# `out_of_band_merged` flag set when a sub-PR has been merged via the
 # GitHub UI (state MERGED) without a prior state:ticket-reviewed transition
 # (the orchestrator treats this as an implicit human approval and sets
 # state:ticket-reviewed before running §5d cleanup).
 #
 # Usage: dev-loop-watch.sh <feature_slug_without_prefix> [--repo OWNER/REPO]
-# Output: [{number, state, title, pr_url, pr_state, ticket_report_summary, out_of_band_merged}, ...]
+# Output: [{number, state, title, pr_url, pr_state, ticket_report_summary, coder_progress_summary, out_of_band_merged, verified_drift}, ...]
 # Exit 1 with empty output when there is nothing to report.
 set -euo pipefail
 SLUG="${1:?feature slug required}"
@@ -82,6 +84,23 @@ while IFS= read -r stub; do
     f && /^  [a-z_]+:/{print substr($0, 3)}
     f && /^[^ ]/{f=0}
   ' | paste -sd '|' - || true)
+  # Latest coder_progress: comment for this issue — the stage-boundary
+  # visibility stream (ticket-lifecycle §2.6). Surfaced in the wake envelope
+  # under coder_progress: { <issue>: <latest event> }. Falls back to
+  # coder_needs_help: for stalled-coder detection.
+  coder_progress=$(gh issue view "$number" --repo "$REPO" --comments --json comments -q '
+    [.comments[]
+      | select(.body | test("(?m)^coder_(progress|needs_help):"))
+      | .body]
+    | last // ""' 2>/dev/null || true)
+  coder_progress_summary=$(printf '%s' "$coder_progress" | awk '
+    /^coder_progress:$/{f=1; kind="progress"; next}
+    /^coder_needs_help:$/{f=1; kind="needs_help"; next}
+    f && /^  event:/{gsub(/^  event: /, "", $0); print kind ":" $0; f=0; next}
+    f && /^  reason:/{gsub(/^  reason: /, "", $0); print kind ":" $0; f=0; next}
+    f && /^[^ ]/{f=0}
+  ' | head -1 || true)
+  [[ -z "$coder_progress_summary" ]] && coder_progress_summary="none"
   # Drift detection: ticket has reached a post-gate state but lacks the gate
   # evidence (no `verified` label OR no `code_review_gate:` comment from any
   # author). This catches the #247-class historical incident where a sub-PR
@@ -106,9 +125,10 @@ while IFS= read -r stub; do
     --arg pu "$pr_url" \
     --arg ps "$pr_state" \
     --arg tr "$ticket_report_summary" \
+    --arg cp "$coder_progress_summary" \
     --argjson oob "$out_of_band_merged" \
     --argjson vd "$verified_drift" \
-    '{number: $n, state: $st, title: $t, pr_url: $pu, pr_state: $ps, ticket_report: $tr, out_of_band_merged: $oob, verified_drift: $vd}')
+    '{number: $n, state: $st, title: $t, pr_url: $pu, pr_state: $ps, ticket_report: $tr, coder_progress: $cp, out_of_band_merged: $oob, verified_drift: $vd}')
   OUT=$(jq -c --argjson e "$entry" '. + [$e]' <<<"$OUT")
 done <"$STUBS_FILE"
 
