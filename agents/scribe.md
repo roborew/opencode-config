@@ -1,7 +1,7 @@
 ---
 description: Markdown and docs writer (write-only). PRD, docs, registry, delivery records.
 mode: subagent
-model: opencode-gpt/gpt-5-nano
+model: opencode-go/glm-5.3-flash
 tools:
   write: true
   edit: true

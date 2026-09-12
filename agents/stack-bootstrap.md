@@ -1,7 +1,7 @@
 ---
 description: Cross-repo template installer for setup-project (spec-coordinated stacks only)
 mode: subagent
-model: opencode-gpt/gpt-5-nano
+model: opencode-go/glm-5.3-flash
 tools:
   write: true
   edit: true

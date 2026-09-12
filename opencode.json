@@ -219,6 +219,20 @@
             "top_p": 0.9
           }
         },
+        "deepseek-v4.1-flash": {
+          "name": "DeepSeek V4.1 Flash (Go)",
+          "options": {
+            "temperature": 0.3,
+            "top_p": 0.9
+          }
+        },
+        "glm-5.3-flash": {
+          "name": "GLM 5.3 Flash (Go)",
+          "options": {
+            "temperature": 0.2,
+            "top_p": 0.9
+          }
+        },
         "deepseek-v4-flash": {
           "name": "DeepSeek V4 Flash (Go)",
           "options": {
@@ -329,12 +343,12 @@
       "steps": 12
     },
     "build": {
-      "model": "opencode/deepseek-v4-flash",
+      "model": "opencode-go/deepseek-v4.1-flash",
       "steps": 30
     },
     "developer": {
       "mode": "subagent",
-      "model": "opencode/deepseek-v4-flash",
+      "model": "opencode-go/deepseek-v4.1-flash",
       "steps": 100
     },
     "designer": {
@@ -359,22 +373,22 @@
     },
     "scribe": {
       "mode": "subagent",
-      "model": "opencode-gpt/gpt-5-nano",
+      "model": "opencode-go/glm-5.3-flash",
       "steps": 60
     },
     "stack-bootstrap": {
       "mode": "subagent",
-      "model": "opencode-gpt/gpt-5-nano",
+      "model": "opencode-go/glm-5.3-flash",
       "steps": 15
     },
     "worktree-sandbox": {
       "mode": "subagent",
-      "model": "opencode-gpt/gpt-5-nano",
+      "model": "opencode-go/glm-5.3-flash",
       "steps": 60
     },
     "worktree-manager": {
       "mode": "subagent",
-      "model": "opencode-gpt/gpt-5-nano",
+      "model": "opencode-go/glm-5.3-flash",
       "steps": 20
     },
     "code-review": {
@@ -384,12 +398,12 @@
     },
     "test-writer": {
       "mode": "subagent",
-      "model": "opencode/deepseek-v4-flash",
+      "model": "opencode-go/deepseek-v4.1-flash",
       "steps": 60
     },
     "review": {
       "mode": "subagent",
-      "model": "opencode/deepseek-v4-flash",
+      "model": "opencode-go/deepseek-v4.1-flash",
       "steps": 25
     },
     "security-reviewer": {
@@ -399,17 +413,17 @@
     },
     "performance-reviewer": {
       "mode": "subagent",
-      "model": "opencode/deepseek-v4-flash",
+      "model": "opencode-go/deepseek-v4.1-flash",
       "steps": 15
     },
     "doc-reviewer": {
       "mode": "subagent",
-      "model": "opencode-gpt/gpt-5-nano",
+      "model": "opencode-go/glm-5.3-flash",
       "steps": 10
     },
     "document": {
       "mode": "subagent",
-      "model": "opencode-gpt/gpt-5-nano",
+      "model": "opencode-go/glm-5.3-flash",
       "steps": 10
     },
     "mentor": {
@@ -419,7 +433,7 @@
     },
     "refactor": {
       "mode": "subagent",
-      "model": "opencode/deepseek-v4-flash",
+      "model": "opencode-go/deepseek-v4.1-flash",
       "steps": 15
     },
     "frontend-dev": {

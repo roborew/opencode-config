@@ -369,7 +369,7 @@ Optional same-session path after a short HANDOFF block: `/compact` then switch a
 
 ## Built-in agents
 
-`plan` (DeepSeek V4 Flash) and `build` (DeepSeek V4 Flash) — see `opencode.json`.
+`plan` (DeepSeek V4.1 Flash) and `build` (DeepSeek V4.1 Flash) — see `opencode.json`.
 
 ## Custom pipeline (summary)
 
