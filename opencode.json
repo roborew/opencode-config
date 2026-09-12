@@ -8,10 +8,7 @@
     "./plugins/localhost-to-docker-host.js",
     "./plugins/rewrite-worktree-gitdirs.js"
   ],
-  "instructions": [
-    "rules/testing.md",
-    "rules/**/*.md"
-  ],
+  "instructions": ["rules/testing.md", "rules/**/*.md"],
   "permission": {
     "external_directory": {
       "*": "allow",
@@ -166,8 +163,8 @@
         "claude-sonnet-5": {
           "name": "Claude Sonnet 5"
         },
-        "glm-5.2": {
-          "name": "GLM 5.2",
+        "glm-5.3": {
+          "name": "GLM 5.3",
           "options": {
             "temperature": 0.2,
             "top_p": 0.9
@@ -301,16 +298,12 @@
     "claude-context": {
       "type": "local",
       "enabled": false,
-      "command": [
-        "npx",
-        "-y",
-        "@zilliz/claude-context-mcp@latest"
-      ]
+      "command": ["npx", "-y", "@zilliz/claude-context-mcp@latest"]
     }
   },
   "agent": {
     "architect": {
-      "model": "opencode/glm-5.2",
+      "model": "opencode/glm-5.3",
       "steps": 30
     },
     "architecture-auditor": {
@@ -319,11 +312,11 @@
       "steps": 25
     },
     "orchestrate": {
-      "model": "kilo/minimax/minimax-m3",
+      "model": "opencode/glm-5.3",
       "steps": 80
     },
     "coder": {
-      "model": "kilo/minimax/minimax-m3",
+      "model": "opencode/glm-5.3",
       "steps": 120
     },
     "plan": {

@@ -1,7 +1,7 @@
 ---
 description: Outer-loop feature coordinator on develop — bootstraps, selects a feature, kicks coder sessions per ticket (via worktree-manager + direct session_kickoff/session_list calls), gates PR approval, merges + cleans up, kicks the feature coder for final verification, merges the feature PR on human approval, hands back to spec feature-complete.
 mode: primary
-model: kilo/minimax/minimax-m3
+model: opencode/glm-5.3
 steps: 50
 tools:
   write: false

@@ -1,7 +1,7 @@
 ---
 description: Planning coordinator — delegates all mutations via Task subagents; read-only bash for discovery and bin/* wrappers only.
 mode: primary
-model: opencode/glm-5.2
+model: opencode/glm-5.3
 tools:
   write: false
   edit: false
@@ -122,7 +122,7 @@ Ask on every action: **“Does this change repo or GitHub state?”** If yes →
 | ------------------------------------------ | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
 | PRD, docs, registry, `.research/*`         | `write`, `edit`, redirects, `mkdir`, `touch`, `cp`                       | Task **`scribe`** (full content + path)                                                                         |
 | Raw GitHub issue create/edit/close/comment | `gh issue create`, `gh issue edit`, `gh issue close`, `gh issue comment` | Approved **`bin/*`** for creates (see below), or Task **`developer`** `load: minimal` for edits/closes/comments |
-| Git commit / push                          | `git add`, `git commit`, `git push`, `git checkout`                      | Task **`developer`** with `execution_mode: github_issue_stage` (issue-backed work only)                                    |
+| Git commit / push                          | `git add`, `git commit`, `git push`, `git checkout`                      | Task **`developer`** with `execution_mode: github_issue_stage` (issue-backed work only)                         |
 | Impl repo scaffolding                      | `cp`, `mkdir` in app trees                                               | Task **`stack-bootstrap`**                                                                                      |
 | Product / app code                         | any direct code change                                                   | **Execution handoff** → user starts **`orchestrate`** (never Task `developer` for product code from architect)  |
 | Planning analysis                          | —                                                                        | Task **`review`**, **`debugger`**, **`document`**, **`architecture-auditor`**, etc.                             |

@@ -1,7 +1,7 @@
 ---
 description: Ticket-session orchestrator — owns the TDD → implement → code-review loop for one ticket worktree (github_issue_full). Dispatches test-writer/developer/frontend-dev/ux-dev/code-review, escalates hard or stuck stages to senior-dev, falls back failed children to kilo/openrouter, reports back to the develop orchestrator via session_notify.
 mode: primary
-model: kilo/minimax/minimax-m3
+model: opencode/glm-5.3
 steps: 60
 tools:
   write: false
