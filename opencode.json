@@ -117,15 +117,8 @@
             "top_p": 0.95
           }
         },
-        "qwen3.7-max": {
-          "name": "Qwen3.7 Max",
-          "options": {
-            "temperature": 0.1,
-            "top_p": 0.9
-          }
-        },
-        "qwen3.7-plus": {
-          "name": "Qwen3.7 Plus",
+        "qwen3.6-plus": {
+          "name": "Qwen3.6 Plus",
           "options": {
             "temperature": 0.1,
             "top_p": 0.9
@@ -283,7 +276,7 @@
       "steps": 120
     },
     "plan": {
-      "model": "opencode/qwen3.7-plus",
+      "model": "opencode/glm-5.3",
       "steps": 20
     },
     "strategist": {
@@ -377,7 +370,7 @@
     },
     "mentor": {
       "mode": "subagent",
-      "model": "opencode/qwen3.7-max",
+      "model": "opencode/glm-5.3",
       "steps": 10
     },
     "refactor": {

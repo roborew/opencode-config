@@ -16,7 +16,7 @@
 			},
 			"improve-codebase-architecture": {
         		"description": "Periodic codebase audit (HTML + optional security); remediation via to-tickets → orchestrate",
-				"defaultModel": "opencode/qwen3.7-max"
+				"defaultModel": "opencode/qwen3.6-plus"
 			},
 			"fanout-issues": {
 				"description": "Spec-repo cross-repo child issue fanout",
