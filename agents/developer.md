@@ -1,7 +1,7 @@
 ---
 description: "GREEN-only executor for GitHub issue stages with Owner: developer."
 mode: subagent
-model: opencode-go/deepseek-v4.1-flash
+model: opencode/glm-5.3-flash
 steps: 45
 tools:
   write: true

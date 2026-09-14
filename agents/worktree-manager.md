@@ -1,7 +1,7 @@
 ---
 description: Drive OpenCode worktree lifecycle via the /experimental/worktree API (creates GUI-registered worktrees). Does not handle session messaging — that is now plugin-owned (session_kickoff / session_notify / session_delete) and called directly by the orchestrator / coder / worktree-manager as appropriate.
 mode: subagent
-model: opencode-go/glm-5.3-flash
+model: opencode/glm-5.3-flash
 steps: 20
 tools:
   write: false

@@ -1,7 +1,7 @@
 ---
 description: Architect's analysis specialist — review-plan drafts, PR-feedback triage, audit security delegation. Never dispatched by coder sessions.
 mode: subagent
-model: opencode-go/deepseek-v4.1-flash
+model: opencode/glm-5.3-flash
 tools:
   write: false
   edit: false

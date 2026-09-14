@@ -1,7 +1,7 @@
 ---
 description: Compose-test backend lifecycle coordinator — env copy, sandbox probe/create/build/warm, status, teardown. Drives plugins/sandbox.js. Entry/exit choreography only — per-stage test runs use the plugin tools directly.
 mode: subagent
-model: opencode-go/glm-5.3-flash
+model: opencode/glm-5.3-flash
 steps: 20
 tools:
   write: false

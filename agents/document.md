@@ -1,7 +1,7 @@
 ---
 description: Generates documentation content from completed plan artifacts. Read-only; returns content for scribe to write.
 mode: subagent
-model: opencode-go/glm-5.3-flash
+model: opencode/glm-5.3-flash
 tools:
   write: false
   edit: false

@@ -1,7 +1,7 @@
 ---
 description: RED-only TDD test writer for approved issue seams
 mode: subagent
-model: opencode-go/deepseek-v4.1-flash
+model: opencode/glm-5.3-flash
 steps: 25
 tools:
   write: true

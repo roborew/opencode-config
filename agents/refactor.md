@@ -1,7 +1,7 @@
 ---
 description: Planning specialist for refactor plans
 mode: subagent
-model: opencode-go/deepseek-v4.1-flash
+model: opencode/glm-5.3-flash
 tools:
   write: false
   edit: false

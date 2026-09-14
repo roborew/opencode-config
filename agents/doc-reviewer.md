@@ -1,7 +1,7 @@
 ---
 description: Documentation accuracy review. Cross-checks docs against source.
 mode: subagent
-model: opencode-go/glm-5.3-flash
+model: opencode/glm-5.3-flash
 tools:
   write: false
   edit: false

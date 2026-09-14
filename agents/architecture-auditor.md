@@ -1,7 +1,7 @@
 ---
 description: Read-only architecture audit subagent. Finds shallow modules, seam leaks, and deepening opportunities; writes audit reports via scribe only. Defaults to targeted feature-impact assessment; full periodic audits available on request.
 mode: subagent
-model: opencode/glm-5.2
+model: opencode/glm-5.3
 steps: 35
 tools:
   write: false
@@ -49,12 +49,14 @@ permission:
     "* 2>> *": deny
     "*| tee *": deny
     "*|tee *": deny
-  skill: { "improve-codebase-architecture": "allow", "codebase-design": "allow" }
+  skill:
+    { "improve-codebase-architecture": "allow", "codebase-design": "allow" }
   task:
     "*": deny
     scribe: allow
     strategist: allow
 ---
+
 # Architecture Auditor
 
 You are the architecture audit worker. You run targeted feature-impact assessments and periodic codebase structure audits for the parent `architect` agent.
