@@ -115,7 +115,7 @@ Report: <path or temp path>
 ## Top recommendation
 <candidate id + one sentence>
 
-## Candidate details for to-issues
+## Candidate details for to-tickets
 ### A1: <title>
 - Files: ...
 - Current friction: ...
@@ -128,7 +128,7 @@ Report: <path or temp path>
 - AFK/HITL: ...
 ```
 
-These details must be sufficient for `to-issues` to create `opencode-task-yaml` issue bodies if the user chooses remediation. Do not create the issues yourself.
+These details must be sufficient for `to-tickets` to create `opencode-task-json` ticket bodies if the user chooses remediation. Do not create the tickets yourself.
 
 ### 5. Optional drill-down
 

@@ -125,9 +125,8 @@ sys.exit(0 if '${KEY}' in repos else 1)
       --arg tid "legacy-$(echo "$KEY" | tr '/' '-')" \
       --arg owner "developer" \
       '{task_id:$tid,depends_on:[],owner:$owner}')
-    META_YAML=$(echo "$META_JSON" | python3 "${BIN_DIR}/lib/task_meta_to_yaml.py")
     REQ_SECTION="- See issue body for product requirements."
-    ISSUE_BODY="$(build_issue_body "$PARENT_URL" "$SLUG" "$META_YAML" "**Blocked by:** (none)" "$BODY" "" "" "$REQ_SECTION")"
+    ISSUE_BODY="$(build_issue_body "$PARENT_URL" "$SLUG" "$META_JSON" "**Blocked by:** (none)" "$BODY" "" "" "$REQ_SECTION")"
     # gh 2.93.0 lacks --parent and --json on `gh issue create`; capture URL from stdout tail.
     URL=$(gh issue create \
       --repo "$KEY" \
@@ -200,7 +199,6 @@ fanout_tickets() {
       --arg capability "$CAPABILITY" \
       --argjson deps "$DEPS" \
       '{task_id:$tid,depends_on:$deps,owner:$owner,capability:$capability}')
-    META_YAML=$(echo "$META_JSON" | python3 "${BIN_DIR}/lib/task_meta_to_yaml.py")
 
     US_HINT=""
     if [[ -n "$COVERS" ]]; then
@@ -236,7 +234,7 @@ fanout_tickets() {
       continue
     fi
 
-    ISSUE_BODY="$(build_issue_body "$PARENT_URL" "$SLUG" "$META_YAML" "$BLOCKED_LINE" "$EXTRA" "$US_HINT" "" "$REQ_SECTION")"
+    ISSUE_BODY="$(build_issue_body "$PARENT_URL" "$SLUG" "$META_JSON" "$BLOCKED_LINE" "$EXTRA" "$US_HINT" "" "$REQ_SECTION")"
 
     # gh 2.93.0 lacks --parent and --json on `gh issue create`; capture URL from stdout tail.
     URL=$(gh issue create \

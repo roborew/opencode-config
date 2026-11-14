@@ -1,13 +1,13 @@
 ---
 name: setup-skills
-description: Scaffold per-repo agent context — issue tracker, triage labels, domain doc layout — under docs/agents/ and an AGENTS.md or README section. Run once per repo before relying on to-issues, grill-me CONTEXT persistence, or cross-session portability.
+description: Scaffold per-repo agent context — GitHub ticket tracker, triage labels, domain doc layout — under docs/agents/ and an AGENTS.md or README section. Run once per repo before relying on to-tickets, grill-me CONTEXT persistence, or cross-session portability.
 ---
 
 # Setup skills (per-repo)
 
-Scaffold the configuration that **`grill-me`**, **`to-issues`**, **`debug-fix`**, and **`zoom-out`** assume:
+Scaffold the configuration that **`grill-me`**, **`to-tickets`**, **`debug-fix`**, and **`zoom-out`** assume:
 
-- **Issue tracker** — where issues live (GitHub default; local markdown optional)
+- **Ticket tracker** — where GitHub tickets live (GitHub is required for this configuration)
 - **Triage labels** — strings for agent-ready vs human-needed work
 - **Domain docs** — single `CONTEXT.md` + `docs/adr/` vs multi-context `CONTEXT-MAP.md`
 
@@ -23,7 +23,7 @@ This is a **prompt-driven** skill: explore the repo, present findings, confirm w
 
 ### 2. Present and confirm (one topic at a time)
 
-**A — Issue tracker.** Default: **GitHub** if `origin` is github.com. Alternatives: GitLab, local markdown under `.scratch/issues/` (describe convention in `issue-tracker.md`), or freeform (Jira/Linear) as prose in `issue-tracker.md`.
+**A — Ticket tracker.** This configuration uses **GitHub**. Confirm the remote and record it in `issue-tracker.md`; do not offer local-markdown, GitLab, or freeform tracker alternatives.
 
 **B — Triage labels.** Canonical five (map to repo labels if different):
 

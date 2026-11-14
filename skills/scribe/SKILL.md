@@ -19,7 +19,7 @@ You are the dedicated markdown writer for architect and orchestrate agents. You 
 
 ## Plan artifact paths (legacy)
 
-When parent explicitly requests legacy `.plan` paths, routing tuple resolves to `.plan/<type>.<slug>.md`. **GitHub-first workflows do not use this path** — architect publishes issues via **`to-issues`** / fanout instead.
+When parent explicitly requests legacy `.plan` paths, routing tuple resolves to `.plan/<type>.<slug>.md`. **GitHub-first workflows do not use this path** — architect publishes tickets via **`to-tickets`** / fanout instead.
 
 ## Hard Rules
 1. **Write-only.** Use the **write** tool — not edit. Do not write runnable `.plan/feature.*` unless parent explicitly requests legacy remediation/review artifacts.
@@ -46,7 +46,7 @@ When parent explicitly requests legacy `.plan` paths, routing tuple resolves to 
     - `debug` -> `.plan/debug.<slug>.md`
     - `refactor` -> `.plan/refactor.<slug>.md`
     - `review` -> `.plan/review.<slug>.md`
-    - `design` -> `.plan/design.<slug>.md`
+    - Design briefs are not local artifacts; issue-expand embeds them in GitHub issues.
 - Optional `mode`: `create` or `update`
 
 ### Archive plan (`operation: archive_plan`)

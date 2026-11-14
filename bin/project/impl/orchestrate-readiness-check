@@ -30,14 +30,17 @@ TEST_CMDS_FOUND=0
 for n in $ISSUES; do
   BODY_FILE=$(mktemp)
   gh issue view "$n" --repo "$REPO" --json body -q .body >"$BODY_FILE"
-  TID=$(sed -n '/```opencode-task-json/,/```/p' "$BODY_FILE" | sed '1d;$d' | jq -r '.task_id // empty' 2>/dev/null || true)
+  META=$(sed -n '/```opencode-task-\(json\|yaml\)/,/```/p' "$BODY_FILE" | sed '1d;$d')
+  TID=$(printf '%s\n' "$META" | sed -n 's/^task_id:[[:space:]]*//p' | head -1)
+  [[ -n "$TID" ]] || TID=$(printf '%s\n' "$META" | jq -r '.task_id // empty' 2>/dev/null || true)
   echo -n "#$n: "
   ARGS=(--level orchestrate --file "$BODY_FILE")
   [[ -n "$TID" ]] && ARGS+=(--task-id "$TID")
   if python3 "$VALIDATE" "${ARGS[@]}" 2>/dev/null; then
-    stages=$(sed -n '/```opencode-task-json/,/```/p' "$BODY_FILE" | sed '1d;$d' | jq '.stages | length' 2>/dev/null || echo "?")
+    stages=$(printf '%s\n' "$META" | grep -cE '^  - (stage_id:|id:)' || true)
+    [[ "$stages" -gt 0 ]] || stages=$(printf '%s\n' "$META" | jq '.stages | length' 2>/dev/null || echo "?")
     echo "OK task_id=${TID} stages=${stages}"
-    if sed -n '/```opencode-task-json/,/```/p' "$BODY_FILE" | sed '1d;$d' | jq -e '[.stages[]?.test_commands[]?] | length > 0' >/dev/null 2>&1; then
+    if printf '%s\n' "$META" | grep -qE 'test_commands:|"test_commands"'; then
       TEST_CMDS_FOUND=1
     fi
   else
@@ -66,7 +69,7 @@ if [[ -x "${OC}/skills/github-issue-run/lib/next-runnable-issue.sh" ]] || [[ -f 
 fi
 
 if [[ "$FAIL" -eq 0 ]]; then
-  echo "PASS: ready for orchestrate option B"
+  echo "PASS: ready for orchestrate GitHub backlog option (1)"
   exit 0
 fi
 echo "FAIL: run issue-expand in this repo first"

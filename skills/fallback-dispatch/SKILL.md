@@ -22,7 +22,7 @@ A fallback Task is the **last** retry path. Before invoking one, the primary mus
 A fallback must reject the Task with **`FALLBACK_CONTEXT_INVALID`** if any of these is missing or invalid:
 
 - `original_agent` — must be the name of a child role dispatched by `orchestrate` or `architect` (see the eligible list below). Never a primary agent.
-- `original_skill` — must be a concrete skill file resolvable to `~/.config/opencode/skills/<original_skill>/SKILL.md` (e.g. `developer`, `verifier`, `senior-dev`, `scribe`, `frontend-dev`, `ux-dev`, `worktree-env`, `preflight`, `vision`, `review`, `helper`, `strategist`, `debugger`, `refactor`, `designer`, `document`, `architecture-auditor`). Skill name **must** be supplied explicitly; do not infer from the child report transcript.
+- `original_skill` — must be a concrete skill file resolvable to `~/.config/opencode/skills/<original_skill>/SKILL.md` (e.g. `developer`, `verifier`, `senior-dev`, `scribe`, `frontend-dev`, `ux-dev`, `worktree-env`, `preflight`, `vision`, `review`, `helper`, `strategist`, `debugger`, `refactor`, `document`, `architecture-auditor`). Skill name **must** be supplied explicitly; do not infer from the child report transcript.
 - `task_contract` — the verbatim original Task prompt (or a faithful restatement) including all required fields: `impl_repo_path`, `expected_branch`, `is_linked_worktree`, `main_checkout_root`, `branch_policy`, plus role-specific fields (e.g. for `verifier`/`developer`/`frontend-dev`/`ux-dev` Stages: `diff_base`, `files_changed`, `acceptance_to_test`, `red_phase`, `green_phase`, `assertion_delta`, `security_review`; for `scribe`: target path and content; for `review` / `strategist`: artifact / PR context; etc.).
 - `failure_evidence` — concise description of the original child failure (error class, retry count, unfinished work).
 - `attempt_history` — list of prior attempts and providers tried (so this fallback knows whether it is the first or second attempt for this Task).
@@ -39,7 +39,7 @@ Optional but recommended:
 
 ## Validation rule (hard)
 
-- `original_agent` MUST resolve to an **allowed child** (`developer`, `frontend-dev`, `ux-dev`, `verifier`, `scribe`, `worktree-env`, `preflight`, `vision`, `helper`, `senior-dev`, `review`, `strategist`, `debugger`, `refactor`, `designer`, `document`, `architecture-auditor`).
+- `original_agent` MUST resolve to an **allowed child** (`developer`, `frontend-dev`, `ux-dev`, `verifier`, `scribe`, `worktree-env`, `preflight`, `vision`, `helper`, `senior-dev`, `review`, `strategist`, `debugger`, `refactor`, `document`, `architecture-auditor`).
 - Any value outside that list (including `orchestrate`, `architect`, `kilo-fallback`, `openrouter-fallback`, or anything unrecognized) → reject with `FALLBACK_CONTEXT_INVALID`.
 - `original_skill` MUST be supplied and refer to a `SKILL.md` that the discovery system can resolve. If it does not resolve, the fallback loads **`orchestrate-recovery`** for context only and reports `SKILL_UNAVAILABLE` — never infers behavior from the failed child's transcript.
 
@@ -81,7 +81,7 @@ Always return the **original role's completion schema verbatim**:
 
 | Original role | Required completion payload |
 |---|---|
-| `developer` / `frontend-dev` / `ux-dev` | `stage_id` (or `issue_number`), `plan_file` or `repo`, `files_changed`, `tests_run` (with `red_phase`, `green_phase`, `assertion_delta`, `acceptance_to_test`), `acceptance_check_status`, `blockers`, residual_risks, `git_commit` (or `sandbox_id` for sandbox feature build), `HANDOFF_COMPLETE` |
+| `developer` / `frontend-dev` | `stage_id` (or `issue_number`), `plan_file` or `repo`, `files_changed`, `tests_run` (with `red_phase`, `green_phase`, `assertion_delta`, `acceptance_to_test`), `acceptance_check_status`, `blockers`, residual_risks, `git_commit` (or `sandbox_id` for sandbox feature build), `HANDOFF_COMPLETE` |
 | `verifier` | verdict, confidence, diff review, criterion checklist, RED replay, commands run, sandbox, security review, coverage assessment, remediation |
 | `senior-dev` | when blocker fixed: `HANDOFF_TO_DEVELOPER` with changed files, commands, remaining work; when not: blocker code + retry recommendation |
 | `scribe` | `target_path`, `operation` (`create`/`update`/`archive`), `summary`, tool evidence the file was written (or `SCRIBE_FAILED`) |

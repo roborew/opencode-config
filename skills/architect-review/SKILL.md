@@ -51,7 +51,7 @@ You may invoke: `review`, `strategist` (**Phase R only**), `document`, `scribe`,
 
 **Impl repos do not close GitHub issues.** They transition `state:*` labels only. Spec **feature-complete** closes issues at merge.
 
-**Remediation (both modes):** Phase R publishes remediation via **`to-issues`** / `publish-targeted-issue` with `--parent-issue` (PRD parent URL from spec PRD frontmatter). `.plan/review.<slug>.md` via scribe only if user insists on legacy sidecar.
+**Remediation (both modes):** Phase R publishes remediation via **`to-tickets`** / `publish-targeted-issue` with `--parent-issue` (PRD parent URL from spec PRD frontmatter). `.plan/review.<slug>.md` via scribe only if user insists on legacy sidecar.
 
 ## Supplementary Hard Rules (both modes; agent Hard Rules override on conflict)
 
@@ -228,7 +228,7 @@ stage:
   commit_message: "chore(<slug>): architect Mode F accept issues"
 ```
 
-**Gate:** Every accepted issue shows **`state:done`** and remains **open**. Do not use `mode-f-close-issues.sh` in impl Mode F.
+**Gate:** Every accepted ticket shows **`state:done`** and remains **open**. Use `mode-f-accept-issues.sh`; close-at-merge is owned by spec `feature-complete`.
 
 Report **Phase 1 complete** table: slug, PR, accepted issue numbers, deferrals. Pause for doc scope.
 
